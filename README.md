@@ -83,8 +83,11 @@ This interpreter consists of a single directory organized as follows
 
 Platform specific instructions:
 ```
-    MacOS: brew install opam
-    Ubuntu: sudo apt-get install opam
+    MacOS:
+        brew install opam
+        brew install gmp mpir
+    Ubuntu:
+        sudo apt-get install opam
 ```
 Platform independent instructions:
 
@@ -97,6 +100,9 @@ Platform independent instructions:
     opam install pprint
     opam install z3.4.7.1
     opam install zarith
+
+    # On OSX, you may need to use this command to install zarith
+    env CFLAGS="-I$HOME/homebrew/include/" LDFLAGS="-L$HOME/homebrew/lib/" opam install zarith
 
     eval `opam config env`
 ```
