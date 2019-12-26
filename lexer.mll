@@ -94,6 +94,7 @@ rule token = parse
     | ['\n']                      { Lexing.new_line lexbuf; EOL1 }
     | [' ' '\t']                  { token lexbuf }
     | '/' '/' [^'\n']*            { token lexbuf }
+    | '#' [^'\n']*                { token lexbuf }
     | '/' '*'                     { comment 1 lexbuf }
 
     (* numbers, strings and identifiers *)

@@ -600,7 +600,7 @@ end = struct
     let getImplicits (env: t): implicitVars =
         let unconflicted _ (ty: AST.ty): bool =
             let deps = fv_type ty in
-            IdentSet.disjoint deps env.modified
+            IdentSet.is_empty (IdentSet.inter deps env.modified)
         in
         let (good, conflicts) = Bindings.partition unconflicted !(env.implicits) in
         env.implicits := good;

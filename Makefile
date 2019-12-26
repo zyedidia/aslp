@@ -14,7 +14,12 @@ BUILDFLAGS      += -tag thread
 BUILDFLAGS      += -tag debug
 BUILDFLAGS      += -cflags -safe-string
 
+ifeq ($(shell opam config var ott:share),\#undefined)
+MENHIR_EXTRA    = $(OTT_DIR)/menhir/menhir_library_extra.mly
+else
 MENHIR_EXTRA    = `opam config var ott:share`/menhir_library_extra.mly
+endif
+
 MENHIRFLAGS     += --infer
 MENHIRFLAGS     += --explain
 MENHIR          := -menhir "menhir $(MENHIRFLAGS)"
