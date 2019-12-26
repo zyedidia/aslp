@@ -124,6 +124,9 @@ grammar, execute these commands.
     make testlexer.native asli pdf doc
 ```
 
+If you get a lot of linker errors involving Z3, double-check that you installed
+the right version.
+
 ### Using ASL lexer
 
 This displays a list of tokens in an ASL file including the indent
