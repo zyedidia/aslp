@@ -308,6 +308,24 @@ end
 (** {2 Evaluation functions}                                    *)
 (****************************************************************)
 
+(** Evaluate bitslice of instruction opcode *)
+let eval_decode_slice (loc: l) (env: Env.t) (x: decode_slice) (op: value): value =
+    (match x with
+    | DecoderSlice_Slice (lo, wd) -> extract_bits' loc op lo wd
+    | DecoderSlice_FieldName f -> Env.getVar loc env f
+    | DecoderSlice_Concat fs -> eval_concat loc (List.map (Env.getVar loc env) fs)
+    )
+
+(** Evaluate instruction decode pattern match *)
+let rec eval_decode_pattern (loc: AST.l) (x: decode_pattern) (op: value): bool =
+    (match x with
+    | DecoderPattern_Bits     b -> eval_eq     loc op (from_bitsLit b)
+    | DecoderPattern_Mask     m -> eval_inmask loc op (from_maskLit m)
+    | DecoderPattern_Wildcard _ -> true
+    | DecoderPattern_Not      p -> not (eval_decode_pattern loc p op)
+    )
+
+
 (** Evaluate list of expressions *)
 let rec eval_exprs (loc: l) (env: Env.t) (xs: AST.expr list): value list =
     List.map (eval_expr loc env) xs
@@ -660,6 +678,10 @@ and eval_stmt (env: Env.t) (x: AST.stmt): unit =
     | Stmt_Throw(v, loc) ->
             let ex = to_exc loc (Env.getVar loc env v) in
             raise (Throw ex)
+    | Stmt_DecodeExecute(i, e, loc) ->
+            let dec = Env.getDecoder env i in
+            let op  = eval_expr loc env e in
+            eval_decode_case loc env dec op
     | Stmt_If(c, t, els, e, loc) ->
             let rec eval css d =
                 (match css with
@@ -802,55 +824,27 @@ and eval_proccall (loc: l) (env: Env.t) (f: ident) (tvs: value list) (vs: value 
     | Throw (l, ex) -> raise (Throw (l, ex))
     )
 
-(** Evaluate instruction encoding *)
-let eval_encoding (env: Env.t) (x: encoding) (op: value): bool =
-    let Encoding_Block (nm, iset, fields, opcode, guard, unpreds, b, loc) = x in
-    (* todo: consider checking iset *)
-    (* Printf.printf "Checking opcode match %s == %s\n" (Utils.to_string (PP.pp_opcode_value opcode)) (pp_value op); *)
-    let ok = (match opcode with
-    | Opcode_Bits b -> eval_eq     loc op (from_bitsLit b)
-    | Opcode_Mask m -> eval_inmask loc op (from_maskLit m)
-    ) in
-    if ok then begin
-        if !trace_instruction then Printf.printf "TRACE: instruction %s\n" (pprint_ident nm);
-        List.iter (function (IField_Field (f, lo, wd)) ->
-            let v = extract_bits' loc op lo wd in
-            if !trace_instruction then Printf.printf "      %s = %s\n" (pprint_ident f) (pp_value v);
-            Env.addLocalVar loc env f v
-        ) fields;
-        if to_bool loc (eval_expr loc env guard) then begin
-            List.iter (fun (i, b) ->
-                if eval_eq loc (extract_bits' loc op i 1) (from_bitsLit b) then
-                    raise (Throw (loc, Exc_Unpredictable))
-            ) unpreds;
-            List.iter (eval_stmt env) b;
-            true
-        end else begin
-            false
-        end
-    end else begin
-        false
-    end
-
-(** Evaluate bitslice of instruction opcode *)
-let eval_decode_slice (loc: l) (env: Env.t) (x: decode_slice) (op: value): value =
+(** Evaluate instruction decode case *)
+and eval_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): unit =
     (match x with
-    | DecoderSlice_Slice (lo, wd) -> extract_bits' loc op lo wd
-    | DecoderSlice_FieldName f -> Env.getVar loc env f
-    | DecoderSlice_Concat fs -> eval_concat loc (List.map (Env.getVar loc env) fs)
-    )
-
-(** Evaluate instruction decode pattern match *)
-let rec eval_decode_pattern (loc: AST.l) (x: decode_pattern) (op: value): bool =
-    (match x with
-    | DecoderPattern_Bits     b -> eval_eq     loc op (from_bitsLit b)
-    | DecoderPattern_Mask     m -> eval_inmask loc op (from_maskLit m)
-    | DecoderPattern_Wildcard _ -> true
-    | DecoderPattern_Not      p -> not (eval_decode_pattern loc p op)
+    | DecoderCase_Case (ss, alts, loc) ->
+            let vs = List.map (fun s -> eval_decode_slice loc env s op) ss in
+            let rec eval alts =
+                (match alts with
+                | (alt :: alts') ->
+                        if eval_decode_alt loc env alt vs op then
+                            ()
+                        else
+                            eval alts'
+                | [] ->
+                        raise (EvalError (loc, "unmatched decode pattern"))
+                )
+            in
+            eval alts
     )
 
 (** Evaluate instruction decode case alternative *)
-let rec eval_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): bool =
+and eval_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): bool =
     if List.for_all2 (eval_decode_pattern loc) ps vs then
         (match b with
         | DecoderBody_UNPRED loc -> raise (Throw (loc, Exc_Unpredictable))
@@ -880,24 +874,35 @@ let rec eval_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: 
     else
         false
 
-(** Evaluate instruction decode case *)
-and eval_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): unit =
-    (match x with
-    | DecoderCase_Case (ss, alts, loc) ->
-            let vs = List.map (fun s -> eval_decode_slice loc env s op) ss in
-            let rec eval alts =
-                (match alts with
-                | (alt :: alts') ->
-                        if eval_decode_alt loc env alt vs op then
-                            ()
-                        else
-                            eval alts'
-                | [] ->
-                        raise (EvalError (loc, "unmatched decode pattern"))
-                )
-            in
-            eval alts
-    )
+(** Evaluate instruction encoding *)
+and eval_encoding (env: Env.t) (x: encoding) (op: value): bool =
+    let Encoding_Block (nm, iset, fields, opcode, guard, unpreds, b, loc) = x in
+    (* todo: consider checking iset *)
+    (* Printf.printf "Checking opcode match %s == %s\n" (Utils.to_string (PP.pp_opcode_value opcode)) (pp_value op); *)
+    let ok = (match opcode with
+    | Opcode_Bits b -> eval_eq     loc op (from_bitsLit b)
+    | Opcode_Mask m -> eval_inmask loc op (from_maskLit m)
+    ) in
+    if ok then begin
+        if !trace_instruction then Printf.printf "TRACE: instruction %s\n" (pprint_ident nm);
+        List.iter (function (IField_Field (f, lo, wd)) ->
+            let v = extract_bits' loc op lo wd in
+            if !trace_instruction then Printf.printf "      %s = %s\n" (pprint_ident f) (pp_value v);
+            Env.addLocalVar loc env f v
+        ) fields;
+        if to_bool loc (eval_expr loc env guard) then begin
+            List.iter (fun (i, b) ->
+                if eval_eq loc (extract_bits' loc op i 1) (from_bitsLit b) then
+                    raise (Throw (loc, Exc_Unpredictable))
+            ) unpreds;
+            List.iter (eval_stmt env) b;
+            true
+        end else begin
+            false
+        end
+    end else begin
+        false
+    end
 
 
 (****************************************************************)
