@@ -338,6 +338,9 @@ let rec visit_stmts (vis: aslVisitor) (xs: stmt list): stmt list =
             | Stmt_Throw (v, loc) ->
                     let v' = visit_var vis v in
                     if v == v' then x else Stmt_Throw (v', loc)
+            | Stmt_DecodeExecute (i, e, loc) ->
+                    let e' = visit_expr vis e in
+                    if e == e' then x else Stmt_DecodeExecute (i, e', loc)
             | Stmt_If (c, t, els, e, loc) ->
                     let c'   = visit_expr vis c in
                     let t'   = visit_stmts vis t in

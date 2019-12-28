@@ -1932,6 +1932,14 @@ and tc_stmt (env: Env.t) (x: AST.stmt): AST.stmt =
                 check_type env u loc type_exn ty
             ) in
             Stmt_Throw(v, loc)
+    | Stmt_DecodeExecute(i, e, loc) ->
+            let ty = ( match pprint_ident i with
+                | "A64" | "A32" | "T32" -> type_bitsK("32")
+                | "T16" -> type_bitsK("16")
+                | _ -> raise (UnknownObject(loc, "instruction set", pprint_ident i))
+            ) in
+            let e' = check_expr env loc ty e in
+            Stmt_DecodeExecute(i, e', loc)
     | Stmt_If(c, t, els, e, loc) ->
             let c'   = check_expr env loc type_bool c in
             let t'   = tc_stmts env loc t in
