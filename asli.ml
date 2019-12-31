@@ -106,6 +106,7 @@ let read_spec (filename : string): AST.declaration list =
 
 let help_msg = [
     {|:? :help                       Show this help message|};
+    {|:elf <file>                    Load an ELF file|};
     {|:opcode <instr-set> <int>      Decode and execute opcode|};
     {|:project <file>                Execute ASLi commands in <file>|};
     {|:q :quit                       Exit the interpreter|};
@@ -134,6 +135,16 @@ let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (inp
     (match String.split_on_char ' ' input with
     | [""] ->
         ()
+    | [":elf"; file] ->
+        let write_byte (addr: Int64.t) (b: char): unit =
+            if false then Printf.printf "ELF %LX = 0x%x\n" addr (Char.code b);
+            let a = Value.VBits (Primops.mkBits 64 (Z.of_int64 addr)) in
+            let b = Value.VBits (Primops.mkBits  8 (Z.of_int (Char.code b))) in
+            Eval.eval_proccall AST.Unknown env (AST.FIdent ("__ELFWriteMemory", 0)) [] [a; b]
+        in
+        Printf.printf "Loading ELF file %s.\n" file;
+        let entry = Elf.load_file file write_byte in
+        Printf.printf "Entry point = 0x%Lx\n" entry
     | [":help"] | [":?"] ->
         List.iter print_endline help_msg;
         print_endline "\nFlags:";
@@ -246,7 +257,7 @@ let options = Arg.align ([
     ( "--version", Arg.Set opt_print_version, "       Print version");
 ] )
 
-let version = "ASL 0.0 alpha"
+let version = "ASL 0.1 alpha"
 
 let banner = [
     {|            _____  _       _    ___________________________________|};

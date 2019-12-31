@@ -29,6 +29,7 @@ SRCS += asl_ast.ml
 SRCS += asl_parser.mly
 SRCS += asl_parser_pp.ml
 SRCS += asli.ml
+SRCS += elf.ml
 SRCS += lexersupport.ml
 SRCS += lexer.mll
 SRCS += tcheck.ml
