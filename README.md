@@ -13,7 +13,7 @@ and an interactive interface for evaluating ASL statements and expressions.
 
 To build and run the ASL interpreter, you will need:
 
-  * OCaml version 4.07 (other versions may work)
+  * OCaml version 4.09 or later
   * OPAM OCaml version 2.0.5 (other versions may work)
   * The following OPAM packages
       * ocaml     - OCaml compiler
@@ -54,6 +54,7 @@ This interpreter consists of a single directory organized as follows
       * `asli.odocl`          - Manifest (for documentation generation)
       * `Makefile`            - build system file
       * `_tags`               - OCaml build system configuration file
+      * `opam`                - OCaml package definition file
   * Source code consisting of
       * Lexer
           * `lexer.mll`       - ASL lexer (ocamllex file)
@@ -89,10 +90,11 @@ Platform specific instructions:
     Ubuntu:
         sudo apt-get install opam
 ```
+
 Platform independent instructions:
 
 ```
-    opam install ocaml
+    opam install ocaml.4.09.0
     opam install menhir
     opam install ocamlfind
     opam install ott
@@ -148,7 +150,7 @@ statements and expressions.
         /\     / ____|| |     (_)   ASL interpreter
        /  \   | (___  | |      _    Copyright Arm Limited (c) 2017-2019
       / /\ \   \___ \ | |     | |
-     / ____ \  ____) || |____ | |   Version 0.0 alpha
+     / ____ \  ____) || |____ | |   Version 0.1 alpha
     /_/    \_\|_____/ |______||_|   ___________________________________
 
     Type :? for help
@@ -161,5 +163,34 @@ statements and expressions.
     '00000000000000000000000000000011'
     ASLi> :quit
 ```
+
+### Using ASL interpreter with Arm's public specifications
+
+You can download Arm's v8-A architecture specification at
+[https://developer.arm.com/architectures/cpu-architecture/a-profile/exploration-tools](https://developer.arm.com/architectures/cpu-architecture/a-profile/exploration-tools).
+Historically, these are updated every 6 months with the latest "8.x" release
+released in December.
+You can download tools to unpack Arm's specification from
+[https://github.com/alastairreid/mra_tools](https://github.com/alastairreid/mra_tools).
+
+Clone the MRA tools release and follow the instructions to unpack Arm's
+specification.
+In the following, I will assume that this is in directory "../mra_tools".
+
+```
+    make -C ../mra_tools clean
+    make -C ../mra_tools
+    make asli
+    ./asli prelude.asl ../mra_tools/arch/regs.asl ../mra_tools/types.asl ../mra_tools/arch/arch.asl ../mra_tools/arch/arch_instrs.asl ../mra_tools/arch/arch_decode.asl ../mra_tools/support/aes.asl ../mra_tools/support/barriers.asl ../mra_tools/support/debug.asl ../mra_tools/support/feature.asl ../mra_tools/support/hints.asl ../mra_tools/support/interrupts.asl ../mra_tools/support/memory.asl ../mra_tools/support/stubs.asl ../mra_tools/support/fetchdecode.asl
+```
+
+After loading the v8.6-A architecture spec, you can configure the
+implementation defined behaviour, load an ELF file and run the
+program as follows.
+```
+    :project test.prj
+    :quit
+```
+
 
 Enjoy!

@@ -89,7 +89,7 @@ asl_grammar.tex: asl.ott
 clean ::
 	$(RM) asl_grammar.tex asl_clean.ott
 
-all :: asl_quotiented.pdf
+# all :: asl_quotiented.pdf
 pdf: asl_quotiented.pdf asl_unquotiented.pdf
 
 asl_quotiented.pdf: asl.ott Makefile
@@ -99,6 +99,15 @@ asl_quotiented.pdf: asl.ott Makefile
 asl_unquotiented.pdf: asl.ott Makefile
 	$(OTT) -quotient_rules false -generate_aux_rules false -aux_style_rules false -i asl.ott -o asl_unquotiented.tex
 	pdflatex asl_unquotiented.tex
+
+install::
+	if [ -z "$(SHARE_DIR)" ]; then echo SHARE_DIR is unset; false; fi
+	mkdir -p $(INSTALL_DIR)/bin
+	cp asli $(INSTALL_DIR)/bin/asli
+
+uninstall::
+	if [ -z "$(SHARE_DIR)" ]; then echo SHARE_DIR is unset; false; else rm -rf $(SHARE_DIR); fi
+	rm -f $(INSTALL_DIR)/bin/asli
 
 clean::
 	$(RM) *~

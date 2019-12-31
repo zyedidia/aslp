@@ -1,0 +1,31 @@
+opam-version: "0.1"
+name: "asli"
+version: "0.1"
+synopsis: "Interpreter for Arm's Architecture Specification Language (ASL)"
+description: """
+Interpreter for the language ASL that Arm uses to write their ISA specifications.
+
+Currently supports reading/typechecking the specification,
+interactive execution of ASL statements and expressions,
+executing opcodes one at a time,
+loading ELF files and executing Arm binaries.
+"""
+maintainer: "Alastair Reid <alastair.d.reid@gmail.com>"
+authors: ["Alastair Reid"]
+homepage: "https://github.com/alastairreid/asl-interpreter"
+bug-reports: "https://github.com/alastairreid/asl-interpreter/issues"
+license: "BSD3"
+dev-repo: "https://github.com/alastairreid/asl-interpreter.git"
+build: [make "INSTALL_DIR=%{prefix}%" "SHARE_DIR=%{asli:share}%" "asli"]
+install: [make "INSTALL_DIR=%{prefix}%" "SHARE_DIR=%{asli:share}%" "install"]
+remove: [ make "INSTALL_DIR=%{prefix}%" "SHARE_DIR=%{asli:share}%" "uninstall"]
+depends: [
+  "linenoise"
+  "menhir"
+  "ocamlfind"
+  "ott"
+  "pprint"
+  "zarith"
+  "z3" { <= "4.7.1" }
+]
+available: [ocaml-version >= "4.09"]
