@@ -7,6 +7,8 @@
 
 .DEFAULT: all
 
+VERSION = 0.1
+
 OTT             := ott
 
 BUILDFLAGS      += -use-ocamlfind
@@ -108,6 +110,9 @@ install::
 uninstall::
 	if [ -z "$(SHARE_DIR)" ]; then echo SHARE_DIR is unset; false; else rm -rf $(SHARE_DIR); fi
 	rm -f $(INSTALL_DIR)/bin/asli
+
+publish::
+	opam publish https://github.com/alastairreid/asl-interpreter/archive/$(VERSION).tar.gz
 
 clean::
 	$(RM) *~
