@@ -854,7 +854,7 @@ and eval_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: valu
                 let (enc, opost, cond, exec) = Env.getInstruction loc env enc in
                 if eval_encoding env enc op then begin
                     (match opost with
-                    | Some post -> eval_stmts env post
+                    | Some post -> List.iter (eval_stmt env) post
                     | None -> ()
                     );
                     (* todo: should evaluate ConditionHolds to decide whether to execute body *)
