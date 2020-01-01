@@ -211,7 +211,29 @@ let from_maskLit (x: AST.maskLit): value =
     let m = String.map (function 'x' -> '0' | c -> '1') x' in
     VMask (mkMask n (Z.of_string_base 2 v) (Z.of_string_base 2 m))
 
-let from_stringLit (x: string): value = VString x
+let from_stringLit (x: string): value =
+    let r = ref "" in
+    let rec unescape (i: int): unit =
+        if i < String.length x then begin
+            let c = String.get x i in
+            if c = '\\' then begin
+                assert (i+1 < String.length x);
+                let c = String.get x (i+1) in
+                if c = '\\' then
+                    r := !r ^ String.make 1 '\\'
+                else if c = 'n' then
+                    r := !r ^ String.make 1 '\n'
+                else
+                    assert false;
+                unescape (i+2)
+            end else begin
+                r := !r ^ String.make 1 c;
+                unescape (i+1)
+            end
+        end
+    in
+    unescape 0;
+    VString !r
 
 
 (****************************************************************)
