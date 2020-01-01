@@ -178,6 +178,7 @@ specification.
 In the following, I will assume that this is in directory "../mra_tools".
 
 ```
+    # follow the instructions in ../mra_tools/README.md for downloading the Arm specs
     make -C ../mra_tools clean
     make -C ../mra_tools
     make asli
@@ -188,7 +189,7 @@ After loading the v8.6-A architecture spec, you can configure the
 implementation defined behaviour, load an ELF file and run the
 program as follows.
 ```
-    :project test.prj
+    :project tests/test.prj
     :quit
 ```
 
