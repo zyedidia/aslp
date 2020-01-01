@@ -364,6 +364,7 @@ let prim_read_ram (asz: bigint) (dsz: bigint) (mem: ram) (addr: bigint): bitvect
             read (i+1)
     in
     read 0;
+    if false then Printf.printf "Read %Lx from address %Lx\n" (Z.to_int64 !r) (Z.to_int64 addr);
     mkBits (8 * (Z.to_int dsz)) !r
 
 let prim_write_ram (asz: bigint) (dsz: bigint) (mem: ram) (addr: bigint) (v: bitvector): unit =
