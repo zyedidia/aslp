@@ -316,6 +316,8 @@ let eval_prim (f: string) (tvs: value list) (vs: value list): value option =
     | ("print_str",          _,       [VString s                 ]) -> Some (prim_print_str  s; VTuple [])
     | ("print_char",         _,       [VInt c                    ]) -> Some (prim_print_char c; VTuple [])
 
+    | ("program_end",        _,       [                          ]) -> Some (raise (Throw (Unknown, Exc_ExceptionTaken)))
+
     (* No function matches *)
     | _ -> None
     )
