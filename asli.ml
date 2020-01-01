@@ -110,6 +110,7 @@ let help_msg = [
     {|:opcode <instr-set> <int>      Decode and execute opcode|};
     {|:project <file>                Execute ASLi commands in <file>|};
     {|:q :quit                       Exit the interpreter|};
+    {|:run                           Execute instructions|};
     {|:set impdef <string> = <expr>  Define implementation defined behavior|};
     {|:set +<flag>                   Set flag|};
     {|:set -<flag>                   Clear flag|};
@@ -190,6 +191,15 @@ let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (inp
         )
     | [":q"] | [":quit"] ->
         exit 0
+    | [":run"] ->
+        (try
+            while true do
+                Eval.eval_proccall AST.Unknown env (AST.FIdent ("__InstructionExecute", 0)) [] [];
+            done
+        with
+        | Value.Throw (_, Primops.Exc_ExceptionTaken) ->
+            Printf.printf "Exception taken\n"
+        )
     | _ ->
         let loc    = mkLoc fname input in
         let lexbuf = Lexing.from_string input in
