@@ -88,44 +88,44 @@ let from_bool (x: bool): value = VBool x
 let to_bool (loc: AST.l) (x: value): bool =
     (match x with
     | VBool b -> b
-    | _ -> raise (EvalError (loc, "boolean expected"))
+    | _ -> raise (EvalError (loc, "boolean expected.  Got " ^ pp_value x))
     )
 
 let to_integer (loc: AST.l) (x: value): bigint =
     (match x with
     | VInt i -> i
-    | _ -> raise (EvalError (loc, "integer expected"))
+    | _ -> raise (EvalError (loc, "integer expected. Got " ^ pp_value x))
     )
 
 (* todo: this should raise an exception if out of range *)
 let to_int (loc: AST.l) (x: value): int =
     (match x with
     | VInt i -> Z.to_int i
-    | _ -> raise (EvalError (loc, "integer expected"))
+    | _ -> raise (EvalError (loc, "integer expected. Got "^ pp_value x))
     )
 
 let to_bits (loc: AST.l) (x: value): bitvector =
     (match x with
     | VBits b -> b
-    | _ -> raise (EvalError (loc, "bits expected"))
+    | _ -> raise (EvalError (loc, "bits expected. Got "^ pp_value x))
     )
 
 let to_mask (loc: AST.l) (x: value): mask =
     (match x with
     | VMask m -> m
-    | _ -> raise (EvalError (loc, "mask expected"))
+    | _ -> raise (EvalError (loc, "mask expected. Got "^ pp_value x))
     )
 
 let to_string (loc: AST.l) (x: value): string =
     (match x with
     | VString s -> s
-    | _ -> raise (EvalError (loc, "string expected"))
+    | _ -> raise (EvalError (loc, "string expected. Got "^ pp_value x))
     )
 
 let to_exc (loc: AST.l) (x: value): (AST.l * exc) =
     (match x with
     | VExc e -> e
-    | _ -> raise (EvalError (loc, "exception expected"))
+    | _ -> raise (EvalError (loc, "exception expected. Got "^ pp_value x))
     )
 
 let to_tuple (xs: value list): value = VTuple xs
@@ -133,7 +133,7 @@ let to_tuple (xs: value list): value = VTuple xs
 let of_tuple (loc: AST.l) (x: value): value list =
     (match x with
     | VTuple xs -> xs
-    | _ -> raise (EvalError (loc, "tuple expected"))
+    | _ -> raise (EvalError (loc, "tuple expected. Got "^ pp_value x))
     )
 
 let mkrecord (fs: (AST.ident * value) list): value =
@@ -142,13 +142,13 @@ let mkrecord (fs: (AST.ident * value) list): value =
 let get_field (loc: AST.l) (x: value) (f: AST.ident): value =
     (match x with
     | VRecord fs -> Bindings.find f fs
-    | _ -> raise (EvalError (loc, "record expected"))
+    | _ -> raise (EvalError (loc, "record expected. Got "^ pp_value x))
     )
 
 let set_field (loc: AST.l) (x: value) (f: AST.ident) (v: value): value =
     (match x with
     | VRecord fs -> VRecord (Bindings.add f v fs)
-    | _ -> raise (EvalError (loc, "record expected"))
+    | _ -> raise (EvalError (loc, "record expected. Got "^ pp_value x))
     )
 
 let empty_array (d: value): value =
@@ -158,16 +158,16 @@ let get_array (loc: AST.l) (a: value) (i: value): value =
     (match (a, i) with
     | (VArray (x, d), VInt  i') -> prim_read_array x (Z.to_int i') d
     | (VArray (x, d), VEnum i') -> prim_read_array x (snd i') d
-    | (VArray (x, d), _) -> raise (EvalError (loc, "array index expected"))
-    | _ -> raise (EvalError (loc, "array expected"))
+    | (VArray (x, d), _) -> raise (EvalError (loc, "array index expected. Got "^pp_value i))
+    | _ -> raise (EvalError (loc, "array expected. Got "^pp_value a))
     )
 
 let set_array (loc: AST.l) (a: value) (i: value) (v: value): value =
     (match (a, i) with
     | (VArray (x, d), VInt  i') -> VArray (prim_write_array x (Z.to_int i') v, d)
     | (VArray (x, d), VEnum i') -> VArray (prim_write_array x (snd i') v, d)
-    | (VArray (x, d), _) -> raise (EvalError (loc, "array index expected"))
-    | _ -> raise (EvalError (loc, "array expected"))
+    | (VArray (x, d), _) -> raise (EvalError (loc, "array index expected. Got "^pp_value i))
+    | _ -> raise (EvalError (loc, "array expected. Got "^ pp_value a))
     )
 
 (** Delete all characters matching 'c' from string 'x' *)
@@ -333,7 +333,7 @@ let extract_bits'' (loc: AST.l) (x: value) (i: value) (w: value): value =
     (match x with
     | VInt(x')  -> VBits (prim_extract_int x' (to_integer loc i) (to_integer loc w))
     | VBits(x') -> VBits (prim_extract x'     (to_integer loc i) (to_integer loc w))
-    | _ -> raise (EvalError (loc, "bits or integer expected"))
+    | _ -> raise (EvalError (loc, "bits or integer expected. Got "^ pp_value x))
     )
 
 let insert_bits (loc: AST.l) (x: value) (i: value) (w: value) (y: value): value =
@@ -351,13 +351,14 @@ let rec eval_eq (loc: AST.l) (x: value) (y: value): bool =
     | (VBits   x', VBits   y') -> prim_eq_bits x' y'
     | (VString x', VString y') -> String.equal x' y'
     | (VTuple  xs, VTuple  ys) -> List.for_all2 (eval_eq loc) xs ys
-    | _ -> raise (EvalError (loc, "matchable types expected"))
+    | _ -> raise (EvalError (loc, "matchable types expected. Got "
+                                  ^ pp_value x ^", "^ pp_value y))
     )
 
 let eval_leq (loc: AST.l) (x: value) (y: value): bool =
     (match (x, y) with
     | (VInt x', VInt y') -> prim_le_int x' y'
-    | _ -> raise (EvalError (loc, "integer expected"))
+    | _ -> raise (EvalError (loc, "integer expected + pp_value x"))
     )
 
 let eval_eq_int (loc: AST.l) (x: value) (y: value): bool =
