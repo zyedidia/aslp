@@ -909,7 +909,7 @@ and eval_encoding (env: Env.t) (x: encoding) (op: value): bool =
 (** {2 Creating environment from global declarations}           *)
 (****************************************************************)
 
-(* todo: it would be better to make this a distinct value *)
+(* Uninitialized global variables are UNKNOWN by default *)
 let eval_uninitialized (loc: l) (env: Env.t) (x: AST.ty): value = eval_unknown loc env x
 
 (** Construct environment from global declarations *)
