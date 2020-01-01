@@ -1563,7 +1563,7 @@ let rec tc_slice_lexpr (env: Env.t) (u: unifier) (loc: AST.l) (x: lexpr) (ss: (A
             (LExpr_Slices(x', ss'), type_bits (slices_width ss'))
     | Type_Constructor tc when tc = Ident "integer" ->
             (* There is an argument for making this operation illegal *)
-            printf "Warning: slice assignment of integer at %s\n" (pp_loc loc);
+            if false then printf "Warning: slice assignment of integer at %s\n" (pp_loc loc);
             (LExpr_Slices(x', ss'), type_bits (slices_width ss'))
     | _ -> raise (TypeError (loc, "slice of lexpr"))
     )
