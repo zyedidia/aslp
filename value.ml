@@ -223,7 +223,9 @@ let from_stringLit (x: string): value = VString x
 let eval_prim (f: string) (tvs: value list) (vs: value list): value option =
     ( match (f, tvs, vs) with
     | ("eq_enum",           [      ], [VEnum x; VEnum y    ])     -> Some (VBool   (snd x =  snd y))
+    | ("eq_enum",           [      ], [VBool x; VBool y    ])     -> Some (VBool   (x =  y))
     | ("ne_enum",           [      ], [VEnum x; VEnum y    ])     -> Some (VBool   (snd x <> snd y))
+    | ("ne_enum",           [      ], [VBool x; VBool y    ])     -> Some (VBool   (x <> y))
     | ("eq_bool",           [      ], [VBool x; VBool y    ])     -> Some (VBool   (prim_eq_bool    x y))
     | ("ne_bool",           [      ], [VBool x; VBool y    ])     -> Some (VBool   (prim_ne_bool    x y))
     | ("equiv_bool",        [      ], [VBool x; VBool y    ])     -> Some (VBool   (prim_equiv_bool x y))
