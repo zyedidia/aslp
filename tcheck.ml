@@ -372,7 +372,7 @@ let subst_consts_type (env: GlobalEnv.t) (ty: AST.ty): AST.ty =
 let isConstant (env: GlobalEnv.t) (v: AST.ident): bool =
     GlobalEnv.getConstant env v <> None
 
-let removeConsts (env: GlobalEnv.t) (ids: IdentSet.t) =
+let removeConsts (env: GlobalEnv.t) (ids: IdentSet.t): IdentSet.t =
     IdentSet.filter (fun v -> not (isConstant env v)) ids
 
 (** dereference typedef *)
