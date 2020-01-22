@@ -119,7 +119,7 @@ let rec mapNoCopyList (f: 'a -> 'a list) = function
       | _ -> il' @ resti'
 
 (* not part of original cil framework *)
-let rec mapOptionNoCopy (f: 'a -> 'a): ('a option -> 'a option) = function
+let mapOptionNoCopy (f: 'a -> 'a): ('a option -> 'a option) = function
   | None -> None
   | (Some x) as ox ->
       let x' = f x in

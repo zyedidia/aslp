@@ -7,8 +7,6 @@
 
 (** ASL lexer test harness *)
 
-open Asl_ast
-
 module Lexer = Lexer
 module Parser = Asl_parser
 module TC = Tcheck

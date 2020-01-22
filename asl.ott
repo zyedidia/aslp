@@ -88,12 +88,12 @@ let pprint_ident (x: ident): string =
 let addTag (x: ident) (tag: int): ident =
     (match x with
     | Ident(s)    -> FIdent (s, tag)
-    | FIdent(s,_) -> failwith "addTag"
+    | FIdent(_,_) -> failwith "addTag"
     )
 
 let name_of_FIdent (x: ident): string =
     (match x with
-    | Ident(s)    -> failwith "name_of_FIdent"
+    | Ident(_)    -> failwith "name_of_FIdent"
     | FIdent(s,_) -> s
     )
 
@@ -101,19 +101,19 @@ let name_of_FIdent (x: ident): string =
 let addQualifier (p: string) (x: ident): ident =
     (match x with
     | Ident(s)    -> Ident (p ^ "." ^ s)
-    | FIdent(s,_) -> failwith "addQualifier"
+    | FIdent(_,_) -> failwith "addQualifier"
     )
 
 let addPrefix (p: string) (x: ident): ident =
     (match x with
     | Ident(q)    -> Ident (p ^ "." ^ q)
-    | FIdent(s,_) -> failwith "addQualifier"
+    | FIdent(_,_) -> failwith "addQualifier"
     )
 
 let addSuffix (x: ident) (s: string): ident =
     (match x with
     | Ident(p)    -> Ident (p ^ "." ^ s)
-    | FIdent(s,_) -> failwith "addQualifier"
+    | FIdent(_,_) -> failwith "addQualifier"
     )
 
 let genericTyvar (i: int): ident =
@@ -123,7 +123,7 @@ let genericTyvar (i: int): ident =
 let isGenericTyvar (x: ident): bool =
     (match x with
     | Ident(s)    -> s.[0] = '$'
-    | FIdent(s,_) -> failwith "addQualifier"
+    | FIdent(_,_) -> failwith "addQualifier"
     )
 
 module Id = struct
@@ -979,7 +979,7 @@ let rec buildExpr (op: binop) (x: expr) (ys: factor list) (loc: l): (expr * fact
 let buildExpression (x: expr) (fs: factor list) (loc: l): expr =
     ( match buildExpr Binop_DUMMY x fs loc with
     | (e, []) -> e
-    | (e, _) -> raise (Parse_error_locn(loc, "Impossible: unable to resolve precedence"))
+    | (_, _) -> raise (Parse_error_locn(loc, "Impossible: unable to resolve precedence"))
     )
 }}
 

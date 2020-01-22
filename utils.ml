@@ -74,8 +74,8 @@ let bind_option (ox: 'a option) (f: 'a -> 'b option): 'b option =
 
 let orelse_option (ox: 'a option) (f: unit -> 'a option): 'a option =
     (match ox with
-    | None -> f()
-    | Some x -> ox
+    | None   -> f()
+    | Some _ -> ox
     )
 
 let rec concat_option (oss: (('a list) option) list): ('a list) option =

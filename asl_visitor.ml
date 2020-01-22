@@ -67,13 +67,13 @@ let rec visit_exprs (vis: aslVisitor) (xs: expr list): expr list =
         mapNoCopy (visit_expr vis) xs
 
     and visit_var (vis: aslVisitor) (x: ident): ident =
-        let aux (vis: aslVisitor) (x: ident): ident =
+        let aux (_: aslVisitor) (x: ident): ident =
             x
         in
         doVisit vis (vis#vvar x) aux x
 
     and visit_lvar (vis: aslVisitor) (x: ident): ident =
-        let aux (vis: aslVisitor) (x: ident): ident =
+        let aux (_: aslVisitor) (x: ident): ident =
             x
         in
         doVisit vis (vis#vlvar x) aux x
@@ -113,11 +113,11 @@ let rec visit_exprs (vis: aslVisitor) (xs: expr list): expr list =
     and visit_pattern (vis: aslVisitor) (x: pattern): pattern = 
         let aux (vis: aslVisitor) (x: pattern): pattern =
             ( match x with
-            | Pat_LitInt(l)  -> x
-            | Pat_LitHex(l)  -> x
-            | Pat_LitBits(l) -> x
-            | Pat_LitMask(l) -> x
-            | Pat_Const(l)   -> x
+            | Pat_LitInt(_)  -> x
+            | Pat_LitHex(_)  -> x
+            | Pat_LitBits(_) -> x
+            | Pat_LitMask(_) -> x
+            | Pat_Const(_)   -> x
             | Pat_Wildcard   -> x
             | Pat_Tuple(ps)  ->
                     let ps' = visit_patterns vis ps in
@@ -206,7 +206,7 @@ let rec visit_exprs (vis: aslVisitor) (xs: expr list): expr list =
     and visit_type (vis: aslVisitor) (x: ty): ty =
         let aux (vis: aslVisitor) (x: ty): ty =
             ( match x with
-            | Type_Constructor(tc) -> x
+            | Type_Constructor(_) -> x
             | Type_Bits(n) ->
                     let n' = visit_expr vis n in
                     if n == n' then x else Type_Bits(n')
@@ -318,20 +318,20 @@ let rec visit_stmts (vis: aslVisitor) (xs: stmt list): stmt list =
             | Stmt_FunReturn (e, loc) ->
                     let e' = visit_expr vis e in
                     if e == e' then x else Stmt_FunReturn (e', loc)
-            | Stmt_ProcReturn (loc) -> x
+            | Stmt_ProcReturn (_) -> x
             | Stmt_Assert (e, loc) ->
                     let e' = visit_expr vis e in
                     if e == e' then x else Stmt_Assert (e', loc)
-            | Stmt_Unpred (loc) -> x
-            | Stmt_ConstrainedUnpred(loc) -> x
+            | Stmt_Unpred (_) -> x
+            | Stmt_ConstrainedUnpred(_) -> x
             | Stmt_ImpDef (v, loc) ->
                     let v' = visit_var vis v in
                     if v == v' then x else Stmt_ImpDef (v', loc)
-            | Stmt_Undefined (loc) -> x
-            | Stmt_ExceptionTaken (loc) -> x
-            | Stmt_Dep_Unpred (loc) -> x
-            | Stmt_Dep_ImpDef (s, loc) -> x
-            | Stmt_Dep_Undefined (loc) -> x
+            | Stmt_Undefined (_) -> x
+            | Stmt_ExceptionTaken (_) -> x
+            | Stmt_Dep_Unpred (_) -> x
+            | Stmt_Dep_ImpDef (_, _) -> x
+            | Stmt_Dep_Undefined (_) -> x
             | Stmt_See (e, loc) ->
                     let e' = visit_expr vis e in
                     if e == e' then x else Stmt_See (e', loc)
@@ -697,26 +697,26 @@ let visit_decl (vis: aslVisitor) (x: declaration): declaration =
 
 class nopAslVisitor : aslVisitor = object
 
-    method vvar      (x: ident)          = DoChildren
-    method ve_elsif  (x: e_elsif)        = DoChildren
-    method vslice    (x: slice)          = DoChildren
-    method vpattern  (x: pattern)        = DoChildren
-    method vexpr     (x: expr)           = DoChildren
-    method vtype     (x: ty)             = DoChildren
-    method vlvar     (x: ident)          = DoChildren
-    method vlexpr    (x: lexpr)          = DoChildren
-    method vstmt     (x: stmt)           = DoChildren
-    method vs_elsif  (x: s_elsif)        = DoChildren
-    method valt      (x: alt)            = DoChildren
-    method vcatcher  (x: catcher)        = DoChildren
-    method vmapfield (x: mapfield)       = DoChildren
-    method vsformal  (x: sformal)        = DoChildren
-    method vdpattern (x: decode_pattern) = DoChildren
-    method vencoding (x: encoding)       = DoChildren
-    method vdcase    (x: decode_case)    = DoChildren
-    method vdalt     (x: decode_alt)     = DoChildren
-    method vdbody    (x: decode_body)    = DoChildren
-    method vdecl     (x: declaration)    = DoChildren
+    method vvar      (_: ident)          = DoChildren
+    method ve_elsif  (_: e_elsif)        = DoChildren
+    method vslice    (_: slice)          = DoChildren
+    method vpattern  (_: pattern)        = DoChildren
+    method vexpr     (_: expr)           = DoChildren
+    method vtype     (_: ty)             = DoChildren
+    method vlvar     (_: ident)          = DoChildren
+    method vlexpr    (_: lexpr)          = DoChildren
+    method vstmt     (_: stmt)           = DoChildren
+    method vs_elsif  (_: s_elsif)        = DoChildren
+    method valt      (_: alt)            = DoChildren
+    method vcatcher  (_: catcher)        = DoChildren
+    method vmapfield (_: mapfield)       = DoChildren
+    method vsformal  (_: sformal)        = DoChildren
+    method vdpattern (_: decode_pattern) = DoChildren
+    method vencoding (_: encoding)       = DoChildren
+    method vdcase    (_: decode_case)    = DoChildren
+    method vdalt     (_: decode_alt)     = DoChildren
+    method vdbody    (_: decode_body)    = DoChildren
+    method vdecl     (_: declaration)    = DoChildren
 
 end
 

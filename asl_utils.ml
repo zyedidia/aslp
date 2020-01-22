@@ -171,17 +171,17 @@ class freevarClass = object
 
     val mutable fvs = IdentSet.empty
     method result = fvs
-    method vvar x =
+    method! vvar x =
         fvs <- IdentSet.add x fvs;
         SkipChildren
 end
 
-let rec fv_expr (x: expr): IdentSet.t =
+let fv_expr (x: expr): IdentSet.t =
     let fv = new freevarClass in
     ignore (visit_expr (fv :> aslVisitor) x);
     fv#result
 
-let rec fv_type (x: ty): IdentSet.t =
+let fv_type (x: ty): IdentSet.t =
     let fv = new freevarClass in
     ignore (visit_type (fv :> aslVisitor) x);
     fv#result
@@ -212,7 +212,7 @@ let fv_sformals (atys: sformal list): IdentSet.t =
     that it easily changed if we think it should.               *)
 class substClass (s: expr Bindings.t) = object
     inherit nopAslVisitor
-    method vexpr x =
+    method! vexpr x =
         (match x with
         | Expr_Var v ->
                 (match Bindings.find_opt v s with
@@ -223,19 +223,19 @@ class substClass (s: expr Bindings.t) = object
         )
 end
 
-let rec subst_expr (s: expr Bindings.t) (x: expr): expr =
+let subst_expr (s: expr Bindings.t) (x: expr): expr =
     let subst = new substClass s in
     visit_expr subst x
 
-let rec subst_lexpr (s: expr Bindings.t) (x: lexpr): lexpr =
+let subst_lexpr (s: expr Bindings.t) (x: lexpr): lexpr =
     let subst = new substClass s in
     visit_lexpr subst x
 
-let rec subst_slice (s: expr Bindings.t) (x: slice): slice =
+let subst_slice (s: expr Bindings.t) (x: slice): slice =
     let subst = new substClass s in
     visit_slice subst x
 
-let rec subst_type (s: expr Bindings.t) (x: ty): ty =
+let subst_type (s: expr Bindings.t) (x: ty): ty =
     let subst = new substClass s in
     visit_type subst x
 
@@ -245,7 +245,7 @@ let rec subst_type (s: expr Bindings.t) (x: ty): ty =
  *)
 class substFunClass (replace: ident -> expr option) = object
     inherit nopAslVisitor
-    method vexpr x =
+    method! vexpr x =
         (match x with
         | Expr_Var v ->
                 (match replace v with
@@ -282,7 +282,7 @@ let subst_fun_type (replace: ident -> expr option) (x: ty): ty =
     (Especially useful for expressions in types)                *)
 class replaceExprClass (replace: expr -> expr option) = object
     inherit nopAslVisitor
-    method vexpr x =
+    method! vexpr x =
         (match replace x with
         | Some r -> ChangeTo r
         | None -> SkipChildren
@@ -304,7 +304,7 @@ end
     the reverse of typechecking.                                *)
 class resugarClass (ops: AST.binop Bindings.t) = object (self)
     inherit nopAslVisitor
-    method vexpr x =
+    method! vexpr x =
         (match x with
         | Expr_TApply(f, tys, args) ->
                 let args' = List.map (visit_expr (self :> aslVisitor)) args in
@@ -318,11 +318,11 @@ class resugarClass (ops: AST.binop Bindings.t) = object (self)
         )
 end
 
-let rec resugar_expr (ops: AST.binop Bindings.t) (x: expr): expr =
+let resugar_expr (ops: AST.binop Bindings.t) (x: expr): expr =
     let resugar = new resugarClass ops in
     visit_expr resugar x
 
-let rec resugar_type (ops: AST.binop Bindings.t) (x: AST.ty): AST.ty =
+let resugar_type (ops: AST.binop Bindings.t) (x: AST.ty): AST.ty =
     let resugar = new resugarClass ops in
     visit_type resugar x
 
