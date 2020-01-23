@@ -8,9 +8,7 @@
 (** ASL lexer test harness *)
 
 module Lexer = Lexer
-module Parser = Asl_parser
 module TC = Tcheck
-module PP = Asl_parser_pp
 open Lexersupport
 open Lexing
 

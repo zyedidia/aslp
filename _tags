@@ -4,3 +4,4 @@ true: package(z3)
 true: package(zarith)
 true: package(linenoise)
 true: use_menhir
+"bin": include

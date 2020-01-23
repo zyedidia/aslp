@@ -30,7 +30,6 @@ MENHIR          := -menhir "menhir $(MENHIRFLAGS)"
 SRCS += asl_ast.ml
 SRCS += asl_parser.mly
 SRCS += asl_parser_pp.ml
-SRCS += asli.ml
 SRCS += elf.ml
 SRCS += lexersupport.ml
 SRCS += lexer.mll
@@ -43,12 +42,14 @@ SRCS += primops.ml
 SRCS += value.ml
 SRCS += eval.ml
 
+SRCS += bin/asli.ml
+
 all :: asli.native
 asli.native: $(SRCS)
 	echo Execute the following: export DYLD_LIBRARY_PATH=`opam config var z3:lib`
 	ocamlbuild $(BUILDFLAGS) $(MENHIR) $@
 
-asli.byte: $(SRCS)
+bin/asli.byte: $(SRCS)
 	echo Execute the following: export DYLD_LIBRARY_PATH=`opam config var z3:lib`
 	ocamlbuild $(BUILDFLAGS) $(MENHIR) $@
 
@@ -61,7 +62,7 @@ asli: asli.native
 	ln -f -s $^ asli
 
 clean ::
-	$(RM) asli.byte asli.native asli
+	$(RM) bin/asli.byte asli.native asli
 	$(RM) -r _build
 	$(RM) asl.tex asl_ast.ml asl_parser.mly asl_lexer.mll asl_parser_pp.ml
 	$(RM) -r asli.docdir
@@ -69,7 +70,7 @@ clean ::
 
 all :: testlexer.native
 
-testlexer.native: testlexer.ml lexersupport.ml lexer.mll asl_parser.mly
+testlexer.native: bin/testlexer.ml lexersupport.ml lexer.mll
 	# Adding Z3 to the dynamic library path would not be necessary if we made
 	# use of the Z3 package conditional on what target we were building
 	echo Execute the following: export DYLD_LIBRARY_PATH=`opam config var z3:lib`
@@ -105,7 +106,7 @@ asl_unquotiented.pdf: asl.ott Makefile
 install::
 	if [ -z "$(SHARE_DIR)" ]; then echo SHARE_DIR is unset; false; fi
 	mkdir -p $(INSTALL_DIR)/bin
-	cp asli $(INSTALL_DIR)/bin/asli
+	cp asli.native $(INSTALL_DIR)/bin/asli
 
 uninstall::
 	if [ -z "$(SHARE_DIR)" ]; then echo SHARE_DIR is unset; false; else rm -rf $(SHARE_DIR); fi
