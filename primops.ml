@@ -120,13 +120,15 @@ type bitvector = { n: int; v: Z.t }
 
 let empty_bits = { n = 0; v = Z.zero }
 
+(* workaround: ZArith library doesn't like zero-length extracts *)
+let checked_extract f v off len = if len > 0 then f v off len else Z.zero
+let z_extract = checked_extract Z.extract
+let z_signed_extract = checked_extract Z.signed_extract
+
 (* primary way of creating bitvector satisfying invariants *)
 let mkBits (n: int) (v: bigint): bitvector = (
     assert (n >= 0);
-    if n = 0 then (* workaround: ZArith library doesn't like zero-length extracts *)
-        { n; v = Z.zero }
-    else
-        { n; v = Z.extract v 0 n }
+    { n; v = z_extract v 0 n }
 )
 
 (* utility function for use in implementing binary operators
@@ -135,10 +137,7 @@ let mkBits (n: int) (v: bigint): bitvector = (
 let mkBits2 (n1: int) (n2: int) (v: bigint): bitvector = (
     assert (n1 = n2);
     assert (n1 >= 0);
-    if n1 = 0 then (* workaround: ZArith library doesn't like zero-length extracts *)
-        { n = n1; v = Z.zero }
-    else
-        { n = n1; v = Z.extract v 0 n1 }
+    { n = n1; v = z_extract v 0 n1 }
 )
 
 let prim_length_bits (x: bitvector): int = x.n
@@ -146,11 +145,11 @@ let prim_length_bits (x: bitvector): int = x.n
 let prim_cvt_int_bits (n: bigint) (i: bigint): bitvector = (
     assert (Z.geq n Z.zero);
     let n' = Z.to_int n in
-    { n = n'; v = Z.extract i 0 n' }
+    { n = n'; v = z_extract i 0 n' }
 )
 
-let prim_cvt_bits_sint (x: bitvector): bigint = Z.signed_extract x.v 0 x.n
-let prim_cvt_bits_uint (x: bitvector): bigint = Z.extract x.v 0 x.n
+let prim_cvt_bits_sint (x: bitvector): bigint = z_signed_extract x.v 0 x.n
+let prim_cvt_bits_uint (x: bitvector): bigint = z_extract x.v 0 x.n
 
 let prim_eq_bits  (x: bitvector) (y: bitvector): bool = assert (x.n = y.n); Z.equal x.v y.v
 let prim_ne_bits  (x: bitvector) (y: bitvector): bool = assert (x.n = y.n); not (Z.equal x.v y.v)
@@ -188,14 +187,14 @@ let prim_extract (x: bitvector) (i: bigint) (w: bigint): bitvector =
     assert (0 <= i');
     assert (0 <= w');
     assert (i' + w' <= x.n);
-    mkBits w' (Z.extract x.v i' w')
+    mkBits w' (z_extract x.v i' w')
 
 let prim_extract_int (x: Z.t) (i: bigint) (w: bigint): bitvector =
     let i' = Z.to_int i in
     let w' = Z.to_int w in
     assert (0 <= i');
     assert (0 <= w');
-    mkBits w' (Z.extract x i' w')
+    mkBits w' (z_extract x i' w')
 
 let prim_insert (x: bitvector) (i: bigint) (w: bigint) (y: bitvector): bitvector =
     let i' = Z.to_int i in
@@ -206,7 +205,7 @@ let prim_insert (x: bitvector) (i: bigint) (w: bigint) (y: bitvector): bitvector
     assert (w' = y.n);
     let msk = (Z.sub (Z.shift_left Z.one (i'+w')) (Z.shift_left Z.one i')) in
     let nmsk = Z.lognot msk in
-    let y' = Z.shift_left (Z.extract y.v 0 w') i' in
+    let y' = Z.shift_left (z_extract y.v 0 w') i' in
     mkBits x.n (Z.logor (Z.logand nmsk x.v) (Z.logand msk y'))
 
 
@@ -370,7 +369,7 @@ let prim_read_ram (asz: bigint) (dsz: bigint) (mem: ram) (addr: bigint): bitvect
 let prim_write_ram (asz: bigint) (dsz: bigint) (mem: ram) (addr: bigint) (v: bitvector): unit =
     let rec write (i: int): unit =
         if i < (Z.to_int dsz) then
-            let b = char_of_int (Z.to_int (Z.extract v.v (i*8) 8)) in
+            let b = char_of_int (Z.to_int (z_extract v.v (i*8) 8)) in
             writeByte_ram mem (Z.add addr (Z.of_int i)) b;
             write (i+1)
     in
