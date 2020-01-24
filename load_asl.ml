@@ -18,8 +18,7 @@ open Lexing
 
 let opt_verbose = ref false
 
-let read_file (filename : string) (isPrelude: bool): AST.declaration list =
-    if !opt_verbose then Printf.printf "Processing %s\n" filename;
+let parse_file (filename : string) (isPrelude: bool): AST.declaration list =
     let inchan = open_in filename in
     let lexbuf = Lexing.from_channel inchan in
     lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
@@ -52,32 +51,34 @@ let read_file (filename : string) (isPrelude: bool): AST.declaration list =
         )
     in
     close_in inchan;
+    t
+
+let report_tc_errors (tc: AST.declaration list -> 'a) (decls: AST.declaration list): 'a =
+    try tc decls with
+    | TC.UnknownObject (loc, what, x) ->
+        Printf.printf "  %s: Type error: Unknown %s %s\n" (pp_loc loc) what x;
+        exit 1
+    | TC.DoesNotMatch (loc, what, x, y) ->
+        Printf.printf "  %s: Type error: %s %s does not match %s\n" (pp_loc loc) what x y;
+        exit 1
+    | TC.IsNotA (loc, what, x) ->
+        Printf.printf "  %s: Type error: %s is not a %s\n" (pp_loc loc) x what;
+        exit 1
+    | TC.Ambiguous (loc, what, x) ->
+        Printf.printf "  %s: Type error: %s %s is ambiguous\n" (pp_loc loc) what x;
+        exit 1
+    | TC.TypeError (loc, what) ->
+        Printf.printf "  %s: Type error: %s\n" (pp_loc loc) what;
+        exit 1
+
+let read_file (filename : string) (isPrelude: bool): AST.declaration list =
+    if !opt_verbose then Printf.printf "Processing %s\n" filename;
+    let t = parse_file filename isPrelude in
 
     if false then PPrint.ToChannel.pretty 1.0 60 stdout (PP.pp_declarations t);
     if !opt_verbose then Printf.printf "  - Got %d declarations from %s\n" (List.length t) filename;
 
-    let t' =
-        try
-            if !opt_verbose then Printf.printf "- Typechecking %s\n" filename;
-            let t' = TC.tc_declarations isPrelude t in
-            t'
-        with
-        | TC.UnknownObject (loc, what, x) ->
-            Printf.printf "  %s: Type error: Unknown %s %s\n" (pp_loc loc) what x;
-            exit 1
-        | TC.DoesNotMatch (loc, what, x, y) ->
-            Printf.printf "  %s: Type error: %s %s does not match %s\n" (pp_loc loc) what x y;
-            exit 1
-        | TC.IsNotA (loc, what, x) ->
-            Printf.printf "  %s: Type error: %s is not a %s\n" (pp_loc loc) x what;
-            exit 1
-        | TC.Ambiguous (loc, what, x) ->
-            Printf.printf "  %s: Type error: %s %s is ambiguous\n" (pp_loc loc) what x;
-            exit 1
-        | TC.TypeError (loc, what) ->
-            Printf.printf "  %s: Type error: %s\n" (pp_loc loc) what;
-            exit 1
-    in
+    let t' = report_tc_errors (TC.tc_declarations isPrelude) t in
 
     if false then PPrint.ToChannel.pretty 1.0 60 stdout (PP.pp_declarations t');
     if !opt_verbose then Printf.printf "  - Got %d typechecked declarations from %s\n" (List.length t') filename;
