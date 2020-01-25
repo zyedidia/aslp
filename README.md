@@ -151,7 +151,7 @@ statements and expressions.
         /\     / ____|| |     (_)   ASL interpreter
        /  \   | (___  | |      _    Copyright Arm Limited (c) 2017-2019
       / /\ \   \___ \ | |     | |
-     / ____ \  ____) || |____ | |   Version 0.1 alpha
+     / ____ \  ____) || |____ | |   Version 0.1.1 alpha
     /_/    \_\|_____/ |______||_|   ___________________________________
 
     Type :? for help
