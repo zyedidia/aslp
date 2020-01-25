@@ -7,6 +7,8 @@
 
 (** ASL interactive frontend *)
 
+open LibASL
+
 open Asl_ast
 
 module Lexer  = Lexer

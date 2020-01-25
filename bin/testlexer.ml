@@ -7,6 +7,8 @@
 
 (** ASL lexer test harness *)
 
+open LibASL
+
 module Lexer = Lexer
 module TC = Tcheck
 open Lexersupport
