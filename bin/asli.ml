@@ -11,14 +11,11 @@ open LibASL
 
 open Asl_ast
 
-module Lexer  = Lexer
 module Parser = Asl_parser
 module TC     = Tcheck
 module PP     = Asl_parser_pp
 module AST    = Asl_ast
 
-open Lexersupport
-open Lexing
 open Load_asl
 
 let opt_filenames : string list ref = ref []
@@ -77,17 +74,10 @@ let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (inp
         let decoder = Eval.Env.getDecoder env (Ident iset) in
         Eval.eval_decode_case AST.Unknown env decoder op
     | (":set" :: "impdef" :: rest) ->
-        let cmd    = String.concat " " rest in
-        let loc    = mkLoc fname cmd in
-        let lexbuf = Lexing.from_string cmd in
-        let lexer  = offside_token Lexer.token in
-        let CLI_Impdef (x, e) = Parser.impdef_command_start lexer lexbuf in
-        let (s, e') = TC.with_unify tcenv loc (fun u ->
-            let (e', _) = TC.tc_expr tcenv u loc e in
-            e'
-        ) in
-        let e'' = TC.unify_subst_e s e' in
-        let v = Eval.eval_expr loc env e'' in
+        let cmd = String.concat " " rest in
+        let loc = mkLoc fname cmd in
+        let (x, e) = read_impdef tcenv loc cmd in
+        let v = Eval.eval_expr loc env e in
         Eval.Env.setImpdef env x v
     | [":set"; flag] when Utils.startswith flag "+" ->
         (match List.assoc_opt (Utils.stringDrop 1 flag) flags with
@@ -121,21 +111,13 @@ let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (inp
             Printf.printf "Exception taken\n"
         )
     | _ ->
-        let loc    = mkLoc fname input in
-        let lexbuf = Lexing.from_string input in
-        let lexer  = offside_token Lexer.token in
         if ';' = String.get input (String.length input - 1) then begin
-            let s = Parser.stmt_command_start lexer lexbuf in
-            let s' = TC.tc_stmt tcenv s in
-            Eval.eval_stmt env s'
+            let s = read_stmt tcenv input in
+            Eval.eval_stmt env s
         end else begin
-            let e = Parser.expr_command_start lexer lexbuf in
-            let (s, e') = TC.with_unify tcenv loc (fun u ->
-                let (e', _) = TC.tc_expr tcenv u loc e in
-                e'
-            ) in
-            let e'' = TC.unify_subst_e s e' in
-            let v = Eval.eval_expr loc env e'' in
+            let loc = mkLoc fname input in
+            let e   = read_expr tcenv loc input in
+            let v   = Eval.eval_expr loc env e in
             print_endline (Value.pp_value v)
         end
     )

@@ -99,3 +99,33 @@ let read_spec (filename : string): AST.declaration list =
         close_in inchan
     );
     List.concat (List.rev !r)
+
+let read_impdef (tcenv: TC.Env.t) (loc: AST.l) (s: string): (string * AST.expr) =
+    let lexbuf = Lexing.from_string s in
+    let lexer  = offside_token Lexer.token in
+    let CLI_Impdef (x, e) = Parser.impdef_command_start lexer lexbuf in
+    let (s, e') = TC.with_unify tcenv loc (fun u ->
+        let (e', _) = TC.tc_expr tcenv u loc e in
+        e'
+    ) in
+    (x, TC.unify_subst_e s e')
+
+let read_expr (tcenv: TC.Env.t) (loc: AST.l) (s: string): AST.expr =
+    let lexbuf = Lexing.from_string s in
+    let lexer  = offside_token Lexer.token in
+    let e = Parser.expr_command_start lexer lexbuf in
+    let (s, e') = TC.with_unify tcenv loc (fun u ->
+        let (e', _) = TC.tc_expr tcenv u loc e in
+        e'
+    ) in
+    TC.unify_subst_e s e'
+
+let read_stmt (tcenv: TC.Env.t) (s: string): AST.stmt =
+    let lexbuf = Lexing.from_string s in
+    let lexer  = offside_token Lexer.token in
+    let s = Parser.stmt_command_start lexer lexbuf in
+    TC.tc_stmt tcenv s
+
+(****************************************************************
+ * End
+ ****************************************************************)
