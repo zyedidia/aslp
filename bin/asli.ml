@@ -20,6 +20,8 @@ open Load_asl
 
 let opt_filenames : string list ref = ref []
 let opt_print_version = ref false
+let opt_verbose = ref false
+
 
 let help_msg = [
     {|:? :help                       Show this help message|};
@@ -132,45 +134,25 @@ let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (inp
         end
     )
 
-let try_process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (input: string): unit =
-    (try
-        process_command tcenv env fname input
-    with
-    | Parse_error_locn(l, s) -> begin
-        Printf.printf "  Syntax error %s at %s\n" s (pp_loc l)
-    end
-    | PrecedenceError(loc, op1, op2) -> begin
-        Printf.printf "  Syntax error: operators %s and %s require parentheses to disambiguate expression at location %s\n"
-            (Utils.to_string (PP.pp_binop op1))
-            (Utils.to_string (PP.pp_binop op2))
-            (pp_loc loc)
-    end
-    | Parser.Error ->
-        Printf.printf "  Parser error\n";
-    | TC.UnknownObject (loc, what, x) ->
-        Printf.printf "  %s: Type error: Unknown %s %s\n" (pp_loc loc) what x
-    | TC.DoesNotMatch (loc, what, x, y) ->
-        Printf.printf "  %s: Type error: %s %s does not match %s\n" (pp_loc loc) what x y
-    | TC.IsNotA (loc, what, x) ->
-        Printf.printf "  %s: Type error: %s is not a %s\n" (pp_loc loc) x what
-    | TC.Ambiguous (loc, what, x) ->
-        Printf.printf "  %s: Type error: %s %s is ambiguous\n" (pp_loc loc) what x
-    | TC.TypeError (loc, what) ->
-        Printf.printf "  %s: Type error: %s\n" (pp_loc loc) what
-    | Value.EvalError (loc, msg) ->
-        Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg
-    | exc ->
-        Printf.printf "  Error %s\n" (Printexc.to_string exc);
-        Printexc.print_backtrace stdout
-    )
-
 let rec repl (tcenv: TC.Env.t) (env: Eval.Env.t): unit =
     flush stdout;
     (match LNoise.linenoise "ASLi> " with
     | None -> ()
     | Some input ->
         LNoise.history_add input |> ignore;
-        try_process_command tcenv env "<stdin>" input;
+        (try
+            report_eval_error (fun _ -> ()) (fun _ ->
+                report_type_error (fun _ -> ()) (fun _ ->
+                    report_parse_error (fun _ -> ()) (fun _ ->
+                        process_command tcenv env "<stdin>" input
+                    )
+                )
+            )
+        with
+        | exc ->
+            Printf.printf "  Error %s\n" (Printexc.to_string exc);
+            Printexc.print_backtrace stdout
+        );
         repl tcenv env
     )
 
@@ -204,12 +186,12 @@ let main () =
     else begin
         List.iter print_endline banner;
         print_endline "\nType :? for help";
-        let t  = read_file "prelude.asl" true in
+        let t  = read_file "prelude.asl" true !opt_verbose in
         let ts = List.map (fun filename ->
             if Utils.endswith filename ".spec" then begin
-                read_spec filename
+                read_spec filename !opt_verbose
             end else if Utils.endswith filename ".asl" then begin
-                read_file filename false
+                read_file filename false !opt_verbose
             end else begin
                 failwith ("Unrecognized file suffix on "^filename)
             end

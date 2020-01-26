@@ -8,10 +8,12 @@
 module AST = Asl_ast
 module TC  = Tcheck
 
-val opt_verbose : bool ref
+val report_parse_error : (unit -> 'a) -> (unit -> 'a) -> 'a
+val report_type_error  : (unit -> 'a) -> (unit -> 'a) -> 'a
+val report_eval_error  : (unit -> 'a) -> (unit -> 'a) -> 'a
 
-val read_file   : string -> bool -> Asl_ast.declaration list
-val read_spec   : string -> Asl_ast.declaration list
+val read_file   : string -> bool -> bool -> Asl_ast.declaration list
+val read_spec   : string -> bool -> Asl_ast.declaration list
 
 val read_impdef : TC.Env.t -> AST.l -> string -> (string * AST.expr)
 val read_expr   : TC.Env.t -> AST.l -> string -> AST.expr

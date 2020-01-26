@@ -16,82 +16,94 @@ module AST    = Asl_ast
 open Lexersupport
 open Lexing
 
-let opt_verbose = ref false
+let report_parse_error (on_error: unit -> 'a) (f: unit -> 'a): 'a =
+    (try
+        f ()
+    with
+    | Parse_error_locn(l, s) ->
+        Printf.printf "  Syntax error %s at %s\n" s (pp_loc l);
+        on_error ()
+    | PrecedenceError(loc, op1, op2) ->
+        Printf.printf "  Syntax error: operators %s and %s require parentheses to disambiguate expression at location %s\n"
+            (Utils.to_string (PP.pp_binop op1))
+            (Utils.to_string (PP.pp_binop op2))
+            (pp_loc loc);
+        on_error ()
+    | Parser.Error ->
+        Printf.printf "  Parser error\n";
+        on_error ()
+    )
 
-let read_file (filename : string) (isPrelude: bool): AST.declaration list =
-    if !opt_verbose then Printf.printf "Processing %s\n" filename;
+let report_type_error (on_error: unit -> 'a) (f: unit -> 'a): 'a =
+    (try
+        f ()
+    with
+    | TC.UnknownObject (loc, what, x) ->
+        Printf.printf "  %s: Type error: Unknown %s %s\n" (pp_loc loc) what x;
+        on_error ()
+    | TC.DoesNotMatch (loc, what, x, y) ->
+        Printf.printf "  %s: Type error: %s %s does not match %s\n" (pp_loc loc) what x y;
+        on_error ()
+    | TC.IsNotA (loc, what, x) ->
+        Printf.printf "  %s: Type error: %s is not a %s\n" (pp_loc loc) x what;
+        on_error ()
+    | TC.Ambiguous (loc, what, x) ->
+        Printf.printf "  %s: Type error: %s %s is ambiguous\n" (pp_loc loc) what x;
+        on_error ()
+    | TC.TypeError (loc, what) ->
+        Printf.printf "  %s: Type error: %s\n" (pp_loc loc) what;
+        on_error ()
+    )
+
+let report_eval_error (on_error: unit -> 'a) (f: unit -> 'a): 'a =
+    (try
+        f ()
+    with
+    | Value.EvalError (loc, msg) ->
+        Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg;
+        on_error ()
+    )
+
+let read_file (filename : string) (isPrelude: bool) (verbose: bool): AST.declaration list =
+    if verbose then Printf.printf "Processing %s\n" filename;
     let inchan = open_in filename in
     let lexbuf = Lexing.from_channel inchan in
     lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
     let t =
-        (try
+        report_parse_error (fun _ -> exit 1) (fun _ ->
             (* Apply offside rule to raw token stream *)
             let lexer = offside_token Lexer.token in
 
             (* Run the parser on this line of input. *)
-            if !opt_verbose then Printf.printf "- Parsing %s\n" filename;
+            if verbose then Printf.printf "- Parsing %s\n" filename;
             Parser.declarations_start lexer lexbuf
-        with
-        | Parse_error_locn(l, s) -> begin
-            Printf.printf "  Syntax error %s at %s\n" s (pp_loc l);
-            exit 1
-        end
-        | PrecedenceError(loc, op1, op2) -> begin
-            Printf.printf "  Syntax error: operators %s and %s require parentheses to disambiguate expression at location %s\n"
-                (Utils.to_string (Asl_parser_pp.pp_binop op1))
-                (Utils.to_string (Asl_parser_pp.pp_binop op2))
-                (pp_loc loc);
-            exit 1
-        end
-        | Parser.Error -> begin
-            let curr = lexbuf.Lexing.lex_curr_p in
-            let tok = Lexing.lexeme lexbuf in
-            Printf.printf "  Parser error at %s '%s'\n" (AST.pp_lexing_position curr) tok;
-            exit 1
-        end
         )
     in
     close_in inchan;
 
     if false then PPrint.ToChannel.pretty 1.0 60 stdout (PP.pp_declarations t);
-    if !opt_verbose then Printf.printf "  - Got %d declarations from %s\n" (List.length t) filename;
+    if verbose then Printf.printf "  - Got %d declarations from %s\n" (List.length t) filename;
 
     let t' =
-        try
-            if !opt_verbose then Printf.printf "- Typechecking %s\n" filename;
-            let t' = TC.tc_declarations isPrelude t in
-            t'
-        with
-        | TC.UnknownObject (loc, what, x) ->
-            Printf.printf "  %s: Type error: Unknown %s %s\n" (pp_loc loc) what x;
-            exit 1
-        | TC.DoesNotMatch (loc, what, x, y) ->
-            Printf.printf "  %s: Type error: %s %s does not match %s\n" (pp_loc loc) what x y;
-            exit 1
-        | TC.IsNotA (loc, what, x) ->
-            Printf.printf "  %s: Type error: %s is not a %s\n" (pp_loc loc) x what;
-            exit 1
-        | TC.Ambiguous (loc, what, x) ->
-            Printf.printf "  %s: Type error: %s %s is ambiguous\n" (pp_loc loc) what x;
-            exit 1
-        | TC.TypeError (loc, what) ->
-            Printf.printf "  %s: Type error: %s\n" (pp_loc loc) what;
-            exit 1
+        report_type_error (fun _ -> exit 1) (fun _ ->
+            if verbose then Printf.printf "- Typechecking %s\n" filename;
+            TC.tc_declarations isPrelude t
+        )
     in
 
     if false then PPrint.ToChannel.pretty 1.0 60 stdout (PP.pp_declarations t');
-    if !opt_verbose then Printf.printf "  - Got %d typechecked declarations from %s\n" (List.length t') filename;
+    if verbose then Printf.printf "  - Got %d typechecked declarations from %s\n" (List.length t') filename;
 
-    if !opt_verbose then Printf.printf "Finished %s\n" filename;
+    if verbose then Printf.printf "Finished %s\n" filename;
     flush stdout;
     t'
 
-let read_spec (filename : string): AST.declaration list =
+let read_spec (filename : string) (verbose: bool): AST.declaration list =
     let r: AST.declaration list list ref = ref [] in
     let inchan = open_in filename in
     (try
         while true do
-            let t = read_file (input_line inchan) false in
+            let t = read_file (input_line inchan) false verbose in
             r := t :: !r
         done
     with
