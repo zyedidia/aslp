@@ -48,20 +48,31 @@ let mkLoc (fname: string) (input: string): AST.l =
     let finish: Lexing.position = { pos_fname = fname; pos_lnum = 1; pos_bol = 0; pos_cnum = len } in
     AST.Range (start, finish)
 
+let load_ELF (env: Eval.Env.t) (fname: string) (verbose: bool): Elf.uint64 =
+    let write_byte (addr: Int64.t) (b: char): unit =
+        if verbose then Printf.printf "ELF %LX = 0x%x\n" addr (Char.code b);
+        let a = Value.VBits (Primops.mkBits 64 (Z.of_int64 addr)) in
+        let b = Value.VBits (Primops.mkBits  8 (Z.of_int (Char.code b))) in
+        Eval.eval_proccall AST.Unknown env (AST.FIdent ("__ELFWriteMemory", 0)) [] [a; b]
+    in
+    Elf.load_file fname write_byte
+
+let exec_opcode (env: Eval.Env.t) (iset: string) (opcode: Z.t): unit =
+    let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) opcode) in
+    let decoder = Eval.Env.getDecoder env (Ident iset) in
+    Eval.eval_decode_case AST.Unknown env decoder op
+
+let exec_instr (env: Eval.Env.t): unit =
+    Eval.eval_proccall AST.Unknown env (AST.FIdent ("__InstructionExecute", 0)) [] []
+
 let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (input0: string): unit =
     let input = String.trim input0 in
     (match String.split_on_char ' ' input with
     | [""] ->
         ()
     | [":elf"; file] ->
-        let write_byte (addr: Int64.t) (b: char): unit =
-            if false then Printf.printf "ELF %LX = 0x%x\n" addr (Char.code b);
-            let a = Value.VBits (Primops.mkBits 64 (Z.of_int64 addr)) in
-            let b = Value.VBits (Primops.mkBits  8 (Z.of_int (Char.code b))) in
-            Eval.eval_proccall AST.Unknown env (AST.FIdent ("__ELFWriteMemory", 0)) [] [a; b]
-        in
         Printf.printf "Loading ELF file %s.\n" file;
-        let entry = Elf.load_file file write_byte in
+        let entry = load_ELF env file false in
         Printf.printf "Entry point = 0x%Lx\n" entry
     | [":help"] | [":?"] ->
         List.iter print_endline help_msg;
@@ -69,10 +80,9 @@ let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (inp
         List.iter (fun (nm, v) -> Printf.printf "  %s%s\n" (if !v then "+" else "-") nm) flags
     | [":opcode"; iset; opcode] ->
         (* todo: make this code more robust *)
-        let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))) in
-        Printf.printf "Decoding and executing instruction %s %s\n" iset (Value.pp_value op);
-        let decoder = Eval.Env.getDecoder env (Ident iset) in
-        Eval.eval_decode_case AST.Unknown env decoder op
+        let op = Z.of_int (int_of_string opcode) in
+        Printf.printf "Decoding and executing instruction %s %s\n" iset (Z.format "%x" op);
+        exec_opcode env iset op
     | (":set" :: "impdef" :: rest) ->
         let cmd = String.concat " " rest in
         let loc = mkLoc fname cmd in
@@ -104,7 +114,7 @@ let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (inp
     | [":run"] ->
         (try
             while true do
-                Eval.eval_proccall AST.Unknown env (AST.FIdent ("__InstructionExecute", 0)) [] [];
+                exec_instr env
             done
         with
         | Value.Throw (_, Primops.Exc_ExceptionTaken) ->
