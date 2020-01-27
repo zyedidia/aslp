@@ -16,8 +16,6 @@ module TC     = Tcheck
 module PP     = Asl_parser_pp
 module AST    = Asl_ast
 
-open Load_asl
-
 let opt_filenames : string list ref = ref []
 let opt_print_version = ref false
 let opt_verbose = ref false
@@ -71,7 +69,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
     | (":set" :: "impdef" :: rest) ->
         let cmd = String.concat " " rest in
         let loc = mkLoc fname cmd in
-        let (x, e) = read_impdef tcenv loc cmd in
+        let (x, e) = LoadASL.read_impdef tcenv loc cmd in
         let v = Eval.eval_expr loc cpu.env e in
         Eval.Env.setImpdef cpu.env x v
     | [":set"; flag] when Utils.startswith flag "+" ->
@@ -107,11 +105,11 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         )
     | _ ->
         if ';' = String.get input (String.length input - 1) then begin
-            let s = read_stmt tcenv input in
+            let s = LoadASL.read_stmt tcenv input in
             Eval.eval_stmt cpu.env s
         end else begin
             let loc = mkLoc fname input in
-            let e   = read_expr tcenv loc input in
+            let e   = LoadASL.read_expr tcenv loc input in
             let v   = Eval.eval_expr loc cpu.env e in
             print_endline (Value.pp_value v)
         end
@@ -124,9 +122,9 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
     | Some input ->
         LNoise.history_add input |> ignore;
         (try
-            report_eval_error (fun _ -> ()) (fun _ ->
-                report_type_error (fun _ -> ()) (fun _ ->
-                    report_parse_error (fun _ -> ()) (fun _ ->
+            LoadASL.report_eval_error (fun _ -> ()) (fun _ ->
+                LoadASL.report_type_error (fun _ -> ()) (fun _ ->
+                    LoadASL.report_parse_error (fun _ -> ()) (fun _ ->
                         process_command tcenv cpu "<stdin>" input
                     )
                 )
@@ -169,12 +167,12 @@ let main () =
     else begin
         List.iter print_endline banner;
         print_endline "\nType :? for help";
-        let t  = read_file "prelude.asl" true !opt_verbose in
+        let t  = LoadASL.read_file "prelude.asl" true !opt_verbose in
         let ts = List.map (fun filename ->
             if Utils.endswith filename ".spec" then begin
-                read_spec filename !opt_verbose
+                LoadASL.read_spec filename !opt_verbose
             end else if Utils.endswith filename ".asl" then begin
-                read_file filename false !opt_verbose
+                LoadASL.read_file filename false !opt_verbose
             end else begin
                 failwith ("Unrecognized file suffix on "^filename)
             end

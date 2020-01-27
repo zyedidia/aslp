@@ -8,5 +8,5 @@
  (flags
   (:standard -w -27))
  (modules asl_ast asl_parser asl_parser_pp asl_utils asl_visitor cpu elf eval
-   lexer lexersupport load_asl primops tcheck utils value visitor)
+   lexer lexersupport loadASL primops tcheck utils value visitor)
  (libraries pprint zarith z3))
