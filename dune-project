@@ -20,6 +20,7 @@
     ("pprint"    :dev)
     ("zarith"    :dev)
     ("z3"        (<= "4.7.1"))
+    ("alcotest"  :with-test)
   )
 )
 
