@@ -50,31 +50,14 @@ let mkLoc (fname: string) (input: string): AST.l =
     let finish: Lexing.position = { pos_fname = fname; pos_lnum = 1; pos_bol = 0; pos_cnum = len } in
     AST.Range (start, finish)
 
-let load_ELF (env: Eval.Env.t) (fname: string) (verbose: bool): Elf.uint64 =
-    let write_byte (addr: Int64.t) (b: char): unit =
-        if verbose then Printf.printf "ELF %LX = 0x%x\n" addr (Char.code b);
-        let a = Value.VBits (Primops.mkBits 64 (Z.of_int64 addr)) in
-        let b = Value.VBits (Primops.mkBits  8 (Z.of_int (Char.code b))) in
-        Eval.eval_proccall AST.Unknown env (AST.FIdent ("__ELFWriteMemory", 0)) [] [a; b]
-    in
-    Elf.load_file fname write_byte
-
-let exec_opcode (env: Eval.Env.t) (iset: string) (opcode: Z.t): unit =
-    let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) opcode) in
-    let decoder = Eval.Env.getDecoder env (Ident iset) in
-    Eval.eval_decode_case AST.Unknown env decoder op
-
-let exec_instr (env: Eval.Env.t): unit =
-    Eval.eval_proccall AST.Unknown env (AST.FIdent ("__InstructionExecute", 0)) [] []
-
-let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (input0: string): unit =
+let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0: string): unit =
     let input = String.trim input0 in
     (match String.split_on_char ' ' input with
     | [""] ->
         ()
     | [":elf"; file] ->
         Printf.printf "Loading ELF file %s.\n" file;
-        let entry = load_ELF env file false in
+        let entry = Elf.load_file file cpu.elfwrite in
         Printf.printf "Entry point = 0x%Lx\n" entry
     | [":help"] | [":?"] ->
         List.iter print_endline help_msg;
@@ -84,13 +67,13 @@ let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (inp
         (* todo: make this code more robust *)
         let op = Z.of_int (int_of_string opcode) in
         Printf.printf "Decoding and executing instruction %s %s\n" iset (Z.format "%x" op);
-        exec_opcode env iset op
+        cpu.opcode iset op
     | (":set" :: "impdef" :: rest) ->
         let cmd = String.concat " " rest in
         let loc = mkLoc fname cmd in
         let (x, e) = read_impdef tcenv loc cmd in
-        let v = Eval.eval_expr loc env e in
-        Eval.Env.setImpdef env x v
+        let v = Eval.eval_expr loc cpu.env e in
+        Eval.Env.setImpdef cpu.env x v
     | [":set"; flag] when Utils.startswith flag "+" ->
         (match List.assoc_opt (Utils.stringDrop 1 flag) flags with
         | None -> Printf.printf "Unknown flag %s\n" flag;
@@ -105,7 +88,7 @@ let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (inp
         let inchan = open_in prj in
         (try
             while true do
-                process_command tcenv env prj (input_line inchan)
+                process_command tcenv cpu prj (input_line inchan)
             done
         with
         | End_of_file ->
@@ -116,7 +99,7 @@ let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (inp
     | [":run"] ->
         (try
             while true do
-                exec_instr env
+                cpu.step ()
             done
         with
         | Value.Throw (_, Primops.Exc_ExceptionTaken) ->
@@ -125,16 +108,16 @@ let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (inp
     | _ ->
         if ';' = String.get input (String.length input - 1) then begin
             let s = read_stmt tcenv input in
-            Eval.eval_stmt env s
+            Eval.eval_stmt cpu.env s
         end else begin
             let loc = mkLoc fname input in
             let e   = read_expr tcenv loc input in
-            let v   = Eval.eval_expr loc env e in
+            let v   = Eval.eval_expr loc cpu.env e in
             print_endline (Value.pp_value v)
         end
     )
 
-let rec repl (tcenv: TC.Env.t) (env: Eval.Env.t): unit =
+let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
     flush stdout;
     (match LNoise.linenoise "ASLi> " with
     | None -> ()
@@ -144,7 +127,7 @@ let rec repl (tcenv: TC.Env.t) (env: Eval.Env.t): unit =
             report_eval_error (fun _ -> ()) (fun _ ->
                 report_type_error (fun _ -> ()) (fun _ ->
                     report_parse_error (fun _ -> ()) (fun _ ->
-                        process_command tcenv env "<stdin>" input
+                        process_command tcenv cpu "<stdin>" input
                     )
                 )
             )
@@ -153,7 +136,7 @@ let rec repl (tcenv: TC.Env.t) (env: Eval.Env.t): unit =
             Printf.printf "  Error %s\n" (Printexc.to_string exc);
             Printexc.print_backtrace stdout
         );
-        repl tcenv env
+        repl tcenv cpu
     )
 
 let options = Arg.align ([
@@ -210,7 +193,7 @@ let main () =
 
         LNoise.history_load ~filename:"asl_history" |> ignore;
         LNoise.history_set ~max_length:100 |> ignore;
-        repl (TC.Env.mkEnv TC.env0) env
+        repl (TC.Env.mkEnv TC.env0) (Cpu.mkCPU env)
     end
 
 let _ =ignore(main ())
