@@ -5,6 +5,7 @@
 
 (library
  (name libASL)
+ (public_name asli.libASL)
  (flags
   (:standard -w -27))
  (modules asl_ast asl_parser asl_parser_pp asl_utils asl_visitor elf eval
