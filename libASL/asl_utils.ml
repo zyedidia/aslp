@@ -198,6 +198,29 @@ let fv_sformal (x: sformal): IdentSet.t =
 let fv_sformals (atys: sformal list): IdentSet.t =
     unionSets (List.map fv_sformal atys)
 
+let fv_stmts stmts =
+    let fvs = new freevarClass in
+    ignore (visit_stmts (fvs :> aslVisitor) stmts);
+    fvs#result
+
+(****************************************************************)
+(** {2 Calculating assigned variables in statements}            *)
+(****************************************************************)
+
+class assignedVarsClass = object
+    inherit nopAslVisitor
+
+    val mutable avs = IdentSet.empty
+    method result = avs
+    method! vlvar x =
+        avs <- IdentSet.add x avs;
+        SkipChildren
+end
+
+let assigned_vars_stmts stmts =
+    let avs = new assignedVarsClass in
+    ignore (visit_stmts (avs :> aslVisitor) stmts);
+    avs#result
 
 (****************************************************************)
 (** {2 Substitutions}                                           *)
