@@ -7,7 +7,6 @@
 
 (** ASL lexer support *)
 
-open Lexer
 open Lexing
 open Asl_parser
 

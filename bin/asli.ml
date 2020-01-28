@@ -7,20 +7,21 @@
 
 (** ASL interactive frontend *)
 
+open LibASL
+
 open Asl_ast
 
-module Lexer  = Lexer
 module Parser = Asl_parser
 module TC     = Tcheck
 module PP     = Asl_parser_pp
 module AST    = Asl_ast
 
-open Lexersupport
-open Lexing
 open Load_asl
 
 let opt_filenames : string list ref = ref []
 let opt_print_version = ref false
+let opt_verbose = ref false
+
 
 let help_msg = [
     {|:? :help                       Show this help message|};
@@ -49,20 +50,31 @@ let mkLoc (fname: string) (input: string): AST.l =
     let finish: Lexing.position = { pos_fname = fname; pos_lnum = 1; pos_bol = 0; pos_cnum = len } in
     AST.Range (start, finish)
 
+let load_ELF (env: Eval.Env.t) (fname: string) (verbose: bool): Elf.uint64 =
+    let write_byte (addr: Int64.t) (b: char): unit =
+        if verbose then Printf.printf "ELF %LX = 0x%x\n" addr (Char.code b);
+        let a = Value.VBits (Primops.mkBits 64 (Z.of_int64 addr)) in
+        let b = Value.VBits (Primops.mkBits  8 (Z.of_int (Char.code b))) in
+        Eval.eval_proccall AST.Unknown env (AST.FIdent ("__ELFWriteMemory", 0)) [] [a; b]
+    in
+    Elf.load_file fname write_byte
+
+let exec_opcode (env: Eval.Env.t) (iset: string) (opcode: Z.t): unit =
+    let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) opcode) in
+    let decoder = Eval.Env.getDecoder env (Ident iset) in
+    Eval.eval_decode_case AST.Unknown env decoder op
+
+let exec_instr (env: Eval.Env.t): unit =
+    Eval.eval_proccall AST.Unknown env (AST.FIdent ("__InstructionExecute", 0)) [] []
+
 let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (input0: string): unit =
     let input = String.trim input0 in
     (match String.split_on_char ' ' input with
     | [""] ->
         ()
     | [":elf"; file] ->
-        let write_byte (addr: Int64.t) (b: char): unit =
-            if false then Printf.printf "ELF %LX = 0x%x\n" addr (Char.code b);
-            let a = Value.VBits (Primops.mkBits 64 (Z.of_int64 addr)) in
-            let b = Value.VBits (Primops.mkBits  8 (Z.of_int (Char.code b))) in
-            Eval.eval_proccall AST.Unknown env (AST.FIdent ("__ELFWriteMemory", 0)) [] [a; b]
-        in
         Printf.printf "Loading ELF file %s.\n" file;
-        let entry = Elf.load_file file write_byte in
+        let entry = load_ELF env file false in
         Printf.printf "Entry point = 0x%Lx\n" entry
     | [":help"] | [":?"] ->
         List.iter print_endline help_msg;
@@ -70,22 +82,14 @@ let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (inp
         List.iter (fun (nm, v) -> Printf.printf "  %s%s\n" (if !v then "+" else "-") nm) flags
     | [":opcode"; iset; opcode] ->
         (* todo: make this code more robust *)
-        let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))) in
-        Printf.printf "Decoding and executing instruction %s %s\n" iset (Value.pp_value op);
-        let decoder = Eval.Env.getDecoder env (Ident iset) in
-        Eval.eval_decode_case AST.Unknown env decoder op
+        let op = Z.of_int (int_of_string opcode) in
+        Printf.printf "Decoding and executing instruction %s %s\n" iset (Z.format "%x" op);
+        exec_opcode env iset op
     | (":set" :: "impdef" :: rest) ->
-        let cmd    = String.concat " " rest in
-        let loc    = mkLoc fname cmd in
-        let lexbuf = Lexing.from_string cmd in
-        let lexer  = offside_token Lexer.token in
-        let CLI_Impdef (x, e) = Parser.impdef_command_start lexer lexbuf in
-        let (s, e') = TC.with_unify tcenv loc (fun u ->
-            let (e', _) = TC.tc_expr tcenv u loc e in
-            e'
-        ) in
-        let e'' = TC.unify_subst_e s e' in
-        let v = Eval.eval_expr loc env e'' in
+        let cmd = String.concat " " rest in
+        let loc = mkLoc fname cmd in
+        let (x, e) = read_impdef tcenv loc cmd in
+        let v = Eval.eval_expr loc env e in
         Eval.Env.setImpdef env x v
     | [":set"; flag] when Utils.startswith flag "+" ->
         (match List.assoc_opt (Utils.stringDrop 1 flag) flags with
@@ -112,62 +116,22 @@ let rec process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (inp
     | [":run"] ->
         (try
             while true do
-                Eval.eval_proccall AST.Unknown env (AST.FIdent ("__InstructionExecute", 0)) [] [];
+                exec_instr env
             done
         with
         | Value.Throw (_, Primops.Exc_ExceptionTaken) ->
             Printf.printf "Exception taken\n"
         )
     | _ ->
-        let loc    = mkLoc fname input in
-        let lexbuf = Lexing.from_string input in
-        let lexer  = offside_token Lexer.token in
         if ';' = String.get input (String.length input - 1) then begin
-            let s = Parser.stmt_command_start lexer lexbuf in
-            let s' = TC.tc_stmt tcenv s in
-            Eval.eval_stmt env s'
+            let s = read_stmt tcenv input in
+            Eval.eval_stmt env s
         end else begin
-            let e = Parser.expr_command_start lexer lexbuf in
-            let (s, e') = TC.with_unify tcenv loc (fun u ->
-                let (e', _) = TC.tc_expr tcenv u loc e in
-                e'
-            ) in
-            let e'' = TC.unify_subst_e s e' in
-            let v = Eval.eval_expr loc env e'' in
+            let loc = mkLoc fname input in
+            let e   = read_expr tcenv loc input in
+            let v   = Eval.eval_expr loc env e in
             print_endline (Value.pp_value v)
         end
-    )
-
-let try_process_command (tcenv: TC.Env.t) (env: Eval.Env.t) (fname: string) (input: string): unit =
-    (try
-        process_command tcenv env fname input
-    with
-    | Parse_error_locn(l, s) -> begin
-        Printf.printf "  Syntax error %s at %s\n" s (pp_loc l)
-    end
-    | PrecedenceError(loc, op1, op2) -> begin
-        Printf.printf "  Syntax error: operators %s and %s require parentheses to disambiguate expression at location %s\n"
-            (Utils.to_string (PP.pp_binop op1))
-            (Utils.to_string (PP.pp_binop op2))
-            (pp_loc loc)
-    end
-    | Parser.Error ->
-        Printf.printf "  Parser error\n";
-    | TC.UnknownObject (loc, what, x) ->
-        Printf.printf "  %s: Type error: Unknown %s %s\n" (pp_loc loc) what x
-    | TC.DoesNotMatch (loc, what, x, y) ->
-        Printf.printf "  %s: Type error: %s %s does not match %s\n" (pp_loc loc) what x y
-    | TC.IsNotA (loc, what, x) ->
-        Printf.printf "  %s: Type error: %s is not a %s\n" (pp_loc loc) x what
-    | TC.Ambiguous (loc, what, x) ->
-        Printf.printf "  %s: Type error: %s %s is ambiguous\n" (pp_loc loc) what x
-    | TC.TypeError (loc, what) ->
-        Printf.printf "  %s: Type error: %s\n" (pp_loc loc) what
-    | Value.EvalError (loc, msg) ->
-        Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg
-    | exc ->
-        Printf.printf "  Error %s\n" (Printexc.to_string exc);
-        Printexc.print_backtrace stdout
     )
 
 let rec repl (tcenv: TC.Env.t) (env: Eval.Env.t): unit =
@@ -176,7 +140,19 @@ let rec repl (tcenv: TC.Env.t) (env: Eval.Env.t): unit =
     | None -> ()
     | Some input ->
         LNoise.history_add input |> ignore;
-        try_process_command tcenv env "<stdin>" input;
+        (try
+            report_eval_error (fun _ -> ()) (fun _ ->
+                report_type_error (fun _ -> ()) (fun _ ->
+                    report_parse_error (fun _ -> ()) (fun _ ->
+                        process_command tcenv env "<stdin>" input
+                    )
+                )
+            )
+        with
+        | exc ->
+            Printf.printf "  Error %s\n" (Printexc.to_string exc);
+            Printexc.print_backtrace stdout
+        );
         repl tcenv env
     )
 
@@ -185,7 +161,7 @@ let options = Arg.align ([
     ( "--version", Arg.Set opt_print_version, "       Print version");
 ] )
 
-let version = "ASL 0.1 alpha"
+let version = "ASL 0.1.1 alpha"
 
 let banner = [
     {|            _____  _       _    ___________________________________|};
@@ -210,12 +186,12 @@ let main () =
     else begin
         List.iter print_endline banner;
         print_endline "\nType :? for help";
-        let t  = read_file "prelude.asl" true in
+        let t  = read_file "prelude.asl" true !opt_verbose in
         let ts = List.map (fun filename ->
             if Utils.endswith filename ".spec" then begin
-                read_spec filename
+                read_spec filename !opt_verbose
             end else if Utils.endswith filename ".asl" then begin
-                read_file filename false
+                read_file filename false !opt_verbose
             end else begin
                 failwith ("Unrecognized file suffix on "^filename)
             end

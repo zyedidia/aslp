@@ -12,7 +12,6 @@ module AST  = Asl_ast
 module TC   = Tcheck
 
 open AST
-open Printf
 open Utils
 open Asl_utils
 open Value

@@ -114,7 +114,7 @@ let load_block (write: uint64 -> char -> unit) (buffer: bytes) (offset: int) (ad
     let rec zero (i: uint64): unit =
         if i < memsz then begin
             write (Int64.add addr i) '\x00';
-            copy (Int64.succ i)
+            zero (Int64.succ i)
         end
     in
     zero fsz

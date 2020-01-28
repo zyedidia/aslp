@@ -1,0 +1,11 @@
+(executable
+ (name asli)
+ (public_name asli)
+ (modules asli)
+ (libraries libASL linenoise pprint))
+
+(executable
+ (name testlexer)
+ ; (public_name test_asl_lexer)
+ (modules testlexer)
+ (libraries libASL))
