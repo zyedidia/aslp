@@ -303,6 +303,13 @@ end = struct
         )
 end
 
+let isGlobalConst (env: Env.t) (id: AST.ident): bool =
+    match Env.getGlobalConst env id with
+    | _ -> true
+    | exception _ -> false
+
+let removeGlobalConsts (env: Env.t) (ids: IdentSet.t): IdentSet.t =
+    IdentSet.filter (fun id -> not (isGlobalConst env id)) ids
 
 (****************************************************************)
 (** {2 Evaluation functions}                                    *)
@@ -944,27 +951,27 @@ let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
                 let init = eval_expr loc env i in
                 Env.addGlobalConst env v init
         | Decl_FunDefn(rty, f, atys, body, loc) ->
-                let tvs  = Asl_utils.to_sorted_list (TC.fv_funtype (f, false, [], [], atys, rty)) in
+                let tvs  = Asl_utils.to_sorted_list (TC.fv_funtype (f, false, [], [], atys, rty) |> removeGlobalConsts env) in
                 let args = List.map snd atys in
                 Env.addFun loc env f (tvs, args, loc, body)
         | Decl_ProcDefn(f, atys, body, loc) ->
-                let tvs  = Asl_utils.to_sorted_list (Asl_utils.fv_args atys) in
+                let tvs  = Asl_utils.to_sorted_list (Asl_utils.fv_args atys |> removeGlobalConsts env) in
                 let args = List.map snd atys in
                 Env.addFun loc env f (tvs, args, loc, body)
         | Decl_VarGetterDefn(ty, f, body, loc) ->
-                let tvs  = Asl_utils.to_sorted_list (Asl_utils.fv_type ty) in
+                let tvs  = Asl_utils.to_sorted_list (Asl_utils.fv_type ty |> removeGlobalConsts env) in
                 let args = [] in
                 Env.addFun loc env f (tvs, args, loc, body)
         | Decl_ArrayGetterDefn(rty, f, atys, body, loc) ->
-                let tvs = Asl_utils.to_sorted_list (TC.fv_funtype (f, true, [], [], atys, rty)) in
+                let tvs = Asl_utils.to_sorted_list (TC.fv_funtype (f, true, [], [], atys, rty) |> removeGlobalConsts env) in
                 let args = List.map snd atys in
                 Env.addFun loc env f (tvs, args, loc, body)
         | Decl_VarSetterDefn(f, ty, v, body, loc) ->
-                let tvs  = Asl_utils.to_sorted_list (Asl_utils.fv_type ty) in
+                let tvs  = Asl_utils.to_sorted_list (Asl_utils.fv_type ty |> removeGlobalConsts env) in
                 let args = [v] in
                 Env.addFun loc env f (tvs, args, loc, body)
         | Decl_ArraySetterDefn(f, atys, ty, v, body, loc) ->
-                let tvs = Asl_utils.to_sorted_list (Asl_utils.IdentSet.union (Asl_utils.fv_sformals atys) (Asl_utils.fv_type ty)) in
+                let tvs = Asl_utils.to_sorted_list (Asl_utils.IdentSet.union (Asl_utils.fv_sformals atys) (Asl_utils.fv_type ty) |> removeGlobalConsts env) in
                 let name_of (x: AST.sformal): ident =
                     (match x with
                     | Formal_In (_, nm) -> nm
@@ -982,7 +989,7 @@ let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
         | Decl_DecoderDefn(nm, case, loc) ->
                 Env.addDecoder env nm case
         | Decl_NewMapDefn(rty, f, atys, body, loc) ->
-                let tvs  = Asl_utils.to_sorted_list (TC.fv_funtype (f, false, [], [], atys, rty)) in
+                let tvs  = Asl_utils.to_sorted_list (TC.fv_funtype (f, false, [], [], atys, rty) |> removeGlobalConsts env) in
                 let args = List.map snd atys in
                 Env.addFun loc env f (tvs, args, loc, body)
         (*
@@ -992,7 +999,7 @@ let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
                 Env.addFun loc env f (tvs, args', loc, body)
         *)
         | Decl_NewEventDefn (f, atys, loc) ->
-                let tvs   = Asl_utils.to_sorted_list (Asl_utils.fv_args atys) in
+                let tvs   = Asl_utils.to_sorted_list (Asl_utils.fv_args atys |> removeGlobalConsts env) in
                 let args = List.map snd atys in
                 Env.addFun loc env f (tvs, args, loc, [])
         | Decl_EventClause (f, body, loc) ->
