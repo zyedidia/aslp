@@ -2409,12 +2409,14 @@ let tc_declaration (env: GlobalEnv.t) (d: AST.declaration): AST.declaration list
             let qid'  = ft_id (addFunction env loc qid false tvs atys' type_unit) in
             [Decl_NewEventDefn(qid', atys', loc)]
     | Decl_EventClause(nm, b, loc) ->
-            let locals = Env.mkEnv env in
             (match GlobalEnv.getFuns env nm with
-            | [r] ->
-                (* todo: put event args in scope *)
+            | [(_, _, _, _, atys, _) as ft] ->
+                let locals = Env.mkEnv env in
+                let tvs = fv_funtype ft |> removeConsts env in
+                IdentSet.iter (fun tv -> Env.addLocalVar locals loc tv type_integer) tvs;
+                let _ = tc_arguments locals loc atys in
                 let b' = tc_body locals loc b in
-                [Decl_EventClause(ft_id r, b', loc)]
+                [Decl_EventClause(ft_id ft, b', loc)]
             | [] ->
                 raise (UnknownObject(loc, "event", pprint_ident nm))
             | fs  ->
@@ -2432,13 +2434,36 @@ let tc_declaration (env: GlobalEnv.t) (d: AST.declaration): AST.declaration list
             let b'    = tc_body locals loc b in
             [Decl_NewMapDefn(rty', qid', atys', b', loc)]
     | Decl_MapClause(nm, fs, oc, b, loc) ->
-            (* todo: check fs, oc and body *)
-            [Decl_MapClause(nm, fs, oc, b, loc)]
+            (match GlobalEnv.getFuns env nm with
+            | [((nm', _, _, _, atys, rty) as ft)] ->
+                let locals = Env.mkEnv env in
+                let tvs = fv_funtype ft |> removeConsts env in
+                IdentSet.iter (fun tv -> Env.addLocalVar locals loc tv type_integer) tvs;
+                let rty' = tc_type locals loc rty in
+                Env.setReturnType locals rty';
+                let _ = tc_arguments locals loc atys in
+                let tc_mapfield (MapField_Field (id, pat)) =
+                  match Env.getVar locals id with
+                  | Some (_, ty) ->
+                     (MapField_Field (id, tc_pattern locals loc ty pat))
+                  | None ->
+                     raise (UnknownObject(loc, "mapfield", pprint_ident id))
+                in
+                let fs' = List.map tc_mapfield fs in
+                let oc' = Utils.map_option (check_expr locals loc type_bool) oc in
+                let b' = tc_stmts locals loc b in
+                [Decl_MapClause(nm', fs', oc', b', loc)]
+            | [] ->
+                raise (UnknownObject(loc, "map", pprint_ident nm))
+            | fs  ->
+                reportChoices loc "map" (pprint_ident nm) [] fs;
+                raise (Ambiguous (loc, "map", pprint_ident nm))
+            )
     | Decl_Config(ty, qid, i, loc) -> (* very similar to Decl_Const *)
             let locals = Env.mkEnv env in
             let ty' = tc_type locals loc ty in
             let i'  = check_expr locals loc ty' i in
-            GlobalEnv.addGlobalVar env loc qid ty true;
+            GlobalEnv.addGlobalVar env loc qid ty' true;
             [Decl_Config(ty', qid, i', loc)]
     )
 
