@@ -9,10 +9,9 @@
 
 module PP   = Asl_parser_pp
 module AST  = Asl_ast
-module Visitor = Asl_visitor
 
 open AST
-open Visitor
+open Asl_visitor
 
 (****************************************************************)
 (** {2 Bindings and IdentSet}                                   *)
@@ -221,6 +220,72 @@ let assigned_vars_stmts stmts =
     let avs = new assignedVarsClass in
     ignore (visit_stmts (avs :> aslVisitor) stmts);
     avs#result
+
+(****************************************************************)
+(** {2 Collect local bindings (variables and constants)}        *)
+(****************************************************************)
+
+class localsClass = object (self)
+    inherit nopAslVisitor
+
+    val mutable stack = [(Bindings.empty : ty Bindings.t)]
+    method locals =
+        let merge _ x y = Some x in
+        List.fold_right (Bindings.union merge) stack Bindings.empty
+
+    method add_local (ty, id) =
+        match stack with
+        | s :: ss -> stack <- (Bindings.add id ty s :: ss)
+        | [] -> failwith "addLocal: empty stack"
+    method! enter_scope vars =
+        stack <- Bindings.empty :: stack;
+        List.iter self#add_local vars
+    method! leave_scope () =
+        match stack with
+        | s :: ss -> stack <- ss
+        | [] -> failwith "leave_scope_ empty stack"
+    method! vstmt = function
+        | Stmt_VarDecl (ty, id, _, _)
+        | Stmt_ConstDecl (ty, id, _, _) ->
+            self#add_local (ty, id);
+            DoChildren
+        | Stmt_VarDeclsNoInit (ty, ids, _) ->
+            List.iter (fun id -> self#add_local (ty, id)) ids;
+            DoChildren
+        | _ ->
+            DoChildren
+end
+
+let locals_of_stmts stmts =
+    let lc = new localsClass in
+    ignore (Visitor.mapNoCopy (visit_stmt (lc :> aslVisitor)) stmts);
+    lc#locals
+
+(****************************************************************)
+(** {2 Calculate functions and procedures called in statements} *)
+(****************************************************************)
+
+class callsClass = object
+  inherit nopAslVisitor
+
+  val mutable calls = IdentSet.empty
+  method result = calls
+  method! vexpr = function
+    | Expr_TApply (f, _, _) ->
+      calls <- IdentSet.add f calls;
+      DoChildren
+    | _ -> DoChildren
+end
+
+let calls_of_expr expr =
+  let cc = new callsClass in
+  ignore (visit_expr (cc :> aslVisitor) expr);
+  cc#result
+
+let calls_of_stmts stmts =
+  let cc = new callsClass in
+  ignore (visit_stmts (cc :> aslVisitor) stmts);
+  cc#result
 
 (****************************************************************)
 (** {2 Substitutions}                                           *)

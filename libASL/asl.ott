@@ -91,6 +91,12 @@ let addTag (x: ident) (tag: int): ident =
     | FIdent(_,_) -> failwith "addTag"
     )
 
+let stripTag (x: ident): ident =
+    (match x with
+    | Ident(s)
+    | FIdent(s,_) -> Ident (s)
+    )
+
 let name_of_FIdent (x: ident): string =
     (match x with
     | Ident(_)    -> failwith "name_of_FIdent"
@@ -135,7 +141,8 @@ module Id = struct
         | (FIdent (x,i), FIdent (y,j)) ->
             let cx = String.compare x y in
             if cx <> 0 then cx else compare i j
-        | _ -> failwith ("Id.compare: " ^ (pprint_ident x) ^" "^ (pprint_ident y))
+        | (Ident _, FIdent (_, _)) -> -1
+        | (FIdent (_, _), Ident _) -> 1
         )
 end
 

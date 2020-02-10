@@ -2125,29 +2125,6 @@ let tc_encoding (env: Env.t) (x: encoding): (encoding * ((AST.ident * AST.ty) li
         (Encoding_Block (nm, iset, fields, opcode, guard', unpreds, b', loc), bs)
     )
 
-(** Typecheck instruction definition *)
-let tc_instruction_defn (env: GlobalEnv.t) (encs: AST.encoding list) (opost: (AST.stmt list) option) (exec: AST.stmt list) (loc: AST.l):
-                       (AST.encoding list * (AST.stmt list) option * AST.stmt list * ((AST.ident * AST.ty) list)) =
-    let locals = Env.mkEnv env in
-    let (encs', vss) = List.split (List.map (tc_encoding locals) encs) in
-
-    (* todo: check consistency of bindings from different encodings *)
-    (* todo: ponder what to do when encodings don't all define the same variables *)
-    List.iter (fun vs -> List.iter (fun (v, ty) -> Env.addLocalVar locals loc v ty) vs) vss;
-
-    let (opost', pvs) = (match opost with
-        | Some b ->
-            let (b', vs) = Env.nest_with_bindings (fun env' -> List.map (tc_stmt env') b) locals in
-            (Some b', vs)
-        | None ->
-            (None, []))
-    in
-    List.iter (fun (v, ty) -> Env.addLocalVar locals loc v ty) pvs;
-
-    let (exec', evs) = Env.nest_with_bindings (fun env' -> tc_body env' loc exec) locals in
-    let vs = List.concat vss @ pvs @ evs in
-    (encs', opost', exec', vs)
-
 (** Typecheck bitslice of instruction opcode *)
 let tc_decode_slice (env: int Bindings.t) (loc: AST.l) (x: AST.decode_slice): (AST.decode_slice * int) =
     (match x with
@@ -2387,7 +2364,23 @@ let tc_declaration (env: GlobalEnv.t) (d: AST.declaration): AST.declaration list
             let b' = tc_body locals loc b in
             [Decl_ArraySetterDefn(sft_id qid', atys', ty', v, b', loc)]
     | Decl_InstructionDefn(nm, encs, opost, conditional, exec, loc) ->
-            let (encs', opost', exec', _) = tc_instruction_defn env encs opost exec loc in
+            let locals = Env.mkEnv env in
+            let (encs', vss) = List.split (List.map (tc_encoding locals) encs) in
+
+            (* todo: check consistency of bindings from different encodings *)
+            (* todo: ponder what to do when encodings don't all define the same variables *)
+            List.iter (fun vs -> List.iter (fun (v, ty) -> Env.addLocalVar locals loc v ty) vs) vss;
+
+            let (opost', pvs) = (match opost with
+                | Some b ->
+                    let (b', vs) = Env.nest_with_bindings (fun env' -> List.map (tc_stmt env') b) locals in
+                    (Some b', vs)
+                | None ->
+                    (None, []))
+            in
+            List.iter (fun (v, ty) -> Env.addLocalVar locals loc v ty) pvs;
+
+            let exec' = tc_body locals loc exec in
             [Decl_InstructionDefn(nm, encs', opost', conditional, exec', loc)]
     | Decl_DecoderDefn(nm, case, loc) ->
             let case' = tc_decode_case env loc [] case in
