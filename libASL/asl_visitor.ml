@@ -369,7 +369,6 @@ let rec visit_stmts (vis: aslVisitor) (xs: stmt list): stmt list =
                     let t' = visit_expr vis t in
                     let ty_v' = (Type_Constructor(Ident "integer"), v') in
                     let b' = with_locals [ty_v'] vis visit_stmts b in
-                    vis#leave_scope ();
                     if v == v' && f == f' && t == t' && b == b' then x else Stmt_For (v', f', dir, t', b', loc)
             | Stmt_While (c, b, loc) ->
                     let c' = visit_expr vis c in
@@ -383,10 +382,8 @@ let rec visit_stmts (vis: aslVisitor) (xs: stmt list): stmt list =
                     let b'  = visit_stmts vis b in
                     let v'  = visit_lvar vis v in
                     let ty_v' = (Type_Constructor(Ident "__Exception"), v') in
-                    vis#enter_scope [(Type_Constructor(Ident "__Exception"), v')];
                     let cs' = mapNoCopy (with_locals [ty_v'] vis visit_catcher) cs in
                     let ob' = mapOptionNoCopy (with_locals [ty_v'] vis visit_stmts) ob in
-                    vis#leave_scope ();
                     if b == b' && v == v' && cs == cs' && ob == ob' then x else Stmt_Try (b', v', cs', ob', loc)
 
             )

@@ -243,7 +243,7 @@ class localsClass = object (self)
     method! leave_scope () =
         match stack with
         | s :: ss -> stack <- ss
-        | [] -> failwith "leave_scope_ empty stack"
+        | [] -> failwith "leave_scope: empty stack"
     method! vstmt = function
         | Stmt_VarDecl (ty, id, _, _)
         | Stmt_ConstDecl (ty, id, _, _) ->
@@ -272,8 +272,21 @@ class callsClass = object
   method result = calls
   method! vexpr = function
     | Expr_TApply (f, _, _) ->
-      calls <- IdentSet.add f calls;
-      DoChildren
+       calls <- IdentSet.add f calls;
+       DoChildren
+    | _ -> DoChildren
+  method! vstmt = function
+    | Stmt_TCall (id, _, _, _) ->
+       calls <- IdentSet.add id calls;
+       DoChildren
+    | _ -> DoChildren
+  method! vlexpr = function
+    | LExpr_Write (id, _, _) ->
+       calls <- IdentSet.add id calls;
+       DoChildren
+    | LExpr_ReadWrite (id1, id2, _, _) ->
+       calls <- IdentSet.add id1 calls |> IdentSet.add id2;
+       DoChildren
     | _ -> DoChildren
 end
 
