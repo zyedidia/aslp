@@ -148,16 +148,16 @@ end
 
 (** Type Identifiers *)
 
-module IdentSet = Set.Make(String)
+module StringSet = Set.Make(String)
 
-let typeIdents = ref IdentSet.empty
+let typeIdents = ref StringSet.empty
 
 let addTypeIdent (x: ident): unit = begin
     (* ignore (Printf.printf "New type identifier %s\n" (pprint_ident x)); *)
-    typeIdents := IdentSet.add (pprint_ident x) !typeIdents
+    typeIdents := StringSet.add (pprint_ident x) !typeIdents
 end
 
-let isTypeIdent (x: string): bool = IdentSet.mem x !typeIdents
+let isTypeIdent (x: string): bool = StringSet.mem x !typeIdents
 
 }}
 
