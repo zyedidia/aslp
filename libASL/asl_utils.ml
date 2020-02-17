@@ -202,6 +202,11 @@ let fv_stmts stmts =
     ignore (visit_stmts (fvs :> aslVisitor) stmts);
     fvs#result
 
+let fv_decl decl =
+    let fvs = new freevarClass in
+    ignore (visit_decl (fvs :> aslVisitor) decl);
+    fvs#result
+
 (****************************************************************)
 (** {2 Calculating assigned variables in statements}            *)
 (****************************************************************)
@@ -216,9 +221,14 @@ class assignedVarsClass = object
         SkipChildren
 end
 
-let assigned_vars_stmts stmts =
+let assigned_vars_of_stmts stmts =
     let avs = new assignedVarsClass in
     ignore (visit_stmts (avs :> aslVisitor) stmts);
+    avs#result
+
+let assigned_vars_of_decl decl =
+    let avs = new assignedVarsClass in
+    ignore (visit_decl (avs :> aslVisitor) decl);
     avs#result
 
 (****************************************************************)
@@ -261,6 +271,45 @@ let locals_of_stmts stmts =
     ignore (Visitor.mapNoCopy (visit_stmt (lc :> aslVisitor)) stmts);
     lc#locals
 
+let locals_of_decl decl =
+    let lc = new localsClass in
+    ignore (Visitor.mapNoCopy (visit_decl (lc :> aslVisitor)) decl);
+    lc#locals
+
+(****************************************************************)
+(** {2 Calculate types used in expressions and statements}      *)
+(****************************************************************)
+
+class typesClass = object
+  inherit nopAslVisitor
+
+  val mutable types = IdentSet.empty
+  method result = types
+  method! vtype ty =
+    match ty with
+    | Type_Constructor id
+    | Type_App (id, _) ->
+       types <- IdentSet.add id types;
+       DoChildren
+    | _ ->
+       DoChildren
+end
+
+let types_of_expr expr =
+  let cc = new typesClass in
+  ignore (visit_expr (cc :> aslVisitor) expr);
+  cc#result
+
+let types_of_stmts stmts =
+  let cc = new typesClass in
+  ignore (visit_stmts (cc :> aslVisitor) stmts);
+  cc#result
+
+let types_of_decl decl =
+  let cc = new typesClass in
+  ignore (visit_decl (cc :> aslVisitor) decl);
+  cc#result
+
 (****************************************************************)
 (** {2 Calculate functions and procedures called in statements} *)
 (****************************************************************)
@@ -298,6 +347,11 @@ let calls_of_expr expr =
 let calls_of_stmts stmts =
   let cc = new callsClass in
   ignore (visit_stmts (cc :> aslVisitor) stmts);
+  cc#result
+
+let calls_of_decl decl =
+  let cc = new callsClass in
+  ignore (visit_decl (cc :> aslVisitor) decl);
   cc#result
 
 (****************************************************************)
