@@ -1,23 +1,21 @@
-Changelog
-=========
-
-ASLi 0.1.1
-----------
+0.1.1 (unreleased)
+------------------
 
 * Changed to semantic numbering system (i.e., 3-part format).
 * Internal change to using Dune build system.
   This replaces the ocamlfind dependency with a dune dependency.
-* Split into library and binary to make it easier to use
+* Split libASL out from ASLi to make it easier to reuse
   parts of ASLi in other tools.
 
 
-ASLi 0.1
---------
+0.1 (2020-01-01)
+----------------
 
 * Added support for loading ELF files and executing binaries.
 
-ASLi 0.0
---------
+
+0.0 (2019-08-30)
+----------------
 
 Initial release of ASLi supporting
 
