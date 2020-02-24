@@ -1660,7 +1660,7 @@ and tc_lexpr2 (env: Env.t) (u: unifier) (loc: AST.l) (x: AST.lexpr): (AST.lexpr 
         | LExpr_Var(a) ->
             let tys = List.map (function (_, ty) -> ty) ss' in
             let getters = GlobalEnv.getFuns (Env.globals env) (addSuffix a "read") in
-            let setters = GlobalEnv.getSetterFun (Env.globals env) (addSuffix a "write") in
+            let setters = GlobalEnv.getSetterFun (Env.globals env) (addSuffix a "set") in
             let ogetters = chooseFunction (Env.globals env) loc "getter function" (pprint_ident a) true tys getters in
             let osetters = chooseSetterFunction (Env.globals env) loc "setter function" a tys setters in
             (match (ogetters, osetters) with
@@ -1766,7 +1766,7 @@ let rec tc_lexpr (env: Env.t) (u: unifier) (loc: AST.l) (ty: AST.ty) (x: AST.lex
         let (e', ty') = (match e with
             | LExpr_Var(a) ->
                 let tys = List.map (function (_, ty) -> ty) ss' in
-                let setters = GlobalEnv.getSetterFun (Env.globals env) (addSuffix a "write") in
+                let setters = GlobalEnv.getSetterFun (Env.globals env) (addSuffix a "set") in
                 let osetters = chooseSetterFunction (Env.globals env) loc "setter function" a tys setters in
                 (match osetters with
                 | Some gty when all_single ->
@@ -2345,7 +2345,7 @@ let tc_declaration (env: GlobalEnv.t) (d: AST.declaration): AST.declaration list
             let ty'   = tc_type     locals loc ty in
             Env.addLocalVar locals loc v ty';
             (* todo: check that if a getter function exists, it has a compatible type *)
-            let qid' = addSetterFunction env loc (addSuffix qid "write") tvs atys' ty' in
+            let qid' = addSetterFunction env loc (addSuffix qid "set") tvs atys' ty' in
             [Decl_ArraySetterType(sft_id qid', atys', ty', v, loc)]
     | Decl_ArraySetterDefn(qid, atys, ty, v, b, loc) ->
             let locals = Env.mkEnv env in
@@ -2357,7 +2357,7 @@ let tc_declaration (env: GlobalEnv.t) (d: AST.declaration): AST.declaration list
              * which namespace to do lookup in?
              *)
             (* todo: check that if a getter function exists, it has a compatible type *)
-            let qid' = addSetterFunction env loc (addSuffix qid "write") tvs atys' ty' in
+            let qid' = addSetterFunction env loc (addSuffix qid "set") tvs atys' ty' in
             Env.addLocalVar locals loc v ty';
             let b' = tc_body locals loc b in
             [Decl_ArraySetterDefn(sft_id qid', atys', ty', v, b', loc)]
