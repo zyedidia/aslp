@@ -2111,17 +2111,15 @@ let tc_encoding (env: Env.t) (x: encoding): (encoding * ((AST.ident * AST.ty) li
             Env.addLocalVar env loc fnm (type_bits (Expr_LitInt (string_of_int wd)))
         ) fields;
         let guard' = check_expr env loc type_bool guard in
-        let (b', bs) = Env.nest_with_bindings (fun env' -> List.map (tc_stmt env') b) env in
-        (*
+        (* let (b', bs) = Env.nest_with_bindings (fun env' -> List.map (tc_stmt env') b) env in *)
         let (b', bs) = Env.nest_with_bindings (fun env' ->
-            let b' = tc_stmts env' loc b in
+            let b' = List.map (tc_stmt env') b in
             let imps = Env.getAllImplicits env in
             List.iter (fun (v, ty) -> Env.addLocalVar env' loc v ty) imps;
             let decls = declare_implicits loc imps in
             if verbose && decls <> [] then Printf.printf "Implicit decls: %s %s" (pp_loc loc) (Utils.to_string (PP.pp_indented_block decls));
             List.append decls b'
         ) env in
-        *)
         (Encoding_Block (nm, iset, fields, opcode, guard', unpreds, b', loc), bs)
     )
 
