@@ -684,23 +684,23 @@ end
  *)
 
 let rec simplify_expr (x: AST.expr): AST.expr =
-    let eval (x: AST.expr): Big_int.big_int option =
+    let eval (x: AST.expr): Z.t option =
         (match x with
-        | Expr_LitInt x' -> Some (Big_int.big_int_of_string x')
+        | Expr_LitInt x' -> Some (Z.of_string x')
         | _ -> None
         )
     in
-    let to_expr (x: Big_int.big_int): AST.expr =
-        Expr_LitInt (Big_int.string_of_big_int x)
+    let to_expr (x: Z.t): AST.expr =
+        Expr_LitInt (Z.to_string x)
     in
 
     (match x with
     | Expr_TApply (f, tes, es) ->
             let es' = List.map simplify_expr es in
             (match (f, flatten_map_option eval es') with
-            | (FIdent ("add_int",_), Some [a; b]) -> to_expr (Big_int.add_big_int a b)
-            | (FIdent ("sub_int",_), Some [a; b]) -> to_expr (Big_int.sub_big_int a b)
-            | (FIdent ("mul_int",_), Some [a; b]) -> to_expr (Big_int.mult_big_int a b)
+            | (FIdent ("add_int",_), Some [a; b]) -> to_expr (Z.add a b)
+            | (FIdent ("sub_int",_), Some [a; b]) -> to_expr (Z.sub a b)
+            | (FIdent ("mul_int",_), Some [a; b]) -> to_expr (Z.mul a b)
             | _ -> Expr_TApply (f, tes, es')
             )
     | _ -> x
