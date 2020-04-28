@@ -89,14 +89,15 @@ let parse_file (filename : string) (isPrelude: bool) (verbose: bool): AST.declar
     let lexbuf = Lexing.from_channel inchan in
     lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
     let t =
-        report_parse_error (fun _ -> exit 1) (fun _ ->
+        report_parse_error
+          (fun _ -> print_endline (pp_loc (Range (lexbuf.lex_start_p, lexbuf.lex_curr_p))); exit 1)
+          (fun _ ->
             (* Apply offside rule to raw token stream *)
             let lexer = offside_token Lexer.token in
 
             (* Run the parser on this line of input. *)
             if verbose then Printf.printf "- Parsing %s\n" filename;
-            Parser.declarations_start lexer lexbuf
-        )
+            Parser.declarations_start lexer lexbuf)
     in
     close_in inchan;
     declare_var_getters t
