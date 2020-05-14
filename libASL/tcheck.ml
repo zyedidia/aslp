@@ -684,23 +684,23 @@ end
  *)
 
 let rec simplify_expr (x: AST.expr): AST.expr =
-    let eval (x: AST.expr): Big_int.big_int option =
+    let eval (x: AST.expr): Z.t option =
         (match x with
-        | Expr_LitInt x' -> Some (Big_int.big_int_of_string x')
+        | Expr_LitInt x' -> Some (Z.of_string x')
         | _ -> None
         )
     in
-    let to_expr (x: Big_int.big_int): AST.expr =
-        Expr_LitInt (Big_int.string_of_big_int x)
+    let to_expr (x: Z.t): AST.expr =
+        Expr_LitInt (Z.to_string x)
     in
 
     (match x with
     | Expr_TApply (f, tes, es) ->
             let es' = List.map simplify_expr es in
             (match (f, flatten_map_option eval es') with
-            | (FIdent ("add_int",_), Some [a; b]) -> to_expr (Big_int.add_big_int a b)
-            | (FIdent ("sub_int",_), Some [a; b]) -> to_expr (Big_int.sub_big_int a b)
-            | (FIdent ("mul_int",_), Some [a; b]) -> to_expr (Big_int.mult_big_int a b)
+            | (FIdent ("add_int",_), Some [a; b]) -> to_expr (Z.add a b)
+            | (FIdent ("sub_int",_), Some [a; b]) -> to_expr (Z.sub a b)
+            | (FIdent ("mul_int",_), Some [a; b]) -> to_expr (Z.mul a b)
             | _ -> Expr_TApply (f, tes, es')
             )
     | _ -> x
@@ -1660,7 +1660,7 @@ and tc_lexpr2 (env: Env.t) (u: unifier) (loc: AST.l) (x: AST.lexpr): (AST.lexpr 
         | LExpr_Var(a) ->
             let tys = List.map (function (_, ty) -> ty) ss' in
             let getters = GlobalEnv.getFuns (Env.globals env) (addSuffix a "read") in
-            let setters = GlobalEnv.getSetterFun (Env.globals env) (addSuffix a "write") in
+            let setters = GlobalEnv.getSetterFun (Env.globals env) (addSuffix a "set") in
             let ogetters = chooseFunction (Env.globals env) loc "getter function" (pprint_ident a) true tys getters in
             let osetters = chooseSetterFunction (Env.globals env) loc "setter function" a tys setters in
             (match (ogetters, osetters) with
@@ -1766,7 +1766,7 @@ let rec tc_lexpr (env: Env.t) (u: unifier) (loc: AST.l) (ty: AST.ty) (x: AST.lex
         let (e', ty') = (match e with
             | LExpr_Var(a) ->
                 let tys = List.map (function (_, ty) -> ty) ss' in
-                let setters = GlobalEnv.getSetterFun (Env.globals env) (addSuffix a "write") in
+                let setters = GlobalEnv.getSetterFun (Env.globals env) (addSuffix a "set") in
                 let osetters = chooseSetterFunction (Env.globals env) loc "setter function" a tys setters in
                 (match osetters with
                 | Some gty when all_single ->
@@ -2111,17 +2111,15 @@ let tc_encoding (env: Env.t) (x: encoding): (encoding * ((AST.ident * AST.ty) li
             Env.addLocalVar env loc fnm (type_bits (Expr_LitInt (string_of_int wd)))
         ) fields;
         let guard' = check_expr env loc type_bool guard in
-        let (b', bs) = Env.nest_with_bindings (fun env' -> List.map (tc_stmt env') b) env in
-        (*
+        (* let (b', bs) = Env.nest_with_bindings (fun env' -> List.map (tc_stmt env') b) env in *)
         let (b', bs) = Env.nest_with_bindings (fun env' ->
-            let b' = tc_stmts env' loc b in
+            let b' = List.map (tc_stmt env') b in
             let imps = Env.getAllImplicits env in
             List.iter (fun (v, ty) -> Env.addLocalVar env' loc v ty) imps;
             let decls = declare_implicits loc imps in
             if verbose && decls <> [] then Printf.printf "Implicit decls: %s %s" (pp_loc loc) (Utils.to_string (PP.pp_indented_block decls));
             List.append decls b'
         ) env in
-        *)
         (Encoding_Block (nm, iset, fields, opcode, guard', unpreds, b', loc), bs)
     )
 
@@ -2347,7 +2345,7 @@ let tc_declaration (env: GlobalEnv.t) (d: AST.declaration): AST.declaration list
             let ty'   = tc_type     locals loc ty in
             Env.addLocalVar locals loc v ty';
             (* todo: check that if a getter function exists, it has a compatible type *)
-            let qid' = addSetterFunction env loc (addSuffix qid "write") tvs atys' ty' in
+            let qid' = addSetterFunction env loc (addSuffix qid "set") tvs atys' ty' in
             [Decl_ArraySetterType(sft_id qid', atys', ty', v, loc)]
     | Decl_ArraySetterDefn(qid, atys, ty, v, b, loc) ->
             let locals = Env.mkEnv env in
@@ -2359,7 +2357,7 @@ let tc_declaration (env: GlobalEnv.t) (d: AST.declaration): AST.declaration list
              * which namespace to do lookup in?
              *)
             (* todo: check that if a getter function exists, it has a compatible type *)
-            let qid' = addSetterFunction env loc (addSuffix qid "write") tvs atys' ty' in
+            let qid' = addSetterFunction env loc (addSuffix qid "set") tvs atys' ty' in
             Env.addLocalVar locals loc v ty';
             let b' = tc_body locals loc b in
             [Decl_ArraySetterDefn(sft_id qid', atys', ty', v, b', loc)]

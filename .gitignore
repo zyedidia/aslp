@@ -7,5 +7,7 @@ asl_lexer.mll
 asl_parser.mly
 asl_parser_pp.ml
 
+.merlin
+
 _build
 _opam

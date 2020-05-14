@@ -173,6 +173,21 @@ class freevarClass = object
     method! vvar x =
         fvs <- IdentSet.add x fvs;
         SkipChildren
+    method! vtype ty =
+        match ty with
+        | Type_Register _ ->
+           (* Free variables in register types are not supported and will
+              lead to a type error.
+
+              Uses of global constants and variables in the indices of field
+              declarations of a register type are allowed, though, and will
+              be checked by the type checker as usual.  Note that they will
+              not be evaluated at register declaration time, but every time
+              the respective register field is accessed (the type checker
+              desugars register field accesses to slice expressions, copying
+              the field indices). *)
+           SkipChildren
+        | _ -> DoChildren
 end
 
 let fv_expr (x: expr): IdentSet.t =

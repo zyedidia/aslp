@@ -538,13 +538,14 @@ assignment_stmt :: 'Stmt_' ::= {{ quotient-with stmt }}
     | lexpr = expr ;               :: :: Assign
 
 lexpr :: 'LExpr_' ::=
-    | -                                   :: :: Wildcard
-    | qualident                           :: :: Var
-    | lexpr . ident                       :: :: Field
-    | lexpr . [ ident1 , ... , identn ]   :: :: Fields
-    | lexpr [ slice1 , .. , slicen ]      :: :: Slices
-    | [ lexpr1 , .... , lexprn ]          :: :: BitTuple
-    | ( lexpr1 , .... , lexprn )          :: :: Tuple
+    | -                                   ::   :: Wildcard
+    | qualident                           ::   :: Var
+    | lexpr . ident                       ::   :: Field
+    | lexpr . [ ident1 , ... , identn ]   ::   :: Fields
+    | lexpr [ slice1 , .. , slicen ]      ::   :: Slices
+    | [ lexpr1 , .... , lexprn ]          ::   :: BitTuple
+    | ( lexpr1 , .... , lexprn )          ::   :: Tuple
+    | ( lexpr )                           :: S :: Parens {{ ocaml [[lexpr]] }}
 
 lexpr_spice :: 'LExpr_' ::= {{ quotient-with lexpr }}
     | __array     lexpr         [ expr ]  :: :: Array     {{ com spice for desugaring array assignment }}
