@@ -9,6 +9,9 @@ understand and make use of Arm's architecture specifications.
 It consists of lexer, parser, typechecker and interpreter for the ASL language
 and an interactive interface for evaluating ASL statements and expressions.
 
+There is a [blog post](https://alastairreid.github.io/using-asli/)
+describing how to use ASLi with Arm's v8.6-A ISA specification.
+
 ## Requirements
 
 To build and run the ASL interpreter, you will need:

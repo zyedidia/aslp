@@ -1,5 +1,7 @@
-(lang dune 2.1)
+(lang dune 2.5)
 (name asli)
+(version 0.2.0)
+
 (using menhir 2.0)
 
 (package
@@ -27,7 +29,7 @@
 (license BSD-3-Clause)
 (authors "Alastair Reid")
 (maintainers "Alastair Reid <alastair.d.reid@gmail.com>")
-; (source ...)
+(source (github alastairreid/asl-interpreter))
 (bug_reports "https://github.com/alastairreid/asl-interpreter/issues")
 (homepage "https://github.com/alastairreid/asl-interpreter")
 ; (documentation ...)

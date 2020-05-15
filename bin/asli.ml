@@ -142,7 +142,7 @@ let options = Arg.align ([
     ( "--version", Arg.Set opt_print_version, "       Print version");
 ] )
 
-let version = "ASL 0.1.1 alpha"
+let version = "ASL 0.2.0 alpha"
 
 let banner = [
     {|            _____  _       _    ___________________________________|};
