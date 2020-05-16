@@ -16,11 +16,11 @@
   )
   (depends
     ("ocaml"     (and (>= "4.09") :build))
-    ("menhir"    :dev)
-    ("ott"       :dev)
-    ("linenoise" :dev)
-    ("pprint"    :dev)
-    ("zarith"    :dev)
+    ("menhir"    :build)
+    ("ott"       :build)
+    "linenoise"
+    "pprint"
+    "zarith"
     ("z3"        (<= "4.7.1"))
     ("alcotest"  :with-test)
   )

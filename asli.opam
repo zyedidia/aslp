@@ -18,11 +18,11 @@ bug-reports: "https://github.com/alastairreid/asl-interpreter/issues"
 depends: [
   "dune" {>= "2.5"}
   "ocaml" {>= "4.09" & build}
-  "menhir" {dev}
-  "ott" {dev}
-  "linenoise" {dev}
-  "pprint" {dev}
-  "zarith" {dev}
+  "menhir" {build}
+  "ott" {build}
+  "linenoise"
+  "pprint"
+  "zarith"
   "z3" {<= "4.7.1"}
   "alcotest" {with-test}
 ]
@@ -40,3 +40,4 @@ build: [
     "@doc" {with-doc}
   ]
 ]
+dev-repo: "git+https://github.com/alastairreid/asl-interpreter.git"
