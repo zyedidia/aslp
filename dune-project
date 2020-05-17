@@ -15,7 +15,7 @@
                "\| loading ELF files and executing Arm binaries.
   )
   (depends
-    ("ocaml"     (and (>= "4.09") :build))
+    ("ocaml"     (>= "4.09"))
     ("menhir"    :build)
     ("ott"       :build)
     "linenoise"
