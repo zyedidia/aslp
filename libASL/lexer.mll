@@ -91,7 +91,7 @@ let keywords : (string * Asl_parser.token) list = [
 
 rule token = parse
     (* whitespace and comments *)
-    | ['\n']                      { Lexing.new_line lexbuf; EOL1 }
+    | ['\n']                      { Lexing.new_line lexbuf; EOL }
     | [' ' '\t']                  { token lexbuf }
     | '/' '/' [^'\n']*            { token lexbuf }
     | '#' [^'\n']*                { token lexbuf }

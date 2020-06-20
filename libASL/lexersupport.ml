@@ -66,8 +66,7 @@ let string_of_token (t: Asl_parser.token): string =
     | ELSIF               -> "elsif"
     | ENUMERATION         -> "enum"
     | EOF                 -> "eof"
-    | EOL1                -> "eol"
-    | EOL2 ()             -> "eol"
+    | EOL                 -> "eol"
     | EOR                 -> "eor"
     | EQ                  -> "eq"
     | EQ_EQ               -> "eqeq"
@@ -155,7 +154,7 @@ let offside_token (read: Lexing.lexbuf -> Asl_parser.token): (Lexing.lexbuf -> A
         stack   = [0];
         parens  = 0;
         newline = false;
-        next    = EOL1
+        next    = EOL
     } in
 
     let pushStack (col: int): Asl_parser.token = begin
@@ -179,7 +178,7 @@ let offside_token (read: Lexing.lexbuf -> Asl_parser.token): (Lexing.lexbuf -> A
 
         if state.parens > 0 then begin
             (* In parentheses: ignore EOL tokens *)
-            while state.next = EOL1 do
+            while state.next = EOL do
                 ignore (useToken())
             done;
             useToken()
@@ -193,12 +192,12 @@ let offside_token (read: Lexing.lexbuf -> Asl_parser.token): (Lexing.lexbuf -> A
                     state.stack <- ds;
                     DEDENT
             end
-        end else if state.next = EOL1  then begin
-            while state.next = EOL1 do
+        end else if state.next = EOL  then begin
+            while state.next = EOL do
                 state.newline <- true;
                 ignore(useToken())
             done;
-            EOL1
+            EOL
         end else begin
             if state.newline then begin
                 let prev_col = List.hd state.stack in

@@ -14,7 +14,6 @@ metavar maskLit   ::= {{ ocaml string }}  {{ ocamllex '\'' ['0' '1' 'x' ' ']* '\
 metavar realLit   ::= {{ ocaml string }}  {{ ocamllex ['0'-'9']+ '.' ['0'-'9']+ }}
 metavar hexLit    ::= {{ ocaml string }}  {{ ocamllex '0''x'['0'-'9' 'A' - 'F' 'a'-'f' '_']+  }}
 metavar stringLit ::= {{ ocaml string }}  {{ ocamllex '"' [^'"']* '"'  }} {{ phantom }}
-metavar eol       ::= {{ ocaml unit }}  {{ ocamllex-remove }} {{ phantom }}
 
 indexvar i, m, n ::= {{ ocaml int }}
 
