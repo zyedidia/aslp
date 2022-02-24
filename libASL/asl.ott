@@ -182,6 +182,14 @@ typeident :: '' ::=    {{ phantom }}
                        {{ pp-raw l = PPrintEngine.string (pprint_ident l) }}
   | typeid             :: :: TypeIdent {{ ocaml Ident [[typeid]] }}
 
+anyident :: '' ::=     {{ phantom }}
+                       {{ ocaml ident }}
+                       {{ com Identifier (in a separate namespace from type identifiers) }}
+                       {{ pp     l = PPrintEngine.string (pprint_ident l) }}
+                       {{ pp-raw l = PPrintEngine.string (pprint_ident l) }}
+  | id                 :: :: AnyIdent {{ ocaml Ident [[id]] }}
+  | typeid             :: :: AnyTypeIdent {{ ocaml Ident [[typeid]] }}
+
 grammar
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -223,13 +231,13 @@ field_ns :: 'FieldNS_' ::=
     {{ phantom }} {{ ocaml ty * ident }}
     {{ pp-raw f = string "(" ^^ pp_raw_ty (fst f) ^^ string ", " ^^ string (snd f) ^^ string ")" }}
     {{ pp f     = pp_ty (fst f) ^^ string " " ^^ string (snd f) }}
-    | ty ident              :: :: Field {{ ocaml ([[ty]], [[ident]]) }}
+    | ty anyident           :: :: Field {{ ocaml ([[ty]], [[anyident]]) }}
 
 field :: 'Field_' ::=
     {{ phantom }} {{ ocaml ty * ident }}
     {{ pp-raw f = string "(" ^^ pp_raw_ty (fst f) ^^ string ", " ^^ pp_raw_ident (snd f) ^^ string ")" }}
     {{ pp f     = pp_ty (fst f) ^^ string " " ^^ pp_ident (snd f) }}
-    | ty ident ;            :: :: Field {{ ocaml ([[ty]], [[ident]]) }}
+    | ty anyident ;         :: :: Field {{ ocaml ([[ty]], [[anyident]]) }}
 
 variable_declaration :: 'Decl_' ::= {{ quotient-with declaration }}
     {{ aux _ l }}
@@ -450,7 +458,7 @@ regfield :: 'RegField_' ::=
     {{ phantom }} {{ ocaml slice list * ident }}
     {{ pp-raw rf = string "([ "^^ separate (string ";\n") (List.map pp_raw_slice (fst rf)) ^^ string " ], " ^^ pp_raw_ident (snd rf) ^^ string ")" }}
     {{ pp rf = separate (string "\n") (List.map pp_slice (fst rf)) ^^ string " " ^^ pp_ident (snd rf) }}
-    | slice1 , ... , slicen ident     :: :: Field {{ ocaml ([[slice1...slicen]], [[ident]]) }}
+    | slice1 , ... , slicen anyident  :: :: Field {{ ocaml ([[slice1...slicen]], [[anyident]]) }}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Statements
@@ -538,14 +546,14 @@ assignment_stmt :: 'Stmt_' ::= {{ quotient-with stmt }}
     | lexpr = expr ;               :: :: Assign
 
 lexpr :: 'LExpr_' ::=
-    | -                                   ::   :: Wildcard
-    | qualident                           ::   :: Var
-    | lexpr . ident                       ::   :: Field
-    | lexpr . [ ident1 , ... , identn ]   ::   :: Fields
-    | lexpr [ slice1 , .. , slicen ]      ::   :: Slices
-    | [ lexpr1 , .... , lexprn ]          ::   :: BitTuple
-    | ( lexpr1 , .... , lexprn )          ::   :: Tuple
-    | ( lexpr )                           :: S :: Parens {{ ocaml [[lexpr]] }}
+    | -                                         ::   :: Wildcard
+    | qualident                                 ::   :: Var
+    | lexpr . anyident                          ::   :: Field
+    | lexpr . [ anyident1 , ... , anyidentn ]   ::   :: Fields
+    | lexpr [ slice1 , .. , slicen ]            ::   :: Slices
+    | [ lexpr1 , .... , lexprn ]                ::   :: BitTuple
+    | ( lexpr1 , .... , lexprn )                ::   :: Tuple
+    | ( lexpr )                                 :: S :: Parens {{ ocaml [[lexpr]] }}
 
 lexpr_spice :: 'LExpr_' ::= {{ quotient-with lexpr }}
     | __array     lexpr         [ expr ]  :: :: Array     {{ com spice for desugaring array assignment }}
@@ -740,8 +748,8 @@ bexpr :: 'Expr_' ::= {{ quotient-with expr }}
     | fexpr                                      :: :: FExpr   {{ quotient-remove }} {{ ocaml [[fexpr]] }}
 
 fexpr :: 'Expr_' ::= {{ quotient-with expr }}
-    | fexpr . ident                              :: :: Field   {{ com field selection }}
-    | fexpr . [ ident1 , ... , identn ]          :: :: Fields  {{ com multiple field selection }}
+    | fexpr . anyident                           :: :: Field   {{ com field selection }}
+    | fexpr . [ anyident1 , ... , anyidentn ]    :: :: Fields  {{ com multiple field selection }}
     | fexpr   [ slice1 , .. , slicen ]           :: :: Slices  {{ com bitslice }}
     | fexpr 'IN' pattern                         :: :: In      {{ com pattern match }}
     | aexpr                                      :: :: AExpr   {{ quotient-remove }} {{ ocaml [[aexpr]] }}
