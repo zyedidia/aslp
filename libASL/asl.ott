@@ -426,6 +426,7 @@ qualident :: 'QIdent_' ::=
 tidentdecl :: 'QIdent_' ::= {{ quotient-with qualident }}
     | typeident             :: :: Plain2 {{ quotient-remove }} {{ ocaml [[typeident]] }}
     | ident                 :: :: Plain3 {{ quotient-remove }} {{ ocaml addTypeIdent([[ident]]); [[ident]] }}
+    | qualifier . typeident :: :: DecoratedT {{ quotient-remove }} {{ ocaml addQualifier [[qualifier]] [[typeident]] }}
     | qualifier . ident     :: :: Decorated2 {{ quotient-remove }} {{ ocaml addTypeIdent([[ident]]); addQualifier [[qualifier]] [[ident]] }}
 
 tident :: 'QIdent_' ::= {{ quotient-with qualident }}
