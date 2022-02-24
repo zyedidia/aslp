@@ -249,8 +249,9 @@ function_declaration :: 'Decl_' ::= {{ quotient-with declaration }}
 
 procedure_declaration :: 'Decl_' ::= {{ quotient-with declaration }}
     {{ aux _ l }}
-    | qualident ( formal1 , .. , formaln ) ; EOL                   :: :: ProcType
-    | qualident ( formal1 , .. , formaln ) opt_indented_block      :: :: ProcDefn
+    | qualident ( formal1 , .. , formaln ) ; EOL                   ::   :: ProcType
+    | __ExceptionTaken ( ) ; EOL                                   :: S :: ExceptionTaken {{ ocaml Decl_ProcType(Ident "__ExceptionTaken", [], Range($symbolstartpos,$endpos)) }}
+    | qualident ( formal1 , .. , formaln ) opt_indented_block      ::   :: ProcDefn
 
 formal :: 'Formal_' ::=
     {{ phantom }} {{ ocaml ty * ident }}
