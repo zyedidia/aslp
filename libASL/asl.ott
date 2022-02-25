@@ -223,21 +223,31 @@ type_declaration :: 'Decl_' ::= {{ quotient-with declaration }}
     | __builtin type tidentdecl ; EOL                          ::   :: BuiltinType
     | type tidentdecl ; EOL                                    ::   :: Forward % says there is a type decl elsewhere
     | record tidentdecl { field1 ... fieldn } ; EOL            ::   :: Record
-    | type tidentdecl is ( field_ns1 , ... , field_nsn ) EOL   :: S :: Dep_Record {{ ocaml Decl_Record([[tidentdecl]], [[field_ns1 ... field_nsn]], Range($symbolstartpos,$endpos)) }} {{ com DEPRECATED }}
+    | type tidentdecl is ( flexible_field_comma_list ) EOL     :: S :: Dep_Record {{ ocaml Decl_Record([[tidentdecl]], [[flexible_field_comma_list]], Range($symbolstartpos,$endpos)) }} {{ com DEPRECATED }}
     | type tidentdecl = ty ; EOL                               ::   :: Typedef
-    | enumeration tidentdecl { ident1 , .. , identn } ; EOL    ::   :: Enum
+    | enumeration tidentdecl { flexible_ident_list } ; EOL     ::   :: Enum
 
-field_ns :: 'FieldNS_' ::=
-    {{ phantom }} {{ ocaml ty * ident }}
-    {{ pp-raw f = string "(" ^^ pp_raw_ty (fst f) ^^ string ", " ^^ string (snd f) ^^ string ")" }}
-    {{ pp f     = pp_ty (fst f) ^^ string " " ^^ string (snd f) }}
-    | ty anyident           :: :: Field {{ ocaml ([[ty]], [[anyident]]) }}
+flexible_field_comma_list :: 'FlexFieldCL_' ::=
+    {{ phantom }} {{ ocaml (ty * ident) list }}
+    {{ pp-raw fs = separate (string ", ") (List.map (fun (ty,id) -> string "(" ^^ pp_raw_ty ty ^^ string ", " ^^ string id ^^ string ")") fs) }}
+    {{ pp fs     = separate (string ", ") (List.map (fun (ty,id) -> pp_ty ty ^^ string " " ^^ string id) fs) }}
+    |                       :: :: Empty {{ ocaml [ ] }}
+    | ty anyident           :: :: Field {{ ocaml [ ([[ty]], [[anyident]]) ] }}
+    | ty anyident , flexible_field_comma_list :: :: Cons {{ ocaml ([[ty]], [[anyident]])::[[flexible_field_comma_list]] }}
 
 field :: 'Field_' ::=
     {{ phantom }} {{ ocaml ty * ident }}
     {{ pp-raw f = string "(" ^^ pp_raw_ty (fst f) ^^ string ", " ^^ pp_raw_ident (snd f) ^^ string ")" }}
     {{ pp f     = pp_ty (fst f) ^^ string " " ^^ pp_ident (snd f) }}
     | ty anyident ;         :: :: Field {{ ocaml ([[ty]], [[anyident]]) }}
+
+flexible_ident_list :: 'IdentList' ::=
+    {{ phantom }} {{ ocaml ident list }}
+    {{ pp-raw idl = separate (string ", ") (List.map pp_raw_ident idl) }}
+    {{ pp     idl = separate (string ", ") (List.map pp_ident     idl) }}
+    |                               :: :: Empty  {{ ocaml [ ] }}
+    | ident                         :: :: Single {{ ocaml [ [[ident]] ] }}
+    | ident , flexible_ident_list   :: :: Cons   {{ ocaml [[ident]] :: [[flexible_ident_list]] }}
 
 variable_declaration :: 'Decl_' ::= {{ quotient-with declaration }}
     {{ aux _ l }}
