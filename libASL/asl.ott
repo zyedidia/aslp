@@ -185,8 +185,8 @@ typeident :: '' ::=    {{ phantom }}
 anyident :: '' ::=     {{ phantom }}
                        {{ ocaml ident }}
                        {{ com Identifier (in a separate namespace from type identifiers) }}
-                       {{ pp     l = PPrintEngine.string (pprint_ident l) }}
-                       {{ pp-raw l = PPrintEngine.string (pprint_ident l) }}
+                       {{ pp     l = PPrint.string (pprint_ident l) }}
+                       {{ pp-raw l = PPrint.string (pprint_ident l) }}
   | id                 :: :: AnyIdent {{ ocaml Ident [[id]] }}
   | typeid             :: :: AnyTypeIdent {{ ocaml Ident [[typeid]] }}
 
