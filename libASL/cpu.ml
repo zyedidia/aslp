@@ -15,6 +15,7 @@ type cpu = {
     setPC    : Primops.bigint -> unit;
     elfwrite : Int64.t -> char -> unit;
     opcode   : string -> Primops.bigint -> unit;
+    sem : string -> Primops.bigint -> unit;
 }
 
 let mkCPU (env : Eval.Env.t): cpu =
@@ -43,6 +44,12 @@ let mkCPU (env : Eval.Env.t): cpu =
         let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) opcode) in
         let decoder = Eval.Env.getDecoder env (Ident iset) in
         Eval.eval_decode_case AST.Unknown env decoder op
+
+    and sem (iset: string) (opcode: Primops.bigint): unit =
+        let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) opcode) in
+        let decoder = Eval.Env.getDecoder env (Ident iset) in
+        Eval.dis_decode_case AST.Unknown env decoder op
+
     in
     {
         env      = env;
@@ -51,7 +58,8 @@ let mkCPU (env : Eval.Env.t): cpu =
         getPC    = getPC;
         setPC    = setPC;
         elfwrite = elfwrite;
-        opcode   = opcode
+        opcode   = opcode;
+        sem      = sem
     }
 
 (****************************************************************

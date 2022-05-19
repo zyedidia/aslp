@@ -910,6 +910,57 @@ and eval_encoding (env: Env.t) (x: encoding) (op: value): bool =
         false
     end
 
+(************ Dissasm Functions ***************)
+
+(* Duplicate of eval_decode_case modified to print rather than eval *)
+let rec dis_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): unit =
+    (match x with
+    | DecoderCase_Case (ss, alts, loc) ->
+            let vs = List.map (fun s -> eval_decode_slice loc env s op) ss in
+            let rec dis alts =
+                (match alts with
+                | (alt :: alts') ->
+                    if dis_decode_alt loc env alt vs op then () else dis alts'
+                | [] ->
+                        raise (EvalError (loc, "unmatched decode pattern"))
+                )
+            in
+            dis alts
+    )
+
+(* Duplicate of eval_decode_alt modified to print rather than eval *)
+and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): bool =
+    if List.for_all2 (eval_decode_pattern loc) ps vs then
+        (match b with
+        | DecoderBody_UNPRED loc -> raise (Throw (loc, Exc_Unpredictable))
+        | DecoderBody_UNALLOC loc -> raise (Throw (loc, Exc_Undefined))
+        | DecoderBody_NOP loc -> raise (Throw (loc, Exc_Undefined))
+        | DecoderBody_Encoding (inst, l) -> 
+                let (enc, opost, cond, exec) = Env.getInstruction loc env inst in
+                if eval_encoding env enc op then begin
+                    (match opost with
+                    | Some post -> List.iter (function s -> Printf.printf "%s\n" (pp_stmt s)) post;
+                        (*List.iter (eval_stmt env) post*)
+                    | None -> ()
+                    );
+                    (* todo: should evaluate ConditionHolds to decide whether to execute body *)
+                    Printf.printf "Dissasm: %s\n" (pprint_ident inst);
+                    List.iter (function s -> Printf.printf "%s\n" (pp_stmt s)) exec;
+                    (*List.iter (eval_stmt env) exec;*)
+                    true
+                end else begin
+                    false
+                end
+        | DecoderBody_Decoder (fs, c, loc) ->
+                let env = Env.empty in (* todo: this seems to share a single mutable object far too widely *)
+                List.iter (function (IField_Field (f, lo, wd)) ->
+                    Env.addLocalVar loc env f (extract_bits' loc op lo wd)
+                ) fs;
+                dis_decode_case loc env c op;
+                true
+        )
+    else
+      false
 
 (****************************************************************)
 (** {2 Creating environment from global declarations}           *)
