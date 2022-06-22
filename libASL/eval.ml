@@ -945,8 +945,7 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     );
                     (* todo: should evaluate ConditionHolds to decide whether to execute body *)
                     Printf.printf "Dissasm: %s\n" (pprint_ident inst);
-                    List.iter (print_dissasm env) exec;
-                    (*List.iter (eval_stmt env) exec;*)
+                    dis_stmts env exec;
                     true
                 end else begin
                     false
@@ -962,23 +961,29 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
     else
       false
 
-and print_dissasm (env: Env.t) s =
-    match s with
+(** Disassemble list of statements *)
+and dis_stmts (env: Env.t) (xs: AST.stmt list):unit =
+    Env.nest (fun env' -> List.iter (dis_stmt env') xs) env
+
+(** Disassemble statement *)
+and dis_stmt (env: Env.t) (x: AST.stmt): unit =
+    (match x with
     | Stmt_If(c, t, els, e, loc) ->
-            (* todo: only eval expr if expr only contains constants *)
-            (match eval_expr loc env c with
-            | VBool b -> 
-                    if b then 
-                        List.iter (print_dissasm env) t 
+            let rec eval css d =
+                (match css with
+                | [] -> dis_stmts env d
+                | (S_Elsif_Cond(c, s) :: css') ->
+                    (* TODO: only evaluate if expression only contains constants *)
+                    if to_bool loc (eval_expr loc env c) then
+                        dis_stmts env s
                     else
-                        (match els with
-                        | [] -> List.iter (print_dissasm env) e
-                        | S_Elsif_Cond(c, br) :: els' -> 
-                                print_dissasm env (Stmt_If(c, br, els', e, loc))
-                        )
-            | _ -> ()
-            )
+                        eval css' d
+                )
+            in
+            eval (S_Elsif_Cond(c, t) :: els) e
+    (* TODO: handle other statement types *)
     | s -> Printf.printf "%s\n" (pp_stmt s)
+    )
 
 (****************************************************************)
 (** {2 Creating environment from global declarations}           *)
