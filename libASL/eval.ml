@@ -945,7 +945,7 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     );
                     (* todo: should evaluate ConditionHolds to decide whether to execute body *)
                     Printf.printf "Dissasm: %s\n" (pprint_ident inst);
-                    List.iter (function s -> Printf.printf "%s\n" (pp_stmt s)) exec;
+                    List.iter (print_dissasm env) exec;
                     (*List.iter (eval_stmt env) exec;*)
                     true
                 end else begin
@@ -961,6 +961,24 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
         )
     else
       false
+
+and print_dissasm (env: Env.t) s =
+    match s with
+    | Stmt_If(c, t, els, e, loc) ->
+            (* todo: only eval expr if expr only contains constants *)
+            (match eval_expr loc env c with
+            | VBool b -> 
+                    if b then 
+                        List.iter (print_dissasm env) t 
+                    else
+                        (match els with
+                        | [] -> List.iter (print_dissasm env) e
+                        | S_Elsif_Cond(c, br) :: els' -> 
+                                print_dissasm env (Stmt_If(c, br, els', e, loc))
+                        )
+            | _ -> ()
+            )
+    | s -> Printf.printf "%s\n" (pp_stmt s)
 
 (****************************************************************)
 (** {2 Creating environment from global declarations}           *)
