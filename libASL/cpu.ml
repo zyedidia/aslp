@@ -48,7 +48,7 @@ let mkCPU (env : Eval.Env.t): cpu =
     and sem (iset: string) (opcode: Primops.bigint): unit =
         let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) opcode) in
         let decoder = Eval.Env.getDecoder env (Ident iset) in
-        Eval.dis_decode_case AST.Unknown env decoder op
+        Dis.dis_decode_case AST.Unknown env decoder op
 
     in
     {
