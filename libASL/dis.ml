@@ -16,56 +16,140 @@ open Asl_utils
 open Value
 open Eval
 
+type valueOrExpr =
+    | ExprValue of value
+    | Expr of AST.expr
+
+(** Return the original expression if the evaluation is undefined *)
+let remove_uninitialized (v: valueOrExpr) (ex: valueOrExpr): valueOrExpr = 
+    if v == ExprValue VUninitialized then ex else v
+
+(** Convert value to a simple expression containing that value, so we can
+    print it or use it symbolically *)
+let value_to_expr (v: valueOrExpr): AST.expr = 
+    match v with
+    | ExprValue x ->
+        (match x with 
+        | VBool b -> Expr_LitInt(if b then "1" else "0")
+        (* TODO: definitely get rid of this. Should convert every case *)
+        | x -> Expr_LitInt("0")
+        )
+    | Expr x -> x
+
+
+let rec dis_expr (loc: l) (env: Env.t) (x: AST.expr): valueOrExpr =
+    (match x with
+    | Expr_If(c, t, els, e) ->
+        let rec eval_if xs d = match xs with
+            (* if the result of dis_expr is Uninit. then we want to return the entire expr*)
+            | [] -> remove_uninitialized (dis_expr loc env d) (Expr d)
+            (* If we cannot evaluate the condition, print the whole statement *)
+            | AST.E_Elsif_Cond (cond, b)::xs' ->
+                match remove_uninitialized (dis_expr loc env cond) (Expr cond) with
+                | ExprValue v -> 
+                    if to_bool loc v then
+                        (* Just print this branch *)
+                        dis_expr loc env b
+                    else
+                        (* Print whatever the rest of the branches turn out to be *)
+                        eval_if xs' d
+                (* We have to print out all branches now because we don't know
+                   whether or not this one is true. We can still simplify 
+                   guards and bodies though *)
+                | Expr ex -> Expr (Expr_If(
+                    ex, 
+                    value_to_expr (remove_uninitialized (dis_expr loc env b) (Expr b)), 
+                    dis_if_expr_no_remove loc env els,
+                    value_to_expr (remove_uninitialized (dis_expr loc env b) (Expr b))
+                ))
+        in
+        eval_if (E_Elsif_Cond(c, t)::els) e
+    | x -> (try (ExprValue (eval_expr loc env x)) with EvalError _ -> Expr x)
+    )
+
+(** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
+and dis_if_expr_no_remove (loc: l) (env: Env.t) xs = 
+    match xs with
+    | [] -> []
+    | (AST.E_Elsif_Cond (cond, b)::xs') ->
+        AST.E_Elsif_Cond(
+            value_to_expr (remove_uninitialized (dis_expr loc env cond) (Expr cond)), 
+            value_to_expr (remove_uninitialized (dis_expr loc env b) (Expr b))
+        ) :: (dis_if_expr_no_remove loc env xs')
+
 (** Dissassemble list of statements *)
-let rec dis_stmts (env: Eval.Env.t) (xs: AST.stmt list):unit =
+let rec dis_stmts (env: Env.t) (xs: AST.stmt list):unit =
     Env.nest (fun env' -> List.iter (dis_stmt env') xs) env
 
 (** Disassemble statement *)
-and dis_stmt (env: Eval.Env.t) (x: AST.stmt): unit =
+and dis_stmt (env: Env.t) (x: AST.stmt): unit =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
+        Printf.printf "%s\n" (pp_stmt x);
         List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs
     | Stmt_VarDecl(ty, v, i, loc) ->
-        let i' = (try (eval_expr loc env i) with EvalError _ -> VUninitialized) in
-        if i' != VUninitialized then 
-            Env.addLocalVar loc env v i'
-        else 
+        (match dis_expr loc env i with
+        | ExprValue i' -> Env.addLocalVar loc env v i'
+        | Expr ex -> 
             (* Declare variable with uninitialized value and just use symbolically *)
             Printf.printf "%s\n" (pp_stmt x);
             Env.addLocalVar loc env v (mk_uninitialized loc env ty)
+        )
     | Stmt_ConstDecl(ty, v, i, loc) ->
-            let i' = eval_expr loc env i in
-            Env.addLocalConst loc env v i'
-    (* TODO: handle other statement types *)
+        (match dis_expr loc env i with
+        | ExprValue i' -> Env.addLocalConst loc env v i'
+        | Expr ex -> 
+            (* Declare constant with uninitialized value and just use symbolically *)
+            Printf.printf "%s\n" (pp_stmt x);
+            Env.addLocalConst loc env v (mk_uninitialized loc env ty)
+        )
     | Stmt_Assign(l, r, loc) ->
-        (* TODO: create dis_expr which checks for unknown at every recursive call *)
-        (match r with
-        (* TODO: treat variable as symbolic from now on if unknown *)
-        | Expr_Unknown(t) -> Printf.printf "%s\n" (pp_stmt x)
-        | r -> let r' = try eval_expr loc env r with EvalError _ -> VUninitialized in 
-            if r' != VUninitialized then
-                eval_lexpr loc env l r'
-            else
-                Printf.printf "%s\n" (pp_stmt x)
+        (match dis_expr loc env r with
+        (* TODO: handle left the same way we handle right. needs dis_lexpr *)
+        | ExprValue r' -> 
+            (try (eval_lexpr loc env l r') with EvalError _ -> Printf.printf "%s\n" (pp_stmt x))
+        | Expr ex -> Printf.printf "%s\n" (pp_stmt x);
         )
     | Stmt_If(c, t, els, e, loc) ->
-            let rec eval css d =
-                (match css with
-                | [] -> dis_stmts env d
-                | (S_Elsif_Cond(c, s) :: css') ->
-                    (* TODO: only evaluate if expression only contains constants *)
-                    if to_bool loc (eval_expr loc env c) then
-                        dis_stmts env s
+        let rec eval_if xs d = match xs with
+            | [] -> dis_stmts env e
+            | AST.S_Elsif_Cond (cond, b)::xs' ->
+                (match remove_uninitialized (dis_expr loc env cond) (Expr cond) with
+                | ExprValue v -> 
+                    if to_bool loc v then
+                        (* Just print this branch *)
+                        dis_stmts env b
                     else
-                        eval css' d
+                        (* Print whatever the rest of the branches turn out to be *)
+                        eval_if xs' d
+                (* We have to print out all branches now because we don't know
+                   whether or not this one is true. We can still simplify 
+                   guards and bodies though *)
+                | Expr ex -> 
+                    Printf.printf "if ";
+                    Printf.printf "%s\n" (pp_expr ex);
+                    Printf.printf " then {\n";
+                    dis_stmts env t;
+                    dis_if_stmt_no_remove loc env els;
+                    Printf.printf "} else {\n";
+                    dis_stmts env e;
+                    Printf.printf "}\n"
                 )
-            in
-            eval (S_Elsif_Cond(c, t) :: els) e
+        in
+        eval_if (S_Elsif_Cond(c, t)::els) e
     | x -> Printf.printf "%s\n" (pp_stmt x)
     )
 
+(** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
+and dis_if_stmt_no_remove (loc: l) (env: Env.t) xs = 
+    match xs with
+    | [] -> ()
+    | (AST.S_Elsif_Cond (cond, b)::xs') ->
+        Printf.printf "} else if %s then {\n" (pp_expr cond);
+        dis_stmts env b
+
 (* Duplicate of eval_decode_case modified to print rather than eval *)
-let rec dis_decode_case (loc: AST.l) (env: Eval.Env.t) (x: decode_case) (op: value): unit =
+let rec dis_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): unit =
     (match x with
     | DecoderCase_Case (ss, alts, loc) ->
             let vs = List.map (fun s -> eval_decode_slice loc env s op) ss in
@@ -81,7 +165,7 @@ let rec dis_decode_case (loc: AST.l) (env: Eval.Env.t) (x: decode_case) (op: val
     )
 
 (* Duplicate of eval_decode_alt modified to print rather than eval *)
-and dis_decode_alt (loc: AST.l) (env: Eval.Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): bool =
+and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): bool =
     if List.for_all2 (eval_decode_pattern loc) ps vs then
         (match b with
         | DecoderBody_UNPRED loc -> raise (Throw (loc, Exc_Unpredictable))
@@ -97,6 +181,8 @@ and dis_decode_alt (loc: AST.l) (env: Eval.Env.t) (DecoderAlt_Alt (ps, b)) (vs: 
                     );
                     (* todo: should evaluate ConditionHolds to decide whether to execute body *)
                     Printf.printf "Dissasm: %s\n" (pprint_ident inst);
+                    (* Uncomment this if you want to see output with no evaluation *)
+                    (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) exec; *)
                     dis_stmts env exec;
                     true
                 end else begin
