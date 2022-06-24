@@ -64,6 +64,35 @@ let rec dis_expr (loc: l) (env: Env.t) (x: AST.expr): valueOrExpr =
                 ))
         in
         eval_if (E_Elsif_Cond(c, t)::els) e
+    (* NOTE: This does not consider early returns currently *)
+    | Expr_TApply(f, tes, es) ->
+        (try
+            (let (targs, args, loc, b) = Env.getFun loc env f in
+                (* Initialise all the dummy variables used for return variables *)
+                List.iter (fun (targ, n) -> 
+                    let d = Stmt_VarDecl(
+                        (* TODO: find type of function return. Env.getTypedef is currently returning None *)
+                        Type_Constructor (Ident "TODOType"),
+                        (* TODO: ensure there are no name collisions *)
+                        Ident ("var" ^ string_of_int n), 
+                        (* TODO: give this a more general empty expression. This currently evaluates to VUnitialized which is necessary *)
+                        Expr_Unknown(Type_Constructor(Ident "integer")),
+                        Unknown
+                    ) in 
+                        Printf.printf "%s\n" (pp_stmt d)
+                ) (List.map2 (fun a b -> (a, b)) targs (Utils.range 0 (List.length targs - 1)));
+
+                (* print out the body *)
+                List.iter (dis_stmt env) b;
+
+                (* resolve to a singular dummy variable or a tuple of the dummy variables for assignment *)
+                if List.length tes == 1 then 
+                    Expr (Expr_Var(Ident "var0"))
+                else
+                Expr (Expr_Tuple(List.map (fun n -> Expr_Var(Ident ("var" ^ string_of_int n))) (Utils.range 0 (List.length tes - 1)))))
+        (* Use this to identify statements not being partially evaluated as expected *)
+        (* with EvalError (loc, message) -> Printf.printf "ERROR: %s\n" message; Expr x)  *)
+        with EvalError (loc, message) -> Expr x)
     | x -> (try (ExprValue (eval_expr loc env x)) with EvalError _ -> Expr x)
     )
 
@@ -78,7 +107,7 @@ and dis_if_expr_no_remove (loc: l) (env: Env.t) xs =
         ) :: (dis_if_expr_no_remove loc env xs')
 
 (** Dissassemble list of statements *)
-let rec dis_stmts (env: Env.t) (xs: AST.stmt list):unit =
+and dis_stmts (env: Env.t) (xs: AST.stmt list): unit =
     Env.nest (fun env' -> List.iter (dis_stmt env') xs) env
 
 (** Disassemble statement *)
@@ -92,8 +121,8 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit =
         | ExprValue i' -> Env.addLocalVar loc env v i'
         | Expr ex -> 
             (* Declare variable with uninitialized value and just use symbolically *)
-            Printf.printf "%s\n" (pp_stmt x);
-            Env.addLocalVar loc env v (mk_uninitialized loc env ty)
+            Printf.printf "%s %s = %s\n" (pp_type ty) (pprint_ident v) (pp_expr ex);
+            Env.addLocalVar loc env v VUninitialized
         )
     | Stmt_ConstDecl(ty, v, i, loc) ->
         (match dis_expr loc env i with
@@ -108,7 +137,7 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit =
         (* TODO: handle left the same way we handle right. needs dis_lexpr *)
         | ExprValue r' -> 
             (try (eval_lexpr loc env l r') with EvalError _ -> Printf.printf "%s\n" (pp_stmt x))
-        | Expr ex -> Printf.printf "%s\n" (pp_stmt x);
+        | Expr ex -> Printf.printf "%s = %s\n" (pp_lexpr l) (pp_expr ex);
         )
     | Stmt_If(c, t, els, e, loc) ->
         let rec eval_if xs d = match xs with
@@ -127,7 +156,7 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit =
                    guards and bodies though *)
                 | Expr ex -> 
                     Printf.printf "if ";
-                    Printf.printf "%s\n" (pp_expr ex);
+                    Printf.printf "%s" (pp_expr ex);
                     Printf.printf " then {\n";
                     dis_stmts env t;
                     dis_if_stmt_no_remove loc env els;
@@ -137,6 +166,9 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit =
                 )
         in
         eval_if (S_Elsif_Cond(c, t)::els) e
+    | Stmt_FunReturn(e, loc) ->
+        (* TODO: replace with all dummy variables *)
+        Printf.printf "%s\n" (pp_stmt x)
     | x -> Printf.printf "%s\n" (pp_stmt x)
     )
 
