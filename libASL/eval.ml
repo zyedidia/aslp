@@ -123,6 +123,9 @@ module Env : sig
     val setImpdef           : t -> string -> value -> unit
     val getImpdef           : AST.l -> t -> string -> value
 
+    val getReturnSymbol    : AST.l -> t -> AST.expr
+    val addReturnSymbol    : t -> AST.expr -> unit
+
 end = struct
     type t = {
         mutable instructions : (encoding * (stmt list) option * bool * stmt list) Bindings.t;
@@ -136,7 +139,9 @@ end = struct
         mutable globals      : scope;
         mutable constants    : scope;
         mutable impdefs      : value ImpDefs.t;
-        mutable locals       : scope list
+        mutable locals       : scope list;
+        (* TODO: maybe expr isn't the best way to represent this *)
+        mutable returnSymbols: AST.expr list
     }
 
     let empty = {
@@ -152,6 +157,7 @@ end = struct
         constants    = empty_scope ();
         impdefs      = ImpDefs.empty;
         locals       = [empty_scope ()];
+        returnSymbols= [];
     }
 
     let nestTop (k: t -> 'a) (parent: t): 'a =
@@ -168,6 +174,7 @@ end = struct
             constants    = parent.constants;
             impdefs      = parent.impdefs;
             locals       = [empty_scope ()];  (* only change *)
+            returnSymbols= parent.returnSymbols;
         } in
         k child
 
@@ -185,6 +192,7 @@ end = struct
             constants    = parent.constants;
             impdefs      = parent.impdefs;
             locals       = empty_scope () :: parent.locals;  (* only change *)
+            returnSymbols= parent.returnSymbols;
         } in
         k child
 
@@ -300,6 +308,14 @@ end = struct
         | None ->
                 raise (EvalError (loc, "Unknown value for IMPLEMENTATION_DEFINED \""^x^"\""))
         )
+
+    let getReturnSymbol (loc: l) (env: t): AST.expr =
+        match env.returnSymbols with
+        | [] -> raise (EvalError (loc, "Return not in function"))
+        | (e :: rs) -> env.returnSymbols <- rs; e
+
+    let addReturnSymbol (env: t) (e: AST.expr): unit =
+        env.returnSymbols <- e :: env.returnSymbols;
 end
 
 let isGlobalConst (env: Env.t) (id: AST.ident): bool =
