@@ -37,19 +37,19 @@ let value_to_expr (v: valueOrExpr): AST.expr =
     | Expr x -> x
 
 
-let rec dis_expr (loc: l) (env: Env.t) (x: AST.expr): valueOrExpr =
+let rec dis_expr (loc: l) (env: Env.t) (rv: AST.expr option) (x: AST.expr): valueOrExpr =
     (match x with
     | Expr_If(c, t, els, e) ->
         let rec eval_if xs d = match xs with
             (* if the result of dis_expr is Uninit. then we want to return the entire expr*)
-            | [] -> remove_uninitialized (dis_expr loc env d) (Expr d)
+            | [] -> remove_uninitialized (dis_expr loc env rv d) (Expr d)
             (* If we cannot evaluate the condition, print the whole statement *)
             | AST.E_Elsif_Cond (cond, b)::xs' ->
-                match remove_uninitialized (dis_expr loc env cond) (Expr cond) with
+                match remove_uninitialized (dis_expr loc env rv cond) (Expr cond) with
                 | ExprValue v -> 
                     if to_bool loc v then
                         (* Just print this branch *)
-                        dis_expr loc env b
+                        dis_expr loc env rv b
                     else
                         (* Print whatever the rest of the branches turn out to be *)
                         eval_if xs' d
@@ -58,38 +58,40 @@ let rec dis_expr (loc: l) (env: Env.t) (x: AST.expr): valueOrExpr =
                    guards and bodies though *)
                 | Expr ex -> Expr (Expr_If(
                     ex, 
-                    value_to_expr (remove_uninitialized (dis_expr loc env b) (Expr b)), 
-                    dis_if_expr_no_remove loc env els,
-                    value_to_expr (remove_uninitialized (dis_expr loc env b) (Expr b))
+                    value_to_expr (remove_uninitialized (dis_expr loc env rv b) (Expr b)), 
+                    dis_if_expr_no_remove loc env rv els,
+                    value_to_expr (remove_uninitialized (dis_expr loc env rv b) (Expr b))
                 ))
         in
         eval_if (E_Elsif_Cond(c, t)::els) e
-    (* NOTE: This does not consider early returns currently *)
+    (* NOTE: This does not consider early returns currently. It also doesn't handle recursive calls *)
     | Expr_TApply(f, tes, es) ->
         (try
             (let (targs, args, loc, b) = Env.getFun loc env f in
                 (* Initialise all the dummy variables used for return variables *)
-                List.iter (fun (targ, n) -> 
-                    let d = Stmt_VarDecl(
-                        (* TODO: find type of function return. Env.getTypedef is currently returning None *)
-                        Type_Constructor (Ident "TODOType"),
-                        (* TODO: ensure there are no name collisions *)
-                        Ident ("var" ^ string_of_int n), 
-                        (* TODO: give this a more general empty expression. This currently evaluates to VUnitialized which is necessary *)
-                        Expr_Unknown(Type_Constructor(Ident "integer")),
-                        Unknown
-                    ) in 
-                        Printf.printf "%s\n" (pp_stmt d)
-                ) (List.map2 (fun a b -> (a, b)) targs (Utils.range 0 (List.length targs - 1)));
+                let fName = match f with
+                | Ident t -> t
+                | FIdent (t, _) -> t in
+                let ds = Stmt_VarDeclsNoInit(
+                    Type_Constructor (Ident "TODOType"), 
+                    List.map (fun n -> Ident (fName ^ "Var" ^ string_of_int n)) (Utils.range 0 (List.length targs - 1)), 
+                    Unknown
+                ) in Printf.printf "%s\n" (pp_stmt ds);
+
+                (let rv' = (
+                    if List.length tes == 1 then 
+                        Expr_Var(Ident (fName ^ "Var0"))
+                    else
+                        Expr_Tuple(List.map (fun n -> Expr_Var(Ident (fName ^ "Var" ^ string_of_int n))) (Utils.range 0 (List.length tes - 1))))
+                in
 
                 (* print out the body *)
-                List.iter (dis_stmt env) b;
+                (* TODO: pass the return value into the state somehow *)
+                dis_stmts env (Some rv') b;
+                Expr rv'))
 
                 (* resolve to a singular dummy variable or a tuple of the dummy variables for assignment *)
-                if List.length tes == 1 then 
-                    Expr (Expr_Var(Ident "var0"))
-                else
-                Expr (Expr_Tuple(List.map (fun n -> Expr_Var(Ident ("var" ^ string_of_int n))) (Utils.range 0 (List.length tes - 1)))))
+                
         (* Use this to identify statements not being partially evaluated as expected *)
         (* with EvalError (loc, message) -> Printf.printf "ERROR: %s\n" message; Expr x)  *)
         with EvalError (loc, message) -> Expr x)
@@ -97,27 +99,27 @@ let rec dis_expr (loc: l) (env: Env.t) (x: AST.expr): valueOrExpr =
     )
 
 (** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
-and dis_if_expr_no_remove (loc: l) (env: Env.t) xs = 
+and dis_if_expr_no_remove (loc: l) (env: Env.t) (rv: AST.expr option) xs = 
     match xs with
     | [] -> []
     | (AST.E_Elsif_Cond (cond, b)::xs') ->
         AST.E_Elsif_Cond(
-            value_to_expr (remove_uninitialized (dis_expr loc env cond) (Expr cond)), 
-            value_to_expr (remove_uninitialized (dis_expr loc env b) (Expr b))
-        ) :: (dis_if_expr_no_remove loc env xs')
+            value_to_expr (remove_uninitialized (dis_expr loc env rv cond) (Expr cond)), 
+            value_to_expr (remove_uninitialized (dis_expr loc env rv b) (Expr b))
+        ) :: (dis_if_expr_no_remove loc env rv xs')
 
 (** Dissassemble list of statements *)
-and dis_stmts (env: Env.t) (xs: AST.stmt list): unit =
-    Env.nest (fun env' -> List.iter (dis_stmt env') xs) env
+and dis_stmts (env: Env.t) (rv: AST.expr option) (xs: AST.stmt list): unit =
+    Env.nest (fun env' -> List.iter (dis_stmt env' rv) xs) env
 
 (** Disassemble statement *)
-and dis_stmt (env: Env.t) (x: AST.stmt): unit =
+and dis_stmt (env: Env.t) (rv: AST.expr option) (x: AST.stmt): unit =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
         Printf.printf "%s\n" (pp_stmt x);
         List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs
     | Stmt_VarDecl(ty, v, i, loc) ->
-        (match dis_expr loc env i with
+        (match dis_expr loc env rv i with
         | ExprValue i' -> Env.addLocalVar loc env v i'
         | Expr ex -> 
             (* Declare variable with uninitialized value and just use symbolically *)
@@ -125,7 +127,7 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit =
             Env.addLocalVar loc env v VUninitialized
         )
     | Stmt_ConstDecl(ty, v, i, loc) ->
-        (match dis_expr loc env i with
+        (match dis_expr loc env rv i with
         | ExprValue i' -> Env.addLocalConst loc env v i'
         | Expr ex -> 
             (* Declare constant with uninitialized value and just use symbolically *)
@@ -133,7 +135,7 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit =
             Env.addLocalConst loc env v (mk_uninitialized loc env ty)
         )
     | Stmt_Assign(l, r, loc) ->
-        (match dis_expr loc env r with
+        (match dis_expr loc env rv r with
         (* TODO: handle left the same way we handle right. needs dis_lexpr *)
         | ExprValue r' -> 
             (try (eval_lexpr loc env l r') with EvalError _ -> Printf.printf "%s\n" (pp_stmt x))
@@ -141,13 +143,13 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit =
         )
     | Stmt_If(c, t, els, e, loc) ->
         let rec eval_if xs d = match xs with
-            | [] -> dis_stmts env e
+            | [] -> dis_stmts env rv e
             | AST.S_Elsif_Cond (cond, b)::xs' ->
-                (match remove_uninitialized (dis_expr loc env cond) (Expr cond) with
+                (match remove_uninitialized (dis_expr loc env rv cond) (Expr cond) with
                 | ExprValue v -> 
                     if to_bool loc v then
                         (* Just print this branch *)
-                        dis_stmts env b
+                        dis_stmts env rv b
                     else
                         (* Print whatever the rest of the branches turn out to be *)
                         eval_if xs' d
@@ -158,27 +160,28 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit =
                     Printf.printf "if ";
                     Printf.printf "%s" (pp_expr ex);
                     Printf.printf " then {\n";
-                    dis_stmts env t;
-                    dis_if_stmt_no_remove loc env els;
+                    dis_stmts env rv t;
+                    dis_if_stmt_no_remove loc env rv els;
                     Printf.printf "} else {\n";
-                    dis_stmts env e;
+                    dis_stmts env rv e;
                     Printf.printf "}\n"
                 )
         in
         eval_if (S_Elsif_Cond(c, t)::els) e
     | Stmt_FunReturn(e, loc) ->
-        (* TODO: replace with all dummy variables *)
-        Printf.printf "%s\n" (pp_stmt x)
+        (match rv with
+        | Some rv' -> Printf.printf "%s = %s\n" (pp_expr rv') (pp_expr e)
+        | None -> raise (EvalError (loc, "return not called within function")))
     | x -> Printf.printf "%s\n" (pp_stmt x)
     )
 
 (** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
-and dis_if_stmt_no_remove (loc: l) (env: Env.t) xs = 
+and dis_if_stmt_no_remove (loc: l) (env: Env.t) (rv: AST.expr option) xs = 
     match xs with
     | [] -> ()
     | (AST.S_Elsif_Cond (cond, b)::xs') ->
         Printf.printf "} else if %s then {\n" (pp_expr cond);
-        dis_stmts env b
+        dis_stmts env rv b
 
 (* Duplicate of eval_decode_case modified to print rather than eval *)
 let rec dis_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): unit =
@@ -215,7 +218,7 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     Printf.printf "Dissasm: %s\n" (pprint_ident inst);
                     (* Uncomment this if you want to see output with no evaluation *)
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) exec; *)
-                    dis_stmts env exec;
+                    dis_stmts env None exec;
                     true
                 end else begin
                     false
