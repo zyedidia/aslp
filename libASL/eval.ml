@@ -125,6 +125,7 @@ module Env : sig
 
     val getReturnSymbol    : AST.l -> t -> AST.expr
     val addReturnSymbol    : t -> AST.expr -> unit
+    val removeReturnSymbol : t -> unit
 
 end = struct
     type t = {
@@ -312,10 +313,16 @@ end = struct
     let getReturnSymbol (loc: l) (env: t): AST.expr =
         match env.returnSymbols with
         | [] -> raise (EvalError (loc, "Return not in function"))
-        | (e :: rs) -> env.returnSymbols <- rs; e
+        | (e :: rs) -> e
 
     let addReturnSymbol (env: t) (e: AST.expr): unit =
-        env.returnSymbols <- e :: env.returnSymbols;
+        env.returnSymbols <- e :: env.returnSymbols
+
+    let removeReturnSymbol (env: t): unit =
+        (match env.returnSymbols with
+        | [] -> ()
+        | (s::ss) -> env.returnSymbols <- ss
+        )
 end
 
 let isGlobalConst (env: Env.t) (id: AST.ident): bool =

@@ -26,11 +26,17 @@ let remove_uninitialized (v: valueOrExpr) (ex: valueOrExpr): valueOrExpr =
 
 (** Convert value to a simple expression containing that value, so we can
     print it or use it symbolically *)
-let value_to_expr (v: valueOrExpr): AST.expr = 
+let rec value_to_expr (v: valueOrExpr): AST.expr = 
     match v with
     | ExprValue x ->
         (match x with 
         | VBool b -> Expr_LitInt(if b then "1" else "0")
+        | VEnum (id, n) -> Expr_LitInt(string_of_int n)
+        | VInt n -> Expr_LitInt(string_of_int (Z.to_int n))
+        | VReal n -> Expr_LitReal(string_of_float (Q.to_float n))
+        | VBits {n; v} -> Expr_LitInt(string_of_int (Z.to_int v))
+        | VString s -> Expr_LitString(s)
+        | VTuple vs -> Expr_Tuple(List.map (fun v -> value_to_expr (ExprValue v)) vs)
         (* TODO: definitely get rid of this. Should convert every case *)
         | x -> Expr_LitInt("0")
         )
@@ -60,13 +66,17 @@ let rec dis_expr (loc: l) (env: Env.t) (x: AST.expr): valueOrExpr =
                     ex, 
                     value_to_expr (remove_uninitialized (dis_expr loc env b) (Expr b)), 
                     dis_if_expr_no_remove loc env els,
-                    value_to_expr (remove_uninitialized (dis_expr loc env b) (Expr b))
+                    value_to_expr (remove_uninitialized (dis_expr loc env e) (Expr e))
                 ))
         in
         eval_if (E_Elsif_Cond(c, t)::els) e
     (* NOTE: This does not consider early returns currently. It also doesn't handle recursive calls *)
     | Expr_TApply(f, tes, es) ->
         (try
+            (* TODO: simplify args by themselves even if whole function fails *)
+            match (try (eval_prim (name_of_FIdent f) (eval_exprs loc env tes) (eval_exprs loc env es)) with EvalError _ -> None) with
+            | Some r -> ExprValue r
+            | None ->
             (let (targs, args, loc, b) = Env.getFun loc env f in
                 (* Initialise all the dummy variables used for return variables *)
                 let fName = match f with
@@ -85,16 +95,23 @@ let rec dis_expr (loc: l) (env: Env.t) (x: AST.expr): valueOrExpr =
                         Expr_Tuple(List.map (fun n -> Expr_Var(Ident (fName ^ "Var" ^ string_of_int n))) (Utils.range 0 (List.length tes - 1))))
                 in
 
+                (* Add local parameters *)
+                List.iter2 (fun arg ex -> match dis_expr loc env ex with | ExprValue v -> Env.addLocalVar loc env arg v | Expr _ -> ()) args es;
+
                 (* print out the body *)
                 Env.addReturnSymbol env rv;
                 dis_stmts env b;
+                Env.removeReturnSymbol env;
                 Expr rv))
 
                 (* resolve to a singular dummy variable or a tuple of the dummy variables for assignment *)
                 
         (* Use this to identify statements not being partially evaluated as expected *)
         (* with EvalError (loc, message) -> Printf.printf "ERROR: %s\n" message; Expr x)  *)
-        with EvalError (loc, message) -> Expr x)
+        with EvalError _ -> Expr x)
+    (* This currently breaks early evaluation of if statements, because we are ALWAYS returning an expr which is a signal of failure *)
+    (* | Expr_Var id -> 
+        (try (Expr (value_to_expr (ExprValue (Env.getVar loc env id)))) with EvalError _ -> Expr x) *)
     | x -> (try (ExprValue (eval_expr loc env x)) with EvalError _ -> Expr x)
     )
 
