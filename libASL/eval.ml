@@ -123,9 +123,10 @@ module Env : sig
     val setImpdef           : t -> string -> value -> unit
     val getImpdef           : AST.l -> t -> string -> value
 
-    val getReturnSymbol    : AST.l -> t -> AST.expr
-    val addReturnSymbol    : t -> AST.expr -> unit
-    val removeReturnSymbol : t -> unit
+    val getReturnSymbol     : AST.l -> t -> AST.expr
+    val addReturnSymbol     : t -> AST.expr -> unit
+    val removeReturnSymbol  : t -> unit
+    val getNumSymbols       : t -> int
 
 end = struct
     type t = {
@@ -142,7 +143,8 @@ end = struct
         mutable impdefs      : value ImpDefs.t;
         mutable locals       : scope list;
         (* TODO: maybe expr isn't the best way to represent this *)
-        mutable returnSymbols: AST.expr list
+        mutable returnSymbols: AST.expr list;
+        mutable numSymbols   : int
     }
 
     let empty = {
@@ -159,6 +161,7 @@ end = struct
         impdefs      = ImpDefs.empty;
         locals       = [empty_scope ()];
         returnSymbols= [];
+        numSymbols   = 0;
     }
 
     let nestTop (k: t -> 'a) (parent: t): 'a =
@@ -176,6 +179,7 @@ end = struct
             impdefs      = parent.impdefs;
             locals       = [empty_scope ()];  (* only change *)
             returnSymbols= parent.returnSymbols;
+            numSymbols   = parent.numSymbols;
         } in
         k child
 
@@ -194,6 +198,7 @@ end = struct
             impdefs      = parent.impdefs;
             locals       = empty_scope () :: parent.locals;  (* only change *)
             returnSymbols= parent.returnSymbols;
+            numSymbols   = parent.numSymbols;
         } in
         k child
 
@@ -323,6 +328,10 @@ end = struct
         | [] -> ()
         | (s::ss) -> env.returnSymbols <- ss
         )
+
+    let getNumSymbols (env: t): int =
+        env.numSymbols <- env.numSymbols + 1;
+        env.numSymbols
 end
 
 let isGlobalConst (env: Env.t) (id: AST.ident): bool =
@@ -663,14 +672,18 @@ and eval_stmts (env: Env.t) (xs: AST.stmt list): unit =
 and eval_stmt (env: Env.t) (x: AST.stmt): unit =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
-            List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs
+            
+            List.iter (fun v -> (*Printf.printf "ASSIGN: %s = VUNINITIALIZED\n" (pprint_ident v); *)Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs
     | Stmt_VarDecl(ty, v, i, loc) ->
+        (* Printf.printf "ASSIGN: %s = %s\n" (pprint_ident v) (pp_expr i); *)
             let i' = eval_expr loc env i in
             Env.addLocalVar loc env v i'
     | Stmt_ConstDecl(ty, v, i, loc) ->
+        (* Printf.printf "ASSIGN: %s = %s\n" (pprint_ident v) (pp_expr i); *)
             let i' = eval_expr loc env i in
             Env.addLocalConst loc env v i'
     | Stmt_Assign(l, r, loc) ->
+            (* Printf.printf "ASSIGN: %s = %s\n" (pp_lexpr l) (pp_expr r); *)
             let r' = eval_expr loc env r in
             eval_lexpr loc env l r'
     | Stmt_TCall(f, tes, es, loc) ->
