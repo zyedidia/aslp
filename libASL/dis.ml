@@ -117,22 +117,24 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
                 | [] -> Expr_Tuple []
                 | [name] -> Expr_Var(name)
                 | names -> Expr_Tuple(List.map (fun n -> Expr_Var n) names)) in
+            let localPrefix = fName ^ string_of_int (Env.getNumSymbols env) in
 
-            (* Add local parameters *)
+            (* Add local parameters, avoiding name collisions *)
             (* Also print what the parameter refers to *)
-            (* TODO: fix naming conflicts if this function is called twice in one expression *)
             List.iter2 (fun arg ex -> 
                 let ex' = dis_expr loc env ex in 
                 (match ex' with 
-                | Result v -> Env.addLocalVar loc env arg v 
-                | Simplified _ -> ());
-                Printf.printf "%s = %s\n" (pprint_ident arg) (pp_result_or_simplified ex')
+                | Result v -> Env.addLocalVar loc env (Ident (localPrefix ^ pprint_ident arg)) v 
+                | Simplified ex'' -> Env.addLocalVar loc env (Ident (localPrefix ^ pprint_ident arg)) VUninitialized);
+                Printf.printf "%s = %s\n" (localPrefix ^ (pprint_ident arg)) (pp_result_or_simplified ex')
             ) args es;
 
             (* print out the body *)
             Env.addReturnSymbol env rv;
+            Env.addLocalPrefix env localPrefix;
             dis_stmts env b;
             Env.removeReturnSymbol env;
+            Env.removeLocalPrefix env;
             Simplified rv)
         | None ->
             let tes' = dis_exprs loc env tes in
@@ -173,7 +175,16 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified =
     | Expr_TApply(f, tes, es) ->
         dis_fun loc env f tes es
     | Expr_Var id ->
-        (try (match (Env.getVar loc env id) with VUninitialized -> Simplified x | v -> Result v) with EvalError (loc, message) -> Simplified x)
+        (try 
+            (match (Env.getVar loc env (Ident ((Env.getLocalPrefix loc env) ^ pprint_ident id))) with 
+            | VUninitialized -> Simplified (Expr_Var(Ident ((Env.getLocalPrefix loc env) ^ pprint_ident id))) 
+            | v -> Result v)
+        with EvalError _ ->
+            (try 
+                (match (Env.getVar loc env id) with 
+                | VUninitialized -> Simplified x 
+                | v -> Result v)
+            with EvalError _ -> Simplified x))
     | Expr_In(e, p) ->
         (match dis_expr loc env e with
         | Result v -> Result (from_bool (eval_pattern loc env v p))

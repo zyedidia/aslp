@@ -127,6 +127,9 @@ module Env : sig
     val addReturnSymbol     : t -> AST.expr -> unit
     val removeReturnSymbol  : t -> unit
     val getNumSymbols       : t -> int
+    val getLocalPrefix      : AST.l -> t -> string
+    val addLocalPrefix      : t -> string -> unit
+    val removeLocalPrefix   : t -> unit
 
 end = struct
     type t = {
@@ -144,7 +147,8 @@ end = struct
         mutable locals       : scope list;
         (* TODO: maybe expr isn't the best way to represent this *)
         mutable returnSymbols: AST.expr list;
-        mutable numSymbols   : int
+        mutable numSymbols   : int;
+        mutable localPrefixes: string list
     }
 
     let empty = {
@@ -162,6 +166,7 @@ end = struct
         locals       = [empty_scope ()];
         returnSymbols= [];
         numSymbols   = 0;
+        localPrefixes= [];
     }
 
     let nestTop (k: t -> 'a) (parent: t): 'a =
@@ -180,6 +185,7 @@ end = struct
             locals       = [empty_scope ()];  (* only change *)
             returnSymbols= parent.returnSymbols;
             numSymbols   = parent.numSymbols;
+            localPrefixes= parent.localPrefixes;
         } in
         k child
 
@@ -199,6 +205,7 @@ end = struct
             locals       = empty_scope () :: parent.locals;  (* only change *)
             returnSymbols= parent.returnSymbols;
             numSymbols   = parent.numSymbols;
+            localPrefixes= parent.localPrefixes;
         } in
         k child
 
@@ -332,6 +339,20 @@ end = struct
     let getNumSymbols (env: t): int =
         env.numSymbols <- env.numSymbols + 1;
         env.numSymbols
+
+    let getLocalPrefix (loc: l) (env: t): string =
+        match env.localPrefixes with
+        | [] -> raise (EvalError (loc, "Local not in function"))
+        | (s :: ss) -> s
+
+    let addLocalPrefix (env: t) (s: string): unit =
+        env.localPrefixes <- s :: env.localPrefixes
+
+    let removeLocalPrefix (env: t): unit =
+        (match env.localPrefixes with
+        | [] -> ()
+        | (s::ss) -> env.localPrefixes <- ss
+        )
 end
 
 let isGlobalConst (env: Env.t) (id: AST.ident): bool =
