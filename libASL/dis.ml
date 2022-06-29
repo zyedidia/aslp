@@ -130,13 +130,13 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
 
             (* Add local parameters, avoiding name collisions *)
             (* Also print what the parameter refers to *)
-            List.iter2 (fun arg ex -> 
+            Utils.iter3 (fun (ty, _) arg ex -> 
                 let ex' = dis_expr loc env ex in 
                 (match ex' with 
                 | Result v -> Env.addLocalVar loc env (Ident (localPrefix ^ pprint_ident arg)) v 
                 | Simplified ex'' -> Env.addLocalVar loc env (Ident (localPrefix ^ pprint_ident arg)) VUninitialized);
-                Printf.printf "%s = %s\n" (localPrefix ^ (pprint_ident arg)) (pp_result_or_simplified ex')
-            ) args es;
+                Printf.printf "%s %s = %s\n" (pp_type (dis_type loc env ty)) (localPrefix ^ (pprint_ident arg)) (pp_result_or_simplified ex')
+            ) atys args es;
 
             (* print out the body *)
             Env.addReturnSymbol env rv;

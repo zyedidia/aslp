@@ -44,6 +44,13 @@ let range (i: int) (j: int): 'a list =
       if n < i then acc else aux (n-1) (n :: acc)
     in aux (j - 1) [] ;;
 
+let rec iter3 (f: 'a -> 'b -> 'c -> unit) (xs: 'a list) (ys: 'b list) (zs: 'c list): unit =
+    match (xs, ys, zs) with
+    | ([], _, _) -> ()
+    | (_, [], _) -> ()
+    | (_, _, []) -> ()
+    | ((x::xs), (y::ys), (z::zs)) -> f x y z; iter3 f xs ys zs
+
 (****************************************************************
  * Option related
  ****************************************************************)
