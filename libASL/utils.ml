@@ -42,7 +42,7 @@ let zipWithIndex (f: 'a -> int -> 'b) (xs: 'a list): 'b list =
 let range (i: int) (j: int): 'a list = 
     let rec aux n acc =
       if n < i then acc else aux (n-1) (n :: acc)
-    in aux j [] ;;
+    in aux (j - 1) [] ;;
 
 (****************************************************************
  * Option related
