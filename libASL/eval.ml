@@ -111,8 +111,8 @@ module Env : sig
     val getVar              : AST.l -> t -> ident -> value
     val setVar              : AST.l -> t -> ident -> value -> unit
 
-    val getFun              : AST.l -> t -> ident -> (ident list * ident list * AST.l * stmt list)
-    val addFun              : AST.l -> t -> ident -> (ident list * ident list * AST.l * stmt list) -> unit
+    val getFun              : AST.l -> t -> ident -> (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list)
+    val addFun              : AST.l -> t -> ident -> (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) -> unit
 
     val getInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list)
     val addInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list) -> unit
@@ -135,7 +135,7 @@ end = struct
     type t = {
         mutable instructions : (encoding * (stmt list) option * bool * stmt list) Bindings.t;
         mutable decoders     : decode_case Bindings.t;
-        mutable functions    : (ident list * ident list * AST.l * stmt list) Bindings.t;
+        mutable functions    : (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) Bindings.t;
         mutable enums        : (value list) Bindings.t;
         mutable enumEqs      : IdentSet.t;
         mutable enumNeqs     : IdentSet.t;
@@ -279,13 +279,13 @@ end = struct
         | None    -> raise (EvalError (loc, "setVar " ^ pprint_ident x))
         )
 
-    let getFun (loc: l) (env: t) (x: ident): (ident list * ident list * AST.l * stmt list) =
+    let getFun (loc: l) (env: t) (x: ident): (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) =
         (match Bindings.find_opt x env.functions with
         | Some def -> def
         | None     -> raise (EvalError (loc, "getFun " ^ pprint_ident x))
         )
 
-    let addFun (loc: l) (env: t) (x: ident) (def: (ident list * ident list * AST.l * stmt list)): unit =
+    let addFun (loc: l) (env: t) (x: ident) (def: (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list)): unit =
         if false then Printf.printf "Adding function %s\n" (pprint_ident x);
         if Bindings.mem x env.functions then begin
             if true then begin
@@ -856,7 +856,7 @@ and eval_call (loc: l) (env: Env.t) (f: ident) (tvs: value list) (vs: value list
                 List.iter (fun v -> Printf.printf " %s" (pp_value v)) vs;
                 Printf.printf "\n"
             end;
-            let (targs, args, loc, b) = Env.getFun loc env f in
+            let (rty, atys, targs, args, loc, b) = Env.getFun loc env f in
             assert (List.length targs = List.length tvs);
             assert (List.length args  = List.length vs);
             Env.nestTop (fun env' ->
@@ -1008,23 +1008,23 @@ let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
         | Decl_FunDefn(rty, f, atys, body, loc) ->
                 let tvs  = Asl_utils.to_sorted_list (TC.fv_funtype (f, false, [], [], atys, rty) |> removeGlobalConsts env) in
                 let args = List.map snd atys in
-                Env.addFun loc env f (tvs, args, loc, body)
+                Env.addFun loc env f (Some rty, atys, tvs, args, loc, body)
         | Decl_ProcDefn(f, atys, body, loc) ->
                 let tvs  = Asl_utils.to_sorted_list (Asl_utils.fv_args atys |> removeGlobalConsts env) in
                 let args = List.map snd atys in
-                Env.addFun loc env f (tvs, args, loc, body)
+                Env.addFun loc env f (None, atys, tvs, args, loc, body)
         | Decl_VarGetterDefn(ty, f, body, loc) ->
                 let tvs  = Asl_utils.to_sorted_list (Asl_utils.fv_type ty |> removeGlobalConsts env) in
                 let args = [] in
-                Env.addFun loc env f (tvs, args, loc, body)
+                Env.addFun loc env f (Some ty, [], tvs, args, loc, body)
         | Decl_ArrayGetterDefn(rty, f, atys, body, loc) ->
                 let tvs = Asl_utils.to_sorted_list (TC.fv_funtype (f, true, [], [], atys, rty) |> removeGlobalConsts env) in
                 let args = List.map snd atys in
-                Env.addFun loc env f (tvs, args, loc, body)
+                Env.addFun loc env f (Some rty, atys, tvs, args, loc, body)
         | Decl_VarSetterDefn(f, ty, v, body, loc) ->
                 let tvs  = Asl_utils.to_sorted_list (Asl_utils.fv_type ty |> removeGlobalConsts env) in
                 let args = [v] in
-                Env.addFun loc env f (tvs, args, loc, body)
+                Env.addFun loc env f (Some ty, [], tvs, args, loc, body)
         | Decl_ArraySetterDefn(f, atys, ty, v, body, loc) ->
                 let tvs = Asl_utils.to_sorted_list (Asl_utils.IdentSet.union (Asl_utils.fv_sformals atys) (Asl_utils.fv_type ty) |> removeGlobalConsts env) in
                 let name_of (x: AST.sformal): ident =
@@ -1034,7 +1034,7 @@ let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
                     )
                 in
                 let args = List.map name_of atys in
-                Env.addFun loc env f (tvs, List.append args [v], loc, body)
+                Env.addFun loc env f (Some ty, [], tvs, List.append args [v], loc, body)
         | Decl_InstructionDefn(nm, encs, opost, conditional, exec, loc) ->
                 (* Instructions are looked up by their encoding name *)
                 List.iter (fun enc ->
@@ -1046,7 +1046,7 @@ let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
         | Decl_NewMapDefn(rty, f, atys, body, loc) ->
                 let tvs  = Asl_utils.to_sorted_list (TC.fv_funtype (f, false, [], [], atys, rty) |> removeGlobalConsts env) in
                 let args = List.map snd atys in
-                Env.addFun loc env f (tvs, args, loc, body)
+                Env.addFun loc env f (Some rty, atys, tvs, args, loc, body)
         (*
         | Decl_MapClause(f, atys, cond, body, loc) ->
                 let tvs   = Asl_utils.to_sorted_list (Asl_utils.fv_args atys) in
@@ -1056,10 +1056,10 @@ let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
         | Decl_NewEventDefn (f, atys, loc) ->
                 let tvs   = Asl_utils.to_sorted_list (Asl_utils.fv_args atys |> removeGlobalConsts env) in
                 let args = List.map snd atys in
-                Env.addFun loc env f (tvs, args, loc, [])
+                Env.addFun loc env f (None, atys, tvs, args, loc, [])
         | Decl_EventClause (f, body, loc) ->
-                let (tvs, args, _, body0) = Env.getFun loc env f in
-                Env.addFun loc env f (tvs, args, loc, List.append body body0)
+                let (_, _, tvs, args, _, body0) = Env.getFun loc env f in
+                Env.addFun loc env f (None, [], tvs, args, loc, List.append body body0)
         (* todo: when creating initial environment, should pass in a set of configuration
          * options that will override any default values given in definition
          *)

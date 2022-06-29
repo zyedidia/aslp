@@ -46,6 +46,8 @@ let rec value_to_expr (v: result_or_simplified): AST.expr =
 let rec dis_type (loc: l) (env: Env.t) (t: ty): ty =
     match t with
     | Type_Bits ex -> Type_Bits (match dis_expr loc env ex with | Result v -> value_to_expr (Result v) | Simplified x -> x)
+    | Type_OfExpr ex -> Type_OfExpr (match dis_expr loc env ex with | Result v -> value_to_expr (Result v) | Simplified x -> x)
+    | Type_Tuple tys -> Type_Tuple (List.map (dis_type loc env) tys)
     | t' -> t'
 
 (** Evaluate list of expressions *)
@@ -106,7 +108,7 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
             raise (EvalError (loc, "malformed implies_bool expression"))
         )
     end else (match (try (Some (Env.getFun loc env f)) with EvalError _ -> None) with
-        | Some (targs, args, loc, b) ->
+        | Some (rty, atys, targs, args, loc, b) ->
             (* Add return type variables *)
             List.iter2 (fun arg e -> match dis_expr loc env e with
                 | Result v -> Env.addLocalVar loc env arg v
@@ -114,9 +116,12 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
             ) targs tes;
 
             (let fName = name_of_FIdent f in
-            (* TODO: Pass the typing information through when a function is declared and extract it here. 
-            For now, just won't print return symbol declarations *)
             let varNames = List.map (fun n -> Ident (fName ^ "Var" ^ string_of_int n ^ string_of_int (Env.getNumSymbols env))) (Utils.range 0 (List.length targs)) in
+            let ds = Stmt_VarDeclsNoInit(
+                (match rty with Some t -> dis_type loc env t | None -> Type_Constructor (Ident "ERRORType")),
+                varNames, 
+                Unknown
+            ) in Printf.printf "%s\n" (pp_stmt ds);
             let rv = (match varNames with
                 | [] -> Expr_Tuple []
                 | [name] -> Expr_Var(name)
