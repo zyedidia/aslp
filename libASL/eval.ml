@@ -694,17 +694,14 @@ and eval_stmt (env: Env.t) (x: AST.stmt): unit =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
             
-            List.iter (fun v -> (*Printf.printf "ASSIGN: %s = VUNINITIALIZED\n" (pprint_ident v); *)Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs
+            List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs
     | Stmt_VarDecl(ty, v, i, loc) ->
-        (* Printf.printf "ASSIGN: %s = %s\n" (pprint_ident v) (pp_expr i); *)
             let i' = eval_expr loc env i in
             Env.addLocalVar loc env v i'
     | Stmt_ConstDecl(ty, v, i, loc) ->
-        (* Printf.printf "ASSIGN: %s = %s\n" (pprint_ident v) (pp_expr i); *)
             let i' = eval_expr loc env i in
             Env.addLocalConst loc env v i'
     | Stmt_Assign(l, r, loc) ->
-            (* Printf.printf "ASSIGN: %s = %s\n" (pp_lexpr l) (pp_expr r); *)
             let r' = eval_expr loc env r in
             eval_lexpr loc env l r'
     | Stmt_TCall(f, tes, es, loc) ->

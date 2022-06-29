@@ -230,6 +230,35 @@ and dis_if_expr_no_remove (loc: l) (env: Env.t) (xs: e_elsif list): e_elsif list
             value_to_expr (dis_expr loc env b)
         ) :: (dis_if_expr_no_remove loc env xs')
 
+and dis_lexpr (loc: l) (env: Env.t) (x: AST.lexpr) (r: result_or_simplified): unit =
+    match x with
+    | LExpr_Write(setter, tes, es) ->
+        let contains_expr = List.exists (fun a -> match a with Result _ -> false | Simplified _ -> true) in
+        let tvs = List.map (dis_expr loc env) tes in
+        let vs = List.map (dis_expr loc env) es in
+        if contains_expr tvs || contains_expr vs || contains_expr [r] then begin
+            Printf.printf "__write %s {{ " (pprint_ident setter);
+            List.iter (fun tv -> Printf.printf "%s " (pp_result_or_simplified tv)) tvs;
+            Printf.printf "}} [ ";
+            List.iter (fun v -> Printf.printf "%s " (pp_result_or_simplified v)) vs;
+            Printf.printf "] = %s\n" (pp_result_or_simplified r)
+        end else
+            eval_proccall 
+            loc 
+            env 
+            setter 
+            (List.map (fun a -> match a with Result v -> v | Simplified _ -> raise (EvalError (loc, "Unreachable"))) tvs) 
+            (List.append (List.map (fun a -> match a with Result v -> v | Simplified _ -> raise (EvalError (loc, "Unreachable"))) vs) 
+                [match r with Result v -> v | Simplified _ -> raise (EvalError (loc, "Unreachable"))])
+    | LExpr_Var(v) -> 
+        (match r with
+        | Result r' -> 
+            Env.setVar loc env v r'
+        | Simplified e -> 
+            Env.setVar loc env v VUninitialized; 
+            Printf.printf "%s = %s\n" (pprint_ident v) (pp_expr e))
+    | _ -> try (eval_lexpr loc env x (match r with Result v -> v | Simplified _ -> raise (EvalError (loc, "Unable to evaluate")))) with EvalError _ -> Printf.printf "%s\n" (pp_lexpr x)
+
 (** Dissassemble list of statements *)
 and dis_stmts (env: Env.t) (xs: AST.stmt list): unit =
     Env.nest (fun env' -> List.iter (dis_stmt env') xs) env
@@ -265,12 +294,7 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit =
             Env.addLocalConst loc env v (mk_uninitialized loc env ty)
         )
     | Stmt_Assign(l, r, loc) ->
-        (match dis_expr loc env r with
-        (* TODO: handle left the same way we handle right. needs dis_lexpr *)
-        | Result r' -> 
-            (try (eval_lexpr loc env l r') with EvalError _ -> Printf.printf "%s\n" (pp_stmt x))
-        | Simplified ex -> Printf.printf "%s = %s\n" (pp_lexpr l) (pp_expr ex);
-        )
+        dis_lexpr loc env l (dis_expr loc env r)
     | Stmt_If(c, t, els, e, loc) ->
         let rec eval_if xs d = match xs with
             | [] -> dis_stmts env e
