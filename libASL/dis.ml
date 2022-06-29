@@ -75,13 +75,6 @@ and dis_slice (loc: l) (env: Env.t) (x: AST.slice): (result_or_simplified * resu
             (lo', wd')
     )
 
-and slices_contain_expr (xs: (result_or_simplified * result_or_simplified) list): bool =
-    match xs with
-    | [] -> false
-    | ((Simplified _, _)::xs') -> true
-    | ((_, Simplified _)::xs') -> true
-    | ((_, _)::xs') -> true
-
 and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr list): result_or_simplified =
     if name_of_FIdent f = "and_bool" then begin
         (match (tes, es) with
@@ -202,15 +195,15 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified =
         let transformedSlices = List.map (fun s -> dis_slice loc env s) ss in
         (match dis_expr loc env e with
         | Result v ->
-            if not (slices_contain_expr transformedSlices) then
+            if List.exists (fun ts -> match ts with (Simplified _, _) -> true | (_, Simplified _) -> true | (_, _) -> false) transformedSlices then
+                Simplified (Expr_Slices(value_to_expr (Result v), List.map (fun (i, w) -> Slice_HiLo(value_to_expr i, value_to_expr w)) transformedSlices))
+            else
                 let vs = List.map (fun s -> 
                     (match s with
                     | (Result v1, Result v2) -> extract_bits loc v v1 v2
-                    | _ -> raise (EvalError (loc, "Shouldn't have expression in bit slice\n")))
+                    | _ -> raise (EvalError (loc, "Unreachable: Shouldn't have expression in bit slice\n")))
                     ) transformedSlices in
                     Result (eval_concat loc vs)
-                else
-                    Simplified (Expr_Slices(value_to_expr (Result v), List.map (fun (i, w) -> Slice_HiLo(value_to_expr i, value_to_expr w)) transformedSlices))
         | Simplified e' -> 
             Simplified (Expr_Slices(e', List.map2 (fun (i, w) s ->
                 (match s with
@@ -219,6 +212,12 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified =
                 | Slice_LoWd _ -> Slice_LoWd(value_to_expr i, value_to_expr w)
                 )
             ) transformedSlices ss)))
+    | Expr_Tuple(es) ->
+        let transformedExprs = List.map (dis_expr loc env) es in
+        if List.exists (fun e -> match e with Result _ -> false | Simplified _ -> true) transformedExprs then
+            Simplified (Expr_Tuple(List.map value_to_expr transformedExprs))
+        else
+            Result (VTuple (List.map (fun te -> match te with Result v -> v | Simplified _ -> raise (EvalError (loc, "Unreachable: cannot have expr in list"))) transformedExprs))
     | x -> try (match eval_expr loc env x with VUninitialized -> Simplified x | v -> Result v) with EvalError (loc, message) -> Simplified x
 
 (** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
