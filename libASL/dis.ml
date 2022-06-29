@@ -298,6 +298,25 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit =
             raise (EvalError (loc, "assertion failure"))
         | Simplified e' -> Printf.printf "assert %s\n"(pp_expr e')
         )
+    | Stmt_Case(e, alts, odefault, loc) ->
+        (let rec eval v alts =
+            (match alts with
+            | [] ->
+                    (match odefault with
+                    | None -> raise (EvalError (loc, "unmatched case"))
+                    | Some s -> dis_stmts env s
+                    )
+            | (Alt_Alt(ps, oc, s) :: alts') ->
+                    if List.exists (eval_pattern loc env v) ps && Utils.from_option
+                    (Utils.map_option (to_bool loc) (Utils.map_option (eval_expr loc env) oc)) (fun _ -> true) then
+                        dis_stmts env s
+                    else
+                        eval v alts'
+            )
+        in
+        (match dis_expr loc env e with
+        | Result v -> eval v alts
+        | Simplified _ -> Printf.printf "%s\n" (pp_stmt x)))
     | x -> Printf.printf "%s\n" (pp_stmt x)
     )
 
