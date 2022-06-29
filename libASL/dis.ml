@@ -58,11 +58,15 @@ and dis_slice (loc: l) (env: Env.t) (x: AST.slice): (result_or_simplified * resu
     | Slice_Single(i) ->
             (dis_expr loc env i, Result (VInt Z.one))
     | Slice_HiLo(hi, lo) ->
-            (* TODO: partially evaluate this case. Tricky because not sure what to have for wd' in failure case. This can currently throw an exception *)
-            let hi' = eval_expr loc env hi in
-            let lo' = eval_expr loc env lo in
-            let wd' = eval_add_int loc (eval_sub_int loc hi' lo') (VInt Z.one) in
-            (Result lo', Result wd')
+            let hi' = dis_expr loc env hi in
+            let lo' = dis_expr loc env lo in
+            (match hi' with
+            | Result vh -> (match lo' with
+                | Result vl -> (Result vl, Result (eval_add_int loc (eval_sub_int loc vh vl) (VInt Z.one)))
+                | Simplified el -> (Simplified el, Simplified (Expr_Binop(Expr_Binop(value_to_expr (Result vh), Binop_Minus, el), Binop_Plus, value_to_expr (Result (VInt Z.one))))))
+            | Simplified eh -> (match lo' with
+                | Result vl -> (Result vl, Simplified (Expr_Binop(Expr_Binop(eh, Binop_Minus, value_to_expr (Result vl)), Binop_Plus, value_to_expr (Result (VInt Z.one)))))
+                | Simplified el -> (Simplified el, Simplified (Expr_Binop(Expr_Binop(eh, Binop_Minus, el), Binop_Plus, value_to_expr (Result (VInt Z.one)))))))
     | Slice_LoWd(lo, wd) ->
             let lo' = dis_expr loc env lo in
             let wd' = dis_expr loc env wd in
