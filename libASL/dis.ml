@@ -119,7 +119,11 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
     end else (match (try (Some (Env.getFun loc env f)) with EvalError _ -> None) with
         | Some (rty, atys, targs, args, loc, b) ->
             (* Add return type variables *)
-            List.iter2 (fun arg e -> match dis_expr loc env e with
+            (* For each of these, if one already exists, add it to a stack to be restored after *)
+            Env.addImplicitLevel env;
+            List.iter2 (fun arg e -> 
+                try (Env.addImplicitValue env arg (Env.getVar loc env arg)) with EvalError _ -> ();
+                match dis_expr loc env e with
                 | Result v -> Env.addLocalVar loc env arg v
                 | Simplified _ -> ()
             ) targs tes;
@@ -153,6 +157,8 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
             dis_stmts env b;
             Env.removeReturnSymbol env;
             Env.removeLocalPrefix env;
+            (* Restore implicit values *)
+            List.iter (fun (arg, v) -> Env.addLocalVar loc env arg v) (Env.getImplicitLevel env);
             Simplified rv)
         | None ->
             let tes' = dis_exprs loc env tes in

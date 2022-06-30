@@ -130,6 +130,9 @@ module Env : sig
     val getLocalPrefix      : AST.l -> t -> string
     val addLocalPrefix      : t -> string -> unit
     val removeLocalPrefix   : t -> unit
+    val addImplicitValue    : t -> ident -> value -> unit
+    val addImplicitLevel    : t -> unit
+    val getImplicitLevel    : t -> (ident * value) list
 
 end = struct
     type t = {
@@ -148,7 +151,8 @@ end = struct
         (* TODO: maybe expr isn't the best way to represent this *)
         mutable returnSymbols: AST.expr list;
         mutable numSymbols   : int;
-        mutable localPrefixes: string list
+        mutable localPrefixes: string list;
+        mutable implicitLevels: ((ident * value) list) list
     }
 
     let empty = {
@@ -167,6 +171,7 @@ end = struct
         returnSymbols= [];
         numSymbols   = 0;
         localPrefixes= [];
+        implicitLevels = [];
     }
 
     let nestTop (k: t -> 'a) (parent: t): 'a =
@@ -186,6 +191,7 @@ end = struct
             returnSymbols= parent.returnSymbols;
             numSymbols   = parent.numSymbols;
             localPrefixes= parent.localPrefixes;
+            implicitLevels = parent.implicitLevels;
         } in
         k child
 
@@ -206,6 +212,7 @@ end = struct
             returnSymbols= parent.returnSymbols;
             numSymbols   = parent.numSymbols;
             localPrefixes= parent.localPrefixes;
+            implicitLevels = parent.implicitLevels;
         } in
         k child
 
@@ -353,6 +360,21 @@ end = struct
         | [] -> ()
         | (s::ss) -> env.localPrefixes <- ss
         )
+
+    let addImplicitValue (env: t) (arg: ident) (v: value): unit =
+        match env.implicitLevels with
+        | [] -> raise (EvalError (Unknown, "No levels exist"))
+        | (level::levels) -> (match level with
+            | [] -> env.implicitLevels <- ([(arg, v)]::levels)
+            | values -> env.implicitLevels <- (((arg, v)::values)::levels))
+
+    let addImplicitLevel (env: t): unit =
+        env.implicitLevels <- ([]::env.implicitLevels)
+
+    let getImplicitLevel (env: t): (ident * value) list =
+        match env.implicitLevels with
+        | [] -> raise (EvalError (Unknown, "No levels exist"))
+        | (level::levels) -> env.implicitLevels <- levels; level
 end
 
 let isGlobalConst (env: Env.t) (id: AST.ident): bool =
