@@ -287,7 +287,7 @@ and dis_lexpr (loc: l) (env: Env.t) (x: AST.lexpr) (r: result_or_simplified): un
         | Simplified e -> 
             Env.setVar loc env v VUninitialized; 
             Printf.printf "%s = %s\n" (pprint_ident v) (pp_expr e))
-    | _ -> try (eval_lexpr loc env x (to_value r)) with EvalError _ -> Printf.printf "%s\n" (pp_lexpr x)
+    | _ -> try (eval_lexpr loc env x (to_value r)) with EvalError _ -> Printf.printf "%s = %s\n" (pp_lexpr x) (pp_result_or_simplified r)
 
 (** Dissassemble list of statements *)
 and dis_stmts (env: Env.t) (xs: AST.stmt list): unit =
@@ -305,23 +305,26 @@ and dis_if_stmt_no_remove (loc: l) (env: Env.t) (xs: s_elsif list): unit =
 and dis_stmt (env: Env.t) (x: AST.stmt): unit =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
-        Printf.printf "%s\n" (pp_stmt (Stmt_VarDeclsNoInit(dis_type loc env ty, vs, loc)));
-        List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs
+        let vs' = try (List.map (fun v -> Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v))) vs) with EvalError _ -> vs in
+        Printf.printf "%s\n" (pp_stmt (Stmt_VarDeclsNoInit(dis_type loc env ty, vs', loc)));
+        List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs'
     | Stmt_VarDecl(ty, v, i, loc) ->
+        let v' = try Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v)) with EvalError _ -> v in
         (match dis_expr loc env i with
-        | Result i' -> Env.addLocalVar loc env v i'
+        | Result i' -> Env.addLocalVar loc env v' i'
         | Simplified ex -> 
             (* Declare variable with uninitialized value and just use symbolically *)
-            Printf.printf "%s %s = %s\n" (pp_type (dis_type loc env ty)) (pprint_ident v) (pp_expr ex);
-            Env.addLocalVar loc env v VUninitialized
+            Printf.printf "%s %s = %s\n" (pp_type (dis_type loc env ty)) (pprint_ident v') (pp_expr ex);
+            Env.addLocalVar loc env v' VUninitialized
         )
     | Stmt_ConstDecl(ty, v, i, loc) ->
+        let v' = try Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v)) with EvalError _ -> v in
         (match dis_expr loc env i with
-        | Result i' -> Env.addLocalConst loc env v i'
+        | Result i' -> Env.addLocalConst loc env v' i'
         | Simplified ex -> 
             (* Declare constant with uninitialized value and just use symbolically *)
-            Printf.printf "%s\n" (pp_stmt x);
-            Env.addLocalConst loc env v (mk_uninitialized loc env ty)
+            Printf.printf "%s %s = %s\n" (pp_type (dis_type loc env ty)) (pprint_ident v') (pp_expr ex);
+            Env.addLocalConst loc env v' VUninitialized
         )
     | Stmt_Assign(l, r, loc) ->
         dis_lexpr loc env l (dis_expr loc env r)
