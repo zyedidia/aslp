@@ -61,7 +61,7 @@ let contains_expr (xs: result_or_simplified list): bool =
 
 (** Concatenate statements inside a result_or_simplified tuple *)
 let concat_stmts (stmts1: stmt list) ((ros, stmts2): (result_or_simplified * stmt list)): (result_or_simplified * stmt list) =
-    (ros, List.append stmts1 stmts2)
+    (ros, stmts1 @ stmts2)
 
 (** Dissassemble type *)
 let rec dis_type (loc: l) (env: Env.t) (t: ty): ty * stmt list =
@@ -168,7 +168,7 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
             let resultSymbolDecl = (match rty with 
             | Some t ->
                 let (t', tstmts) = dis_type loc env t in
-                List.append tstmts [
+                tstmts @ [
                 Stmt_VarDeclsNoInit(
                     t',
                     varNames, 
@@ -270,7 +270,7 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): (result_or_simplified * stmt l
         (match dis_expr loc env e with
         | (Result v, stmts2) ->
             if List.exists (fun ts -> match ts with (Simplified _, _) -> true | (_, Simplified _) -> true | (_, _) -> false) transformedSlices then
-                (Simplified (Expr_Slices(to_expr (Result v), List.map (fun (i, w) -> Slice_HiLo(to_expr i, to_expr w)) transformedSlices)), List.append stmts1 stmts2)
+                (Simplified (Expr_Slices(to_expr (Result v), List.map (fun (i, w) -> Slice_HiLo(to_expr i, to_expr w)) transformedSlices)), stmts1 @ stmts2)
             else
                 let vs = List.map (fun s -> 
                     (match s with
@@ -368,7 +368,7 @@ and dis_stmt (env: Env.t) (x: AST.stmt): stmt list =
         let vs' = try (List.map (fun v -> Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v))) vs) with EvalError _ -> vs in
         List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs';
         let (ty', stmts) = dis_type loc env ty in
-        List.append stmts [Stmt_VarDeclsNoInit(ty', vs', loc)]
+        stmts @ [Stmt_VarDeclsNoInit(ty', vs', loc)]
     | Stmt_VarDecl(ty, v, i, loc) ->
         let v' = try Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v)) with EvalError _ -> v in
         (match dis_expr loc env i with
@@ -390,7 +390,7 @@ and dis_stmt (env: Env.t) (x: AST.stmt): stmt list =
         )
     | Stmt_Assign(l, r, loc) ->
         let (r', stmts) = dis_expr loc env r in
-        List.append stmts (dis_lexpr loc env l r')
+        stmts @ (dis_lexpr loc env l r')
     | Stmt_If(c, t, els, e, loc) ->
         let rec eval_if xs d = match xs with
             | [] -> dis_stmts env e
@@ -408,7 +408,7 @@ and dis_stmt (env: Env.t) (x: AST.stmt): stmt list =
                    guards and bodies though *)
                 | (Simplified e', stmts) -> 
                     let (els', elsstmts) = dis_if_stmt_no_remove loc env els in
-                    (List.append stmts elsstmts) @ [Stmt_If(e', dis_stmts env t, els', dis_stmts env e, loc)]
+                    stmts @ elsstmts @ [Stmt_If(e', dis_stmts env t, els', dis_stmts env e, loc)]
                 )
         in
         eval_if (S_Elsif_Cond(c, t)::els) e
