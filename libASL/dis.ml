@@ -59,140 +59,190 @@ let is_expr (v: result_or_simplified): bool =
 let contains_expr (xs: result_or_simplified list): bool =
     List.exists is_expr xs
 
-let rec dis_type (loc: l) (env: Env.t) (t: ty): ty =
-    match t with
-    | Type_Bits ex -> Type_Bits (match dis_expr loc env ex with | Result v -> to_expr (Result v) | Simplified x -> x)
-    | Type_OfExpr ex -> Type_OfExpr (match dis_expr loc env ex with | Result v -> to_expr (Result v) | Simplified x -> x)
-    | Type_Tuple tys -> Type_Tuple (List.map (dis_type loc env) tys)
-    | t' -> t'
+(** Concatenate statements inside a result_or_simplified tuple *)
+let concat_stmts (stmts1: stmt list) ((ros, stmts2): (result_or_simplified * stmt list)): (result_or_simplified * stmt list) =
+    (ros, List.append stmts1 stmts2)
 
-(** Evaluate list of expressions *)
-and dis_exprs (loc: l) (env: Env.t) (xs: AST.expr list): result_or_simplified list =
-    List.map (dis_expr loc env) xs
+(** Dissassemble type *)
+let rec dis_type (loc: l) (env: Env.t) (t: ty): ty * stmt list =
+    match t with
+    | Type_Bits ex ->
+        let (ex', stmts) = dis_expr loc env ex in
+        (Type_Bits (match ex' with | Result v -> to_expr (Result v) | Simplified x -> x), stmts)
+    | Type_OfExpr ex ->
+        let (ex', stmts) = dis_expr loc env ex in
+        (Type_OfExpr (match ex' with | Result v -> to_expr (Result v) | Simplified x -> x), stmts)
+    | Type_Tuple tys ->
+        let exprsstmts = List.map (dis_type loc env) tys in
+        let exprs = List.map (fun (e, _) -> e) exprsstmts in
+        let stmts = List.map (fun (_, s) -> s) exprsstmts in
+        (Type_Tuple (exprs), List.concat stmts)
+    | t' -> (t', [])
+
+(** Dissassemble list of expressions *)
+and dis_exprs (loc: l) (env: Env.t) (xs: AST.expr list): result_or_simplified list * stmt list =
+    let exprsstmts = List.map (dis_expr loc env) xs in
+    let exprs = List.map (fun (e, _) -> e) exprsstmts in
+    let stmts = List.map (fun (_, s) -> s) exprsstmts in
+    (exprs, List.concat stmts)
 
 (** Evaluate bitslice bounds *)
-and dis_slice (loc: l) (env: Env.t) (x: AST.slice): (result_or_simplified * result_or_simplified) =
+and dis_slice (loc: l) (env: Env.t) (x: AST.slice): (result_or_simplified * result_or_simplified) * stmt list =
     (match x with
     | Slice_Single(i) ->
-            (dis_expr loc env i, Result (VInt Z.one))
+            let (i', stmts) = dis_expr loc env i in
+            ((i', Result (VInt Z.one)), stmts)
     | Slice_HiLo(hi, lo) ->
-            let hi' = dis_expr loc env hi in
-            let lo' = dis_expr loc env lo in
+            let (hi', histmts) = dis_expr loc env hi in
+            let (lo', lostmts) = dis_expr loc env lo in
             (match hi' with
             | Result vh -> (match lo' with
-                | Result vl -> (Result vl, Result (eval_add_int loc (eval_sub_int loc vh vl) (VInt Z.one)))
-                | Simplified el -> (Simplified el, Simplified (Expr_Binop(Expr_Binop(to_expr (Result vh), Binop_Minus, el), Binop_Plus, to_expr (Result (VInt Z.one))))))
+                | Result vl -> ((Result vl, Result (eval_add_int loc (eval_sub_int loc vh vl) (VInt Z.one))), histmts @ lostmts)
+                | Simplified el -> ((Simplified el, Simplified (Expr_Binop(Expr_Binop(to_expr (Result vh), Binop_Minus, el), Binop_Plus, to_expr (Result (VInt Z.one)))))), histmts @ lostmts)
             | Simplified eh -> (match lo' with
-                | Result vl -> (Result vl, Simplified (Expr_Binop(Expr_Binop(eh, Binop_Minus, to_expr (Result vl)), Binop_Plus, to_expr (Result (VInt Z.one)))))
-                | Simplified el -> (Simplified el, Simplified (Expr_Binop(Expr_Binop(eh, Binop_Minus, el), Binop_Plus, to_expr (Result (VInt Z.one)))))))
+                | Result vl -> ((Result vl, Simplified (Expr_Binop(Expr_Binop(eh, Binop_Minus, to_expr (Result vl)), Binop_Plus, to_expr (Result (VInt Z.one))))), histmts @ lostmts)
+                | Simplified el -> ((Simplified el, Simplified (Expr_Binop(Expr_Binop(eh, Binop_Minus, el), Binop_Plus, to_expr (Result (VInt Z.one)))))), histmts @ lostmts))
     | Slice_LoWd(lo, wd) ->
-            let lo' = dis_expr loc env lo in
-            let wd' = dis_expr loc env wd in
-            (lo', wd')
+            let (lo', lostmts) = dis_expr loc env lo in
+            let (wd', wdstmts) = dis_expr loc env wd in
+            ((lo', wd'), lostmts @ wdstmts)
     )
 
-and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr list): result_or_simplified =
+(** Dissassemble a function call *)
+and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr list): result_or_simplified * stmt list =
     if name_of_FIdent f = "and_bool" then begin
         (match (tes, es) with
         | ([], [x; y]) -> (match dis_expr loc env x with
-            | Result v -> if to_bool loc v then dis_expr loc env y else Result (from_bool false)
-            | Simplified e -> Simplified (Expr_TApply(f, tes, [e; to_expr (dis_expr loc env y)])))
+            | (Result v, stmts) -> if to_bool loc v then concat_stmts stmts (dis_expr loc env y) else (Result (from_bool false), stmts)
+            | (Simplified e, stmts) -> 
+                let (y', ystmts) = dis_expr loc env y in
+                (Simplified (Expr_TApply(f, tes, [e; to_expr y']))), stmts @ ystmts)
         | _ ->
             raise (EvalError (loc, "malformed and_bool expression"))
         )
     end else if name_of_FIdent f = "or_bool" then begin
         (match (tes, es) with
-        | ([], [x; y]) -> (match dis_expr loc env x with
-            | Result v -> if to_bool loc v then Result (from_bool true) else dis_expr loc env y
-            | Simplified e -> Simplified (Expr_TApply(f, tes, [e; to_expr (dis_expr loc env y)])))
+        | ([], [x; y]) -> 
+            (match dis_expr loc env x with
+            | (Result v, stmts) -> if to_bool loc v then (Result (from_bool true), stmts) else concat_stmts stmts (dis_expr loc env y)
+            | (Simplified e, stmts) -> 
+                let (y', ystmts) = dis_expr loc env y in
+                (Simplified (Expr_TApply(f, tes, [e; to_expr y']))), stmts @ ystmts)
         | _ ->
             raise (EvalError (loc, "malformed or_bool expression"))
         )
     end else if name_of_FIdent f = "implies_bool" then begin
         (match (tes, es) with
         | ([], [x; y]) -> (match dis_expr loc env x with
-            | Result v -> if to_bool loc v then dis_expr loc env y else Result (from_bool true)
-            | Simplified e -> Simplified (Expr_TApply(f, tes, [e; to_expr (dis_expr loc env y)])))
+            | (Result v, stmts) -> if to_bool loc v then concat_stmts stmts (dis_expr loc env y) else (Result (from_bool true), stmts)
+            | (Simplified e, stmts) -> 
+                let (y', ystmts) = dis_expr loc env y in
+                (Simplified (Expr_TApply(f, tes, [e; to_expr y']))), stmts @ ystmts)
         | _ ->
             raise (EvalError (loc, "malformed implies_bool expression"))
         )
     end else (match (try (Some (Env.getFun loc env f)) with EvalError _ -> None) with
         | Some (rty, atys, targs, args, loc, b) ->
-            (* Add return type variables *)
-            (* For each of these, if one already exists, add it to a stack to be restored after *)
-            Env.addImplicitLevel env;
-            List.iter2 (fun arg e -> 
-                try (Env.addImplicitValue env arg (Env.getVar loc env arg)) with EvalError _ -> ();
-                match dis_expr loc env e with
-                | Result v -> Env.addLocalVar loc env arg v
-                | Simplified _ -> ()
-            ) targs tes;
 
-            (let fName = name_of_FIdent f in
+            (* Setup names for return symbols*)
+            let fName = name_of_FIdent f in
             let varNames = List.map (fun n -> Ident (fName ^ "Var" ^ string_of_int n ^ string_of_int (Env.getNumSymbols env))) (Utils.range 0 (List.length targs)) in
-            let ds = Stmt_VarDeclsNoInit(
-                (match rty with Some t -> dis_type loc env t | None -> Type_Constructor (Ident "ERRORType")),
-                varNames, 
-                Unknown
-            ) in Printf.printf "%s\n" (pp_stmt ds);
             let rv = (match varNames with
                 | [] -> Expr_Tuple []
                 | [name] -> Expr_Var(name)
                 | names -> Expr_Tuple(List.map (fun n -> Expr_Var n) names)) in
             let localPrefix = fName ^ string_of_int (Env.getNumSymbols env) in
 
+            (* Add return type variables *)
+            (* For each of these, if one already exists, add it to a stack to be restored after *)
+            let returnTypeStmts = 
+                Env.addImplicitLevel env;
+                List.concat (List.map2 (fun arg e -> 
+                (try (Env.addImplicitValue env arg (Env.getVar loc env arg)) with EvalError _ -> ());
+                match dis_expr loc env e with
+                | (Result v, stmts) -> Env.addLocalVar loc env arg v; stmts
+                | (Simplified _, stmts) -> stmts
+            ) targs tes) in
+
+            (* Create dummy variable to assign return to *)
+            let resultSymbolDecl = (match rty with 
+            | Some t ->
+                let (t', tstmts) = dis_type loc env t in
+                List.append tstmts [
+                Stmt_VarDeclsNoInit(
+                    t',
+                    varNames, 
+                    Unknown
+                )]
+            | None ->
+                [Stmt_VarDeclsNoInit(
+                    Type_Constructor (Ident "ERRORType"),
+                    varNames, 
+                    Unknown
+                )]) 
+            in
+
             (* Add local parameters, avoiding name collisions *)
             (* Also print what the parameter refers to *)
-            Utils.iter3 (fun (ty, _) arg ex -> 
-                let ex' = dis_expr loc env ex in 
+            let localParamStmts = (List.concat ((Utils.map3 (fun (ty, _) arg ex -> 
+                let (ex', stmts) = dis_expr loc env ex in 
                 (match ex' with 
                 | Result v -> Env.addLocalVar loc env (Ident (localPrefix ^ pprint_ident arg)) v 
                 | Simplified ex'' -> Env.addLocalVar loc env (Ident (localPrefix ^ pprint_ident arg)) VUninitialized);
-                Printf.printf "%s %s = %s\n" (pp_type (dis_type loc env ty)) (localPrefix ^ (pprint_ident arg)) (pp_result_or_simplified ex')
-            ) atys args es;
+                let (ty', tystmts) = dis_type loc env ty in
+                stmts @ tystmts @ [Stmt_VarDecl(ty', Ident (localPrefix ^ (pprint_ident arg)), to_expr ex', loc)])
+            ) atys args es)) in
 
-            (* print out the body *)
-            Env.addReturnSymbol env rv;
+            let bodyStmts = (Env.addReturnSymbol env rv;
             Env.addLocalPrefix env localPrefix;
-            dis_stmts env b;
-            Env.removeReturnSymbol env;
-            Env.removeLocalPrefix env;
-            (* Restore implicit values *)
-            List.iter (fun (arg, v) -> Env.addLocalVar loc env arg v) (Env.getImplicitLevel env);
-            Simplified rv)
+            dis_stmts env b) in
+
+            (Simplified rv,
+            let result = 
+                returnTypeStmts @ resultSymbolDecl @ localParamStmts @ bodyStmts
+            in
+                Env.removeReturnSymbol env;
+                Env.removeLocalPrefix env;
+                (* Restore implicit values *)
+                List.iter (fun (arg, v) -> Env.addLocalVar loc env arg v) (Env.getImplicitLevel env);
+                result
+            )
         | None ->
-            let tes' = dis_exprs loc env tes in
-            let es' = dis_exprs loc env es in
+            let (tes', tesstmts) = dis_exprs loc env tes in
+            let (es', esstmts) = dis_exprs loc env es in
             (match eval_prim 
                 (name_of_FIdent f) 
                 (List.map (fun v -> match v with | Result v -> v | Simplified _ -> VUninitialized) tes') 
                 (List.map (fun v -> match v with | Result v -> v | Simplified _ -> VUninitialized) es') with
-            | Some VUninitialized -> Simplified (Expr_TApply(f, List.map to_expr tes', List.map to_expr es'))
-            | Some v -> Result v
-            | None -> Simplified (Expr_TApply(f, List.map to_expr tes', List.map to_expr es'))))
+            | Some VUninitialized -> (Simplified (Expr_TApply(f, List.map to_expr tes', List.map to_expr es')), tesstmts @ esstmts)
+            | Some v -> (Result v, tesstmts @ esstmts)
+            | None -> (Simplified (Expr_TApply(f, List.map to_expr tes', List.map to_expr es'))), tesstmts @ esstmts))
 
-(** This should never return Result VUninitialized *)
-and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified =
+(** Dissassemble expression. This should never return Result VUninitialized *)
+and dis_expr (loc: l) (env: Env.t) (x: AST.expr): (result_or_simplified * stmt list) =
     match x with
     | Expr_If(c, t, els, e) ->
         let rec eval_if xs d = match xs with
             | [] -> dis_expr loc env d
             (* If we cannot evaluate the condition, print the whole statement *)
             | AST.E_Elsif_Cond (cond, b)::xs' -> match dis_expr loc env cond with
-                | Result v -> 
+                | (Result v, stmts) ->
                     if to_bool loc v then
                         (* Just print this branch *)
-                        dis_expr loc env b
+                        concat_stmts stmts (dis_expr loc env b)
                     else
                         (* Print whatever the rest of the branches turn out to be *)
-                        eval_if xs' d
-                | Simplified e' -> 
-                    Simplified (Expr_If(
-                        e', 
-                        to_expr (dis_expr loc env b),
-                        dis_if_expr_no_remove loc env els,
-                        to_expr (dis_expr loc env e)
-                    ))
+                        concat_stmts stmts (eval_if xs' d)
+                | (Simplified cond', stmts) -> 
+                    let (b', bstmts) = dis_expr loc env b in
+                    let (els', elsstmts) = dis_if_expr_no_remove loc env els in
+                    let (e', estmts) = dis_expr loc env e in
+                    (Simplified (Expr_If(
+                        cond', 
+                        to_expr (b'),
+                        els',
+                        to_expr (e')
+                    )), stmts @ bstmts @ elsstmts @ estmts)
         in
         eval_if (E_Elsif_Cond(c, t)::els) e
     (* NOTE: This does not consider early returns currently. It also doesn't handle recursive calls *)
@@ -201,167 +251,176 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified =
     | Expr_Var id ->
         (try 
             (match (Env.getVar loc env (Ident ((Env.getLocalPrefix loc env) ^ pprint_ident id))) with 
-            | VUninitialized -> Simplified (Expr_Var(Ident ((Env.getLocalPrefix loc env) ^ pprint_ident id))) 
-            | v -> Result v)
+            | VUninitialized -> (Simplified (Expr_Var(Ident ((Env.getLocalPrefix loc env) ^ pprint_ident id))), [])
+            | v -> (Result v, []))
         with EvalError _ ->
             (try 
                 (match (Env.getVar loc env id) with 
-                | VUninitialized -> Simplified x 
-                | v -> Result v)
-            with EvalError _ -> Simplified x))
+                | VUninitialized -> (Simplified x , [])
+                | v -> (Result v, []))
+            with EvalError _ -> (Simplified x, [])))
     | Expr_In(e, p) ->
         (match dis_expr loc env e with
-        | Result v -> Result (from_bool (eval_pattern loc env v p))
-        | Simplified _ -> Simplified x)
+        | (Result v, stmts) -> (Result (from_bool (eval_pattern loc env v p)), stmts)
+        | (Simplified _, stmts) -> (Simplified x, stmts))
     | Expr_Slices(e, ss) ->
-        let transformedSlices = List.map (fun s -> dis_slice loc env s) ss in
+        let transformedSlicesStmts = List.map (fun s -> dis_slice loc env s) ss in
+        let transformedSlices = List.map (fun (sl, _) -> sl) transformedSlicesStmts in
+        let stmts1 = List.concat (List.map (fun (_, s) -> s) transformedSlicesStmts) in
         (match dis_expr loc env e with
-        | Result v ->
+        | (Result v, stmts2) ->
             if List.exists (fun ts -> match ts with (Simplified _, _) -> true | (_, Simplified _) -> true | (_, _) -> false) transformedSlices then
-                Simplified (Expr_Slices(to_expr (Result v), List.map (fun (i, w) -> Slice_HiLo(to_expr i, to_expr w)) transformedSlices))
+                (Simplified (Expr_Slices(to_expr (Result v), List.map (fun (i, w) -> Slice_HiLo(to_expr i, to_expr w)) transformedSlices)), List.append stmts1 stmts2)
             else
                 let vs = List.map (fun s -> 
                     (match s with
                     | (Result v1, Result v2) -> extract_bits loc v v1 v2
                     | _ -> raise (EvalError (loc, "Unreachable: Shouldn't have expression in bit slice\n")))
                     ) transformedSlices in
-                    Result (eval_concat loc vs)
-        | Simplified e' -> 
-            Simplified (Expr_Slices(e', List.map2 (fun (i, w) s ->
+                    (Result (eval_concat loc vs), stmts1 @ stmts2)
+        | (Simplified e', stmts2) -> 
+            (Simplified (Expr_Slices(e', List.map2 (fun (i, w) s ->
                 (match s with
                 | Slice_Single _ -> Slice_Single(to_expr i)
                 | Slice_HiLo _ -> Slice_HiLo(to_expr i, to_expr w)
                 | Slice_LoWd _ -> Slice_LoWd(to_expr i, to_expr w)
                 )
-            ) transformedSlices ss)))
+            ) transformedSlices ss)), stmts1 @ stmts2))
     | Expr_Tuple(es) ->
-        let transformedExprs = List.map (dis_expr loc env) es in
+        let transformedExprsStmts = List.map (dis_expr loc env) es in
+        let transformedExprs = List.map (fun (e, _) -> e) transformedExprsStmts in
+        let stmts = List.concat (List.map (fun (_, s) -> s) transformedExprsStmts) in
         if contains_expr transformedExprs then
-            Simplified (Expr_Tuple(List.map to_expr transformedExprs))
+            (Simplified (Expr_Tuple(List.map to_expr transformedExprs)), stmts)
         else
-            Result (VTuple (List.map to_value transformedExprs))
+            (Result (VTuple (List.map to_value transformedExprs)), stmts)
     | Expr_Array(a, i) ->
-        let a' = dis_expr loc env a in
-        let i' = dis_expr loc env i in
+        let (a', stmt1) = dis_expr loc env a in
+        let (i', stmt2) = dis_expr loc env i in
         if is_expr a' || is_expr i' then
-            Simplified (Expr_Array(a, to_expr i'))
+            (Simplified (Expr_Array(a, to_expr i')), stmt1 @ stmt2)
         else
             (match (get_array loc (to_value a') (to_value i')) with
-            | VUninitialized -> Simplified (Expr_Array(a, to_expr i'))
-            | v -> Result v)
-    | x -> try (match eval_expr loc env x with VUninitialized -> Simplified x | v -> Result v) with EvalError (loc, message) -> Simplified x
+            | VUninitialized -> (Simplified (Expr_Array(a, to_expr i')), stmt1 @ stmt2)
+            | v -> (Result v, stmt1 @ stmt2))
+    | x -> try (match eval_expr loc env x with VUninitialized -> (Simplified x, []) | v -> (Result v, [])) with EvalError (loc, message) -> (Simplified x, [])
 
 (** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
-and dis_if_expr_no_remove (loc: l) (env: Env.t) (xs: e_elsif list): e_elsif list = 
+and dis_if_expr_no_remove (loc: l) (env: Env.t) (xs: e_elsif list): e_elsif list * stmt list = 
     match xs with
-    | [] -> []
+    | [] -> ([], [])
     | (AST.E_Elsif_Cond (cond, b)::xs') ->
-        AST.E_Elsif_Cond(
-            to_expr (dis_expr loc env cond), 
-            to_expr (dis_expr loc env b)
-        ) :: (dis_if_expr_no_remove loc env xs')
+        let (cond', condstmts) = dis_expr loc env cond in
+        let (b', bstmts) = dis_expr loc env b in
+        let (els', elsstmts) = dis_if_expr_no_remove loc env xs' in
+        (AST.E_Elsif_Cond(
+            to_expr (cond'), 
+            to_expr (b')
+        ) :: (els'), condstmts @ bstmts @ elsstmts)
 
-and dis_lexpr (loc: l) (env: Env.t) (x: AST.lexpr) (r: result_or_simplified): unit =
+and dis_lexpr (loc: l) (env: Env.t) (x: AST.lexpr) (r: result_or_simplified): stmt list =
     match x with
     | LExpr_Write(setter, tes, es) ->
-        let tvs = List.map (dis_expr loc env) tes in
-        let vs = List.map (dis_expr loc env) es in
+        let tvsExprsStmts = List.map (dis_expr loc env) tes in
+        let tvs = List.map (fun (e, _) -> e) tvsExprsStmts in
+        let tvsStmts = List.map (fun (_, s) -> s) tvsExprsStmts in
+        let vsExprsStmts = List.map (dis_expr loc env) es in
+        let vs = List.map (fun (e, _) -> e) vsExprsStmts in
+        let vsStmts = List.map (fun (_, s) -> s) vsExprsStmts in
         if contains_expr tvs || contains_expr vs || contains_expr [r] then begin
-            Printf.printf "__write %s {{ " (pprint_ident setter);
-            List.iter (fun tv -> Printf.printf "%s " (pp_result_or_simplified tv)) tvs;
-            Printf.printf "}} [ ";
-            List.iter (fun v -> Printf.printf "%s " (pp_result_or_simplified v)) vs;
-            Printf.printf "] = %s\n" (pp_result_or_simplified r)
-        end else
+            (List.concat tvsStmts) @ (List.concat vsStmts) @ [Stmt_Assign(LExpr_Write(setter, List.map to_expr tvs, List.map to_expr vs), to_expr r, loc)]
+        end else begin
             eval_proccall 
             loc 
             env 
             setter 
             (List.map (to_value) tvs) 
-            (List.append (List.map to_value vs) 
-                [to_value r])
+            ((List.map to_value vs) @ [to_value r]);
+            [] 
+        end    
     | LExpr_Var(v) -> 
         (match r with
         | Result r' -> 
-            Env.setVar loc env v r'
+            Env.setVar loc env v r'; []
         | Simplified e -> 
-            Env.setVar loc env v VUninitialized; 
-            Printf.printf "%s = %s\n" (pprint_ident v) (pp_expr e))
-    | _ -> try (eval_lexpr loc env x (to_value r)) with EvalError _ -> Printf.printf "%s = %s\n" (pp_lexpr x) (pp_result_or_simplified r)
+            Env.setVar loc env v VUninitialized;
+            [Stmt_Assign(LExpr_Var(v), e, loc)])
+    | _ -> try (eval_lexpr loc env x (to_value r); []) with EvalError _ ->
+        [Stmt_Assign(x, to_expr r, loc)]
 
 (** Dissassemble list of statements *)
-and dis_stmts (env: Env.t) (xs: AST.stmt list): unit =
-    Env.nest (fun env' -> List.iter (dis_stmt env') xs) env
+and dis_stmts (env: Env.t) (xs: AST.stmt list): stmt list =
+    List.concat (List.map (dis_stmt env) xs)
 
 (** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
-and dis_if_stmt_no_remove (loc: l) (env: Env.t) (xs: s_elsif list): unit = 
+and dis_if_stmt_no_remove (loc: l) (env: Env.t) (xs: s_elsif list): s_elsif list * stmt list = 
     match xs with
-    | [] -> ()
+    | [] -> ([], [])
     | (AST.S_Elsif_Cond (cond, b)::xs') ->
-        Printf.printf "} else if %s then {\n" (pp_expr cond);
-        dis_stmts env b
+        let (cond', condstmts) = dis_expr loc env cond in
+        let (els', elsstmts) = dis_if_stmt_no_remove loc env xs' in
+        (AST.S_Elsif_Cond(to_expr cond', dis_stmts env b)::(els'), condstmts @ elsstmts)
 
 (** Disassemble statement *)
-and dis_stmt (env: Env.t) (x: AST.stmt): unit =
+and dis_stmt (env: Env.t) (x: AST.stmt): stmt list =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
         let vs' = try (List.map (fun v -> Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v))) vs) with EvalError _ -> vs in
-        Printf.printf "%s\n" (pp_stmt (Stmt_VarDeclsNoInit(dis_type loc env ty, vs', loc)));
-        List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs'
+        List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs';
+        let (ty', stmts) = dis_type loc env ty in
+        List.append stmts [Stmt_VarDeclsNoInit(ty', vs', loc)]
     | Stmt_VarDecl(ty, v, i, loc) ->
         let v' = try Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v)) with EvalError _ -> v in
         (match dis_expr loc env i with
-        | Result i' -> Env.addLocalVar loc env v' i'
-        | Simplified ex -> 
-            (* Declare variable with uninitialized value and just use symbolically *)
-            Printf.printf "%s %s = %s\n" (pp_type (dis_type loc env ty)) (pprint_ident v') (pp_expr ex);
-            Env.addLocalVar loc env v' VUninitialized
+        | (Result i', stmts) -> Env.addLocalVar loc env v' i'; stmts
+        | (Simplified ex, stmts1) ->
+            Env.addLocalVar loc env v' VUninitialized;
+            let (ty', stmts2) = dis_type loc env ty in
+            stmts1 @ stmts2 @ [Stmt_VarDecl(ty', v', ex, loc)]
         )
     | Stmt_ConstDecl(ty, v, i, loc) ->
         let v' = try Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v)) with EvalError _ -> v in
         (match dis_expr loc env i with
-        | Result i' -> Env.addLocalConst loc env v' i'
-        | Simplified ex -> 
+        | (Result i', stmts) -> Env.addLocalConst loc env v' i'; stmts
+        | (Simplified ex, stmts1) -> 
             (* Declare constant with uninitialized value and just use symbolically *)
-            Printf.printf "%s %s = %s\n" (pp_type (dis_type loc env ty)) (pprint_ident v') (pp_expr ex);
-            Env.addLocalConst loc env v' VUninitialized
+            Env.addLocalConst loc env v' VUninitialized;
+            let (ty', stmts2) = dis_type loc env ty in
+            stmts1 @ stmts2 @ [Stmt_ConstDecl(ty', v', ex, loc)]
         )
     | Stmt_Assign(l, r, loc) ->
-        dis_lexpr loc env l (dis_expr loc env r)
+        let (r', stmts) = dis_expr loc env r in
+        List.append stmts (dis_lexpr loc env l r')
     | Stmt_If(c, t, els, e, loc) ->
         let rec eval_if xs d = match xs with
             | [] -> dis_stmts env e
             | AST.S_Elsif_Cond (cond, b)::xs' ->
                 (match dis_expr loc env cond with
-                | Result v -> 
+                | (Result v, stmts) -> 
                     if to_bool loc v then
                         (* Just print this branch *)
-                        dis_stmts env b
+                        stmts @ (dis_stmts env b)
                     else
                         (* Print whatever the rest of the branches turn out to be *)
-                        eval_if xs' d
+                        stmts @ (eval_if xs' d)
                 (* We have to print out all branches now because we don't know
                    whether or not this one is true. We can still simplify 
                    guards and bodies though *)
-                | Simplified e' -> 
-                    Printf.printf "if ";
-                    Printf.printf "%s" (pp_expr e');
-                    Printf.printf " then {\n";
-                    dis_stmts env t;
-                    dis_if_stmt_no_remove loc env els;
-                    Printf.printf "} else {\n";
-                    dis_stmts env e;
-                    Printf.printf "}\n"
+                | (Simplified e', stmts) -> 
+                    let (els', elsstmts) = dis_if_stmt_no_remove loc env els in
+                    (List.append stmts elsstmts) @ [Stmt_If(e', dis_stmts env t, els', dis_stmts env e, loc)]
                 )
         in
         eval_if (S_Elsif_Cond(c, t)::els) e
     | Stmt_FunReturn(e, loc) ->
-        Printf.printf "%s = %s\n" (pp_expr (Env.getReturnSymbol loc env)) (match dis_expr loc env e with Result v -> pp_value v | Simplified e' -> pp_expr e')
+        let (e', stmts) = dis_expr loc env e in
+        stmts @ [Stmt_Assign((match (Env.getReturnSymbol loc env) with Expr_Var(i) -> LExpr_Var(i) | _ -> raise (EvalError (loc, "TODO"))), to_expr e', loc)]
     | Stmt_Assert(e, loc) ->
         (match dis_expr loc env e with 
-        | Result v -> if not (to_bool loc v) then
-            raise (EvalError (loc, "assertion failure"))
-        | Simplified e' -> Printf.printf "assert %s\n"(pp_expr e')
+        | (Result v, stmts) -> if not (to_bool loc v) then
+            raise (EvalError (loc, "assertion failure")); stmts
+        | (Simplified e', stmts) ->
+            stmts @ [Stmt_Assert(e', loc)]
         )
     | Stmt_Case(e, alts, odefault, loc) ->
         (let rec eval v alts =
@@ -380,9 +439,12 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit =
             )
         in
         (match dis_expr loc env e with
-        | Result v -> eval v alts
-        | Simplified _ -> Printf.printf "%s\n" (pp_stmt x)))
-    | x -> Printf.printf "%s\n" (pp_stmt x)
+        | (Result v, stmts) -> stmts @ (eval v alts)
+        | (Simplified _, stmts) ->
+            (* TODO simplify cases individually*)
+            stmts @ [x]
+        ))
+    | x -> [x]
     )
 
 (* Duplicate of eval_decode_case modified to print rather than eval *)
@@ -420,7 +482,7 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     Printf.printf "Dissasm: %s\n" (pprint_ident inst);
                     (* Uncomment this if you want to see output with no evaluation *)
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) exec; *)
-                    dis_stmts env exec;
+                    List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (dis_stmts env exec);
                     true
                 end else begin
                     false

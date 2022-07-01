@@ -51,6 +51,13 @@ let rec iter3 (f: 'a -> 'b -> 'c -> unit) (xs: 'a list) (ys: 'b list) (zs: 'c li
     | (_, _, []) -> ()
     | ((x::xs), (y::ys), (z::zs)) -> f x y z; iter3 f xs ys zs
 
+let rec map3 (f: 'a -> 'b -> 'c -> 'd) (xs: 'a list) (ys: 'b list) (zs: 'c list): 'd list =
+    match (xs, ys, zs) with
+    | ([], _, _) -> []
+    | (_, [], _) -> []
+    | (_, _, []) -> []
+    | ((x::xs), (y::ys), (z::zs)) -> (f x y z) :: (map3 f xs ys zs)
+
 (****************************************************************
  * Option related
  ****************************************************************)
