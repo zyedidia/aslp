@@ -20,27 +20,27 @@ type result_or_simplified =
     | Result of value
     | Simplified of AST.expr
 
-type 'a writer = 'a * stmt list 
+type 'a writer = 'a * stmt list * Env.t
 
-let return x = (x, [])
+let return x = (x, [], Env.empty)
 
-let write s = ((),[s])
+let write s = ((),[s], Env.empty)
 
-let write_multi ss = ((), ss)
+let write_multi ss = ((), ss, Env.empty)
 
-let ( let* ) (x: 'a * 'b list) (f: 'a -> 'c * stmt list): 'c * stmt list =
-    let (ex, stmts1) = x in
-    let (ex', stmts2) = f ex in
-    (ex', stmts1 @ stmts2)
+let ( let* ) (x: 'a writer) (f: 'a -> 'b writer): 'b writer =
+    let (ex, stmts1, env1) = x in
+    let (ex', stmts2, env2) = f ex in
+    (ex', stmts1 @ stmts2, env1)
 
-let (let**) (xs: ('a * 'b list) list) (f: 'a list -> 'c * stmt list): 'c * stmt list =
-    let xsa = List.map (fun (a, _) -> a) xs in
-    let xsbs = List.concat (List.map (fun (_, bs) -> bs) xs) in
-    let (ex', stmts) = f xsa in
-    (ex', xsbs @ stmts)
+let (let**) (xs: ('a writer) list) (f: 'a list -> 'b writer): 'b writer =
+    let xsa = List.map (fun (a, _, _) -> a) xs in
+    let xsbs = List.concat (List.map (fun (_, bs, _) -> bs) xs) in
+    let (ex', stmts, env) = f xsa in
+    (ex', xsbs @ stmts, env)
 
 let read (w: 'a writer): stmt list =
-    match w with (_, stmts) -> stmts
+    match w with (_, stmts, _) -> stmts
 
 let pp_result_or_simplified (rs: result_or_simplified): string = 
     match rs with
@@ -303,8 +303,9 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified writer =
         | Simplified _ -> return (Simplified x))
     | Expr_Slices(e, ss) ->
         let** transformedSlices = List.map (fun s -> dis_slice loc env s) ss in
-        (match dis_expr loc env e with
-        | (Result v, stmts2) ->
+        let* e' = dis_expr loc env e in
+        (match e' with
+        | Result v ->
             if List.exists (fun ts -> match ts with (Simplified _, _) -> true | (_, Simplified _) -> true | (_, _) -> false) transformedSlices then
                 return (Simplified (Expr_Slices(to_expr (Result v), List.map (fun (i, w) -> Slice_HiLo(to_expr i, to_expr w)) transformedSlices)))
             else
@@ -314,7 +315,7 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified writer =
                     | _ -> raise (EvalError (loc, "Unreachable: Shouldn't have expression in bit slice\n")))
                     ) transformedSlices in
                     return (Result (eval_concat loc vs))
-        | (Simplified e', stmts2) -> 
+        | Simplified e' -> 
             return (Simplified (Expr_Slices(e', List.map2 (fun (i, w) s ->
                 (match s with
                 | Slice_Single _ -> Slice_Single(to_expr i)
@@ -337,12 +338,12 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified writer =
             (match (get_array loc (to_value a') (to_value i')) with
             | VUninitialized -> return (Simplified (Expr_Array(a, to_expr i')))
             | v -> return (Result v))
-    | x -> try (match eval_expr loc env x with VUninitialized -> return (Simplified x) | v -> (Result v, [])) with EvalError (loc, message) -> return (Simplified x)
+    | x -> try (match eval_expr loc env x with VUninitialized -> return (Simplified x) | v -> return (Result v)) with EvalError (loc, message) -> return (Simplified x)
 
 (** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
 and dis_if_expr_no_remove (loc: l) (env: Env.t) (xs: e_elsif list): e_elsif list writer = 
     match xs with
-    | [] -> ([], [])
+    | [] -> return []
     | (AST.E_Elsif_Cond (cond, b)::xs') ->
         let* cond' = dis_expr loc env cond in
         let* b' = dis_expr loc env b in
@@ -384,7 +385,7 @@ and dis_stmts (env: Env.t) (xs: AST.stmt list): unit writer =
 (** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
 and dis_if_stmt_no_remove (loc: l) (env: Env.t) (xs: s_elsif list): s_elsif list writer = 
     match xs with
-    | [] -> ([], [])
+    | [] -> return []
     | (AST.S_Elsif_Cond (cond, b)::xs') ->
         let* cond' = dis_expr loc env cond in
         let* els' = dis_if_stmt_no_remove loc env xs' in
