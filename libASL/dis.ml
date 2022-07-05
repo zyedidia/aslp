@@ -377,13 +377,17 @@ and dis_lexpr (loc: l) (env: Env.t) (x: AST.lexpr) (r: result_or_simplified): un
             (List.map (to_value) tvs) 
             ((List.map to_value vs) @ [to_value r]))
         end
-    | LExpr_Var(v) -> 
+    | LExpr_Var(v) ->
+        let v' = try 
+            (ignore (Env.getVar loc env (Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v)))); 
+            (Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v)))) 
+        with EvalError _ -> v in
         (match r with
         | Result r' -> 
-            return (Env.setVar loc env v r')
+            return (Env.setVar loc env v' r')
         | Simplified e -> 
-            Env.setVar loc env v VUninitialized;
-            write (Stmt_Assign(LExpr_Var(v), e, loc)))
+            Env.setVar loc env v' VUninitialized;
+            write (Stmt_Assign(LExpr_Var(v'), e, loc)))
     | _ -> try (return (eval_lexpr loc env x (to_value r))) with EvalError _ ->
         write (Stmt_Assign(x, to_expr r, loc))
 
