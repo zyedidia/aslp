@@ -541,7 +541,7 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) exec; *)
                     let stmts = read (dis_stmts env exec) in
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts; *)
-                    List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (remove_unused (constant_propagation stmts));
+                    List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (constant_propagation stmts)));
                     true
                 end else begin
                     false
@@ -582,4 +582,19 @@ and constant_propagation (xs: stmt list): stmt list =
         | Stmt_ConstDecl(ty, v, i, loc) -> if is_val i then (acc, Bindings.add v i bs) else (acc @ [subst_stmt bs stmt], bs)
         | Stmt_Assign(LExpr_Var(v), r, loc) -> if is_val r then (acc, Bindings.add v r bs) else (acc @ [subst_stmt bs stmt], bs)
         | x -> (acc @ [subst_stmt bs stmt], bs)
+    ) ([], Bindings.empty) xs with (acc, bs) -> acc
+
+(* Don't print no init decls until they are assigned *)
+and join_decls (xs: stmt list): stmt list =
+    match List.fold_left (fun (acc, bs) stmt -> 
+        (match stmt with
+        | Stmt_VarDeclsNoInit(ty, vs, loc) ->
+            (acc, List.fold_left (fun bs v -> Bindings.add v ty bs) bs vs)
+        | Stmt_Assign(LExpr_Var(ident), r, loc) -> 
+            if Bindings.mem ident bs then 
+                (acc @ [Stmt_VarDecl(Bindings.find ident bs, ident, r, loc)], Bindings.remove ident bs)
+            else
+                (acc @ [stmt], bs)
+        | _ -> (acc @ [stmt], bs)
+        )
     ) ([], Bindings.empty) xs with (acc, bs) -> acc
