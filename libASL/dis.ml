@@ -65,6 +65,15 @@ let rec to_expr (v: result_or_simplified): AST.expr =
         )
     | Simplified x -> x
 
+let is_val (x: AST.expr): bool =
+    (match x with 
+    | Expr_LitInt _ -> true
+    | Expr_LitReal _ -> true
+    | Expr_LitString _ -> true
+    | Expr_Tuple _ -> true
+    | x -> false
+    )
+
 (** Converts a result_or_simplified to a value. 
     Raises an exception if an expression is given, as an expression cannot be casted to a value. 
     Requires checking beforehand *)
@@ -526,7 +535,9 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     Printf.printf "Dissasm: %s\n" (pprint_ident inst);
                     (* Uncomment this if you want to see output with no evaluation *)
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) exec; *)
-                    List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (read (dis_stmts env exec));
+                    let stmts = read (dis_stmts env exec) in
+                    (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts; *)
+                    List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (remove_unused (constant_propagation stmts));
                     true
                 end else begin
                     false
@@ -541,3 +552,30 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
         )
     else
       false
+
+and remove_unused (xs: stmt list): stmt list =
+    match List.fold_right (fun stmt (acc, idents) -> 
+        let stmts =
+            match stmt with
+            | Stmt_VarDeclsNoInit(ty, vs, loc) -> 
+                (match List.filter (fun ident -> IdentSet.mem ident idents) vs with
+                | [] -> acc
+                | xs -> Stmt_VarDeclsNoInit(ty, xs, loc) :: acc
+                )
+            | Stmt_VarDecl(ty, v, i, loc) -> if IdentSet.mem v idents then stmt :: acc else acc
+            | Stmt_ConstDecl(ty, v, i, loc) -> if IdentSet.mem v idents then stmt :: acc else acc
+            | Stmt_Assign(LExpr_Var(v), r, loc) -> if IdentSet.mem v idents then stmt :: acc else acc
+            | x -> x :: acc
+        in
+        let newIdents = IdentSet.union idents (fv_stmt stmt) in
+        (stmts, newIdents)
+    ) xs ([], IdentSet.empty) with (acc, idents) -> acc
+
+and constant_propagation (xs: stmt list): stmt list =
+    match List.fold_left (fun (acc, bs) stmt -> 
+        match stmt with
+        | Stmt_VarDecl(ty, v, i, loc) -> if is_val i then (acc, Bindings.add v i bs) else (acc @ [subst_stmt bs stmt], bs)
+        | Stmt_ConstDecl(ty, v, i, loc) -> if is_val i then (acc, Bindings.add v i bs) else (acc @ [subst_stmt bs stmt], bs)
+        | Stmt_Assign(LExpr_Var(v), r, loc) -> if is_val r then (acc, Bindings.add v r bs) else (acc @ [subst_stmt bs stmt], bs)
+        | x -> (acc @ [subst_stmt bs stmt], bs)
+    ) ([], Bindings.empty) xs with (acc, bs) -> acc

@@ -217,6 +217,11 @@ let fv_stmts stmts =
     ignore (visit_stmts (fvs :> aslVisitor) stmts);
     fvs#result
 
+let fv_stmt stmt =
+    let fvs = new freevarClass in
+    ignore (visit_stmt (fvs :> aslVisitor) stmt);
+    fvs#result
+
 let fv_decl decl =
     let fvs = new freevarClass in
     ignore (visit_decl (fvs :> aslVisitor) decl);
@@ -408,6 +413,10 @@ let subst_slice (s: expr Bindings.t) (x: slice): slice =
 let subst_type (s: expr Bindings.t) (x: ty): ty =
     let subst = new substClass s in
     visit_type subst x
+
+let subst_stmt (s: expr Bindings.t) (x: stmt): stmt =
+    let subst = new substClass s in
+    visit_stmt subst x
 
 
 (** More flexible substitution class - takes a function instead
