@@ -199,28 +199,35 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
 
         (* Add return variable declarations *)
         let fName = name_of_FIdent f in
-        let varNames = List.map (fun n -> Ident (fName ^ "Var" ^ string_of_int n ^ string_of_int (Env.getNumSymbols env))) (Utils.range 0 (List.length targs)) in
         let* _ = (match rty with 
             | Some t -> 
-                let* t' = dis_type loc env t in
-                write (Stmt_VarDeclsNoInit(
-                    t',
-                    varNames, 
-                    Unknown
-                ))
-            | None -> 
-                write (Stmt_VarDeclsNoInit(
-                    Type_Constructor (Ident "ERRORType"),
-                    varNames, 
-                    Unknown
-                ))
+                (match t with
+                | Type_Tuple(ts) -> 
+                    let** ts' = List.map (dis_type loc env) ts in
+                    let varNames = List.map (fun _ -> Ident (fName ^ "Var" ^ string_of_int (Env.getNumSymbols env))) ts in
+                    Env.addReturnSymbol env (Expr_Tuple(List.map (fun n -> Expr_Var n) varNames));
+                    let** _ = (List.map2 (fun t' name ->
+                        write (Stmt_VarDeclsNoInit(
+                            t',
+                            [name], 
+                            Unknown
+                        ))
+                    ) ts' varNames) in return ()
+                | _ -> 
+                    let* t' = dis_type loc env t in
+                    let varName = Ident (fName ^ "Var" ^ string_of_int (Env.getNumSymbols env)) in
+                    Env.addReturnSymbol env (Expr_Var(varName));
+                    write (Stmt_VarDeclsNoInit(
+                        t',
+                        [varName], 
+                        Unknown
+                    ))
+                )
+            | None -> raise (EvalError (loc, "Unexpected function return type"))
         ) in
 
-        (* Create the return symbol *)
-        let rv = (match varNames with
-            | [] -> Expr_Tuple []
-            | [name] -> Expr_Var(name)
-            | names -> Expr_Tuple(List.map (fun n -> Expr_Var n) names)) in
+        (* Get the return symbol we just made so we can return it later *)
+        let rv = Env.getReturnSymbol loc env in
 
         (* Add local parameters, avoiding name collisions *)
         (* Also print what the parameter refers to *)
@@ -238,7 +245,6 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
         ) atys args es)) in
 
         (* print out the body *)
-        Env.addReturnSymbol env rv;
         Env.addLocalPrefix env localPrefix;
         let* _ = dis_stmts env b in
         Env.removeReturnSymbol env;
@@ -442,7 +448,13 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
         )
     | Stmt_Assign(l, r, loc) ->
         let* r' = dis_expr loc env r in
-        dis_lexpr loc env l r' (* TODO: double check that both statements are added *)
+        (match (l, r') with
+        | (LExpr_Tuple(les), Simplified Expr_Tuple(es)) ->
+            let** _ = List.map2 (fun le e -> dis_stmt env (Stmt_Assign(le, e, loc))) les es in
+            return ()
+        | _ ->
+            dis_lexpr loc env l r' (* TODO: double check that both statements are added *)
+        )
     | Stmt_If(c, t, els, e, loc) ->
         let rec eval_if xs d = match xs with
             | [] -> dis_stmts env e
@@ -469,7 +481,14 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
         eval_if (S_Elsif_Cond(c, t)::els) e
     | Stmt_FunReturn(e, loc) ->
         let* e' = dis_expr loc env e in
-        write (Stmt_Assign((match (Env.getReturnSymbol loc env) with Expr_Var(i) -> LExpr_Var(i) | _ -> raise (EvalError (loc, "TODO"))), to_expr e', loc))
+        (match (e', Env.getReturnSymbol loc env) with
+        | (Simplified (Expr_Tuple(es)), Expr_Tuple(les)) ->
+            write_multi (List.map2 (fun le e -> 
+                Stmt_Assign((match le with Expr_Var(ident) -> LExpr_Var(ident) | _ -> raise (EvalError (loc, "Unexpected expression type in return symbol"))), e, loc)
+            ) les es)
+        | (_, Expr_Var(i)) -> write (Stmt_Assign(LExpr_Var(i), to_expr e', loc))
+        | _ -> raise (EvalError (loc, "TODO"))
+        )
     | Stmt_Assert(e, loc) ->
         let* e' = dis_expr loc env e in
         (match e' with 
