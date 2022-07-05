@@ -577,21 +577,18 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
       false
 
 and remove_unused (xs: stmt list): stmt list =
-    match List.fold_right (fun stmt (acc, idents) -> 
-        let stmts =
-            match stmt with
-            | Stmt_VarDeclsNoInit(ty, vs, loc) -> 
-                (match List.filter (fun ident -> IdentSet.mem ident idents) vs with
-                | [] -> acc
-                | xs -> Stmt_VarDeclsNoInit(ty, xs, loc) :: acc
-                )
-            | Stmt_VarDecl(ty, v, i, loc) -> if IdentSet.mem v idents then stmt :: acc else acc
-            | Stmt_ConstDecl(ty, v, i, loc) -> if IdentSet.mem v idents then stmt :: acc else acc
-            | Stmt_Assign(LExpr_Var(v), r, loc) -> if IdentSet.mem v idents then stmt :: acc else acc
-            | x -> x :: acc
-        in
+    match List.fold_right (fun stmt (acc, idents) ->
         let newIdents = IdentSet.union idents (fv_stmt stmt) in
-        (stmts, newIdents)
+        match stmt with
+        | Stmt_VarDeclsNoInit(ty, vs, loc) -> 
+            (match List.filter (fun ident -> IdentSet.mem ident idents) vs with
+            | [] -> (acc, idents)
+            | xs -> (Stmt_VarDeclsNoInit(ty, xs, loc) :: acc, idents)
+            )
+        | Stmt_VarDecl(ty, v, i, loc) -> if IdentSet.mem v idents then (stmt :: acc, newIdents) else (acc, idents)
+        | Stmt_ConstDecl(ty, v, i, loc) -> if IdentSet.mem v idents then (stmt :: acc, newIdents) else (acc, idents)
+        | Stmt_Assign(LExpr_Var(v), r, loc) -> if IdentSet.mem v idents then (stmt :: acc, newIdents) else (acc, idents)
+        | x -> (x :: acc, newIdents)
     ) xs ([], IdentSet.empty) with (acc, idents) -> acc
 
 and constant_propagation (xs: stmt list): stmt list =
