@@ -560,7 +560,7 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) exec; *)
                     let stmts = read (dis_stmts env exec) in
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts; *)
-                    List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (constant_propagation stmts)));
+                    List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (copy_propagation (join_decls (remove_unused (constant_propagation stmts))));
                     true
                 end else begin
                     false
@@ -599,6 +599,27 @@ and constant_propagation (xs: stmt list): stmt list =
         | Stmt_Assign(LExpr_Var(v), r, loc) -> if is_val r then (acc, Bindings.add v r bs) else (acc @ [subst_stmt bs stmt], bs)
         | x -> (acc @ [subst_stmt bs stmt], bs)
     ) ([], Bindings.empty) xs with (acc, bs) -> acc
+
+and copy_propagation (xs: stmt list): stmt list =
+    match List.fold_left (fun (acc, bs) stmt -> 
+        match stmt with
+        | Stmt_VarDecl(ty, v, i, loc) -> 
+            copy_propagation_helper v i bs acc stmt
+        | Stmt_ConstDecl(ty, v, i, loc) ->
+            copy_propagation_helper v i bs acc stmt
+        | Stmt_Assign(LExpr_Var(v), r, loc) ->
+            copy_propagation_helper v r bs acc stmt
+        | x -> (acc @ [subst_stmt bs stmt], bs)
+    ) ([], Bindings.empty) xs with (acc, bs) -> acc  
+
+and copy_propagation_helper (l: ident) (r: AST.expr) (bs: expr Bindings.t) (acc: stmt list) (stmt: stmt): stmt list * expr Bindings.t =
+    (match r with 
+    | Expr_Var(i) -> 
+        if Bindings.mem i bs then
+            (acc, Bindings.add l (Bindings.find i bs) bs)
+        else
+            (acc, Bindings.add l r bs) 
+    | _ -> (acc @ [subst_stmt bs stmt], bs))
 
 (* Don't print no init decls until they are assigned *)
 and join_decls (xs: stmt list): stmt list =
