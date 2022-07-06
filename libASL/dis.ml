@@ -616,10 +616,13 @@ and copy_propagation_helper (l: ident) (r: AST.expr) (bs: expr Bindings.t) (acc:
     (match r with 
     | Expr_Var(i) -> 
         if Bindings.mem i bs then
-            (acc, Bindings.add l (Bindings.find i bs) bs)
+            (acc, remove_reassigned l (Bindings.add l (Bindings.find i bs) bs))
         else
-            (acc, Bindings.add l r bs) 
+            (acc, remove_reassigned l (Bindings.add l r bs))
     | _ -> (acc @ [subst_stmt bs stmt], bs))
+
+and remove_reassigned (l: ident) (bs: expr Bindings.t): expr Bindings.t =
+    List.fold_left (fun bs' (ident, expr) -> if expr = Expr_Var(l) then Bindings.remove ident bs' else bs') bs (Bindings.bindings bs);
 
 (* Don't print no init decls until they are assigned *)
 and join_decls (xs: stmt list): stmt list =
