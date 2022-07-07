@@ -516,9 +516,13 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
         let* e' = dis_expr loc env e in
         (match e' with
         | Result v -> eval v alts
-        | Simplified _ ->
-            (* TODO simplify cases individually*)
-            write x
+        | Simplified e'' ->
+            write (Stmt_Case(
+                e'', 
+                List.map (fun (Alt_Alt(ps, oc, s)) -> Alt_Alt(ps, oc, read (dis_stmts env s))) alts, 
+                (match odefault with None -> None | Some s -> Some (read (dis_stmts env s))), 
+                loc
+            ))
         ))
     | x -> write x
     )
