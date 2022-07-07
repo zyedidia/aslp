@@ -394,6 +394,7 @@ and dis_lexpr (loc: l) (env: Env.t) (x: AST.lexpr) (r: result_or_simplified): un
         | Simplified e -> 
             Env.setVar loc env v' VUninitialized;
             write (Stmt_Assign(LExpr_Var(v'), e, loc)))
+    | LExpr_Wildcard -> return ()
     | _ -> try (return (eval_lexpr loc env x (to_value r))) with EvalError _ ->
         write (Stmt_Assign(x, to_expr r, loc))
 
