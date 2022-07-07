@@ -564,7 +564,7 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) exec; *)
                     let stmts = read (dis_stmts env exec) in
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts; *)
-                    List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (copy_propagation (join_decls (remove_unused (constant_propagation stmts))));
+                    List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts))));
                     true
                 end else begin
                     false
@@ -608,7 +608,8 @@ and copy_propagation (xs: stmt list): stmt list =
     match List.fold_left (fun (acc, bs) stmt -> 
         match stmt with
         | Stmt_VarDecl(ty, v, i, loc) -> 
-            copy_propagation_helper v i bs acc stmt
+            (* If we remove the statement, leave the declaration to be removed or joined later *)
+            (match copy_propagation_helper v i bs acc stmt with (stmts, bs) -> if stmts = acc then (stmts @ [Stmt_VarDeclsNoInit(ty, [v], loc)], bs) else (stmts, bs))
         | Stmt_ConstDecl(ty, v, i, loc) ->
             copy_propagation_helper v i bs acc stmt
         | Stmt_Assign(LExpr_Var(v), r, loc) ->
@@ -617,13 +618,14 @@ and copy_propagation (xs: stmt list): stmt list =
     ) ([], Bindings.empty) xs with (acc, bs) -> acc  
 
 and copy_propagation_helper (l: ident) (r: AST.expr) (bs: expr Bindings.t) (acc: stmt list) (stmt: stmt): stmt list * expr Bindings.t =
+    let newBs = if Bindings.mem l bs then Bindings.remove l bs else bs in
     (match r with 
     | Expr_Var(i) -> 
-        if Bindings.mem i bs then
-            (acc, remove_reassigned l (Bindings.add l (Bindings.find i bs) bs))
+        if Bindings.mem i newBs then
+            (acc, remove_reassigned l (Bindings.add l (Bindings.find i newBs) newBs))
         else
-            (acc, remove_reassigned l (Bindings.add l r bs))
-    | _ -> (acc @ [subst_stmt bs stmt], bs))
+            (acc, remove_reassigned l (Bindings.add l r newBs))
+    | _ -> (acc @ [subst_stmt bs stmt], newBs))
 
 and remove_reassigned (l: ident) (bs: expr Bindings.t): expr Bindings.t =
     List.fold_left (fun bs' (ident, expr) -> if expr = Expr_Var(l) then Bindings.remove ident bs' else bs') bs (Bindings.bindings bs);
