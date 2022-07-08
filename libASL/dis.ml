@@ -356,7 +356,7 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified writer =
             return (Simplified (Expr_Slices(e', List.map2 (fun (i, w) s ->
                 (match s with
                 | Slice_Single _ -> Slice_Single(to_expr i)
-                | Slice_HiLo _ -> Slice_HiLo(to_expr i, to_expr w)
+                | Slice_HiLo _ -> Slice_LoWd(to_expr i, to_expr w)
                 | Slice_LoWd _ -> Slice_LoWd(to_expr i, to_expr w)
                 )
             ) transformedSlices ss))))
@@ -561,14 +561,14 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
     )
 
 (* Duplicate of eval_decode_case modified to print rather than eval *)
-let rec dis_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): unit =
+let rec dis_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): stmt list =
     (match x with
     | DecoderCase_Case (ss, alts, loc) ->
             let vs = List.map (fun s -> eval_decode_slice loc env s op) ss in
             let rec dis alts =
                 (match alts with
                 | (alt :: alts') ->
-                    if dis_decode_alt loc env alt vs op then () else dis alts'
+                    (match dis_decode_alt loc env alt vs op with Some stmts -> stmts | None -> dis alts')
                 | [] ->
                         raise (EvalError (loc, "unmatched decode pattern"))
                 )
@@ -577,7 +577,7 @@ let rec dis_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): 
     )
 
 (* Duplicate of eval_decode_alt modified to print rather than eval *)
-and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): bool =
+and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): stmt list option =
     if List.for_all2 (eval_decode_pattern loc) ps vs then
         (match b with
         | DecoderBody_UNPRED loc -> raise (Throw (loc, Exc_Unpredictable))
@@ -595,24 +595,23 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     Printf.printf "Dissasm: %s\n" (pprint_ident inst);
                     (* Uncomment this if you want to see output with no evaluation *)
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) exec; *)
-                    Env.removeGlobals env;
+                    (* Env.removeGlobals env; *)
                     let stmts = read (dis_stmts env exec) in
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts; *)
-                    List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts))));
-                    true
+                    (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
+                    Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts))));
                 end else begin
-                    false
+                    None
                 end
         | DecoderBody_Decoder (fs, c, loc) ->
-                let env = Env.empty in (* todo: this seems to share a single mutable object far too widely *)
+                (* let env = Env.empty in  *)
                 List.iter (function (IField_Field (f, lo, wd)) ->
                     Env.addLocalVar loc env f (extract_bits' loc op lo wd)
                 ) fs;
-                dis_decode_case loc env c op;
-                true
+                Some (dis_decode_case loc env c op)
         )
     else
-      false
+      None
 
 and remove_unused (xs: stmt list): stmt list =
     match List.fold_right (fun stmt (acc, idents) ->

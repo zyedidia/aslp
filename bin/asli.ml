@@ -10,6 +10,8 @@
 open LibASL
 
 open Asl_ast
+open Value
+open Eval
 
 module Parser = Asl_parser
 module TC     = Tcheck
@@ -53,6 +55,27 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
     let input = String.trim input0 in
     (match String.split_on_char ' ' input with
     | [""] ->
+        ()
+    | [":compare"; iset; opcode] -> 
+        let op = Z.of_int (int_of_string opcode) in
+        Printf.printf "Comparing instruction %s %s\n" iset (Z.format "%x" op);
+        Eval.Env.initialize cpu.env (Utils.range 0 64);
+        let op' = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) op) in
+        let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
+
+        (* Set up our environments *)
+        let evalEnv = Eval.Env.copy cpu.env in 
+        let disEnv = Eval.Env.copy cpu.env in
+        let disEvalEnv = Eval.Env.copy cpu.env in
+
+        (* Evaluate original instruction *)
+        Eval.eval_decode_case AST.Unknown evalEnv decoder op';
+
+        (* Generate and evaluate partially evaluated instruction *)
+        let disStmts = Dis.dis_decode_case AST.Unknown disEnv decoder op' in
+        Eval.eval_stmt_case Unknown disEvalEnv decoder op' disStmts;
+
+        if Eval.Env.compare evalEnv disEvalEnv then Printf.printf "No errors detected\n" else Printf.printf "Environments not equal\n";
         ()
     | [":elf"; file] ->
         Printf.printf "Loading ELF file %s.\n" file;

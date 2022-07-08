@@ -15,6 +15,7 @@ open AST
 open Utils
 open Asl_utils
 open Value
+open Primops
 
 (****************************************************************
  * Flags to control behaviour (mostly for debugging)
@@ -86,6 +87,9 @@ module Env : sig
     val empty               : t
     val nestTop             : (t -> 'a) -> (t -> 'a)
     val nest                : (t -> 'a) -> (t -> 'a)
+    val copy                : t -> t
+    val compare             : t -> t -> bool
+    val compareLocals       : t -> t -> bool
 
     val addLocalVar         : AST.l -> t -> ident -> value -> unit
     val addLocalConst       : AST.l -> t -> ident -> value -> unit
@@ -126,17 +130,24 @@ module Env : sig
     val getReturnSymbol     : AST.l -> t -> AST.expr
     val addReturnSymbol     : t -> AST.expr -> unit
     val removeReturnSymbol  : t -> unit
+
     val getNumSymbols       : t -> int
+
     val getLocalPrefix      : AST.l -> t -> string
     val addLocalPrefix      : t -> string -> unit
     val removeLocalPrefix   : t -> unit
+
     val addImplicitValue    : t -> ident -> value -> unit
     val addImplicitLevel    : t -> unit
     val getImplicitLevel    : t -> (ident * value) list
-    val copy                : t -> t
+    
     val setLocals           : t -> scope list -> unit
     val getLocals           : t -> scope list
+
+    val getGlobals          : t -> scope
     val removeGlobals       : t -> unit
+
+    val initialize          : t -> int list -> unit
 
 end = struct
     type t = {
@@ -152,7 +163,6 @@ end = struct
         mutable constants    : scope;
         mutable impdefs      : value ImpDefs.t;
         mutable locals       : scope list;
-        (* TODO: maybe expr isn't the best way to represent this *)
         mutable returnSymbols: AST.expr list;
         mutable numSymbols   : int;
         mutable localPrefixes: string list;
@@ -219,6 +229,63 @@ end = struct
             implicitLevels = parent.implicitLevels;
         } in
         k child
+
+    let copy (env: t): t =
+        {
+            decoders     = env.decoders;
+            instructions = env.instructions;
+            functions    = env.functions;
+            enums        = env.enums;
+            enumEqs      = env.enumEqs;
+            enumNeqs     = env.enumNeqs;
+            records      = env.records;
+            typedefs     = env.typedefs;
+            globals      = { bs = 
+                List.fold_left (fun bs' (key, value) -> 
+                    Bindings.add key value bs'
+                ) Bindings.empty (Bindings.bindings env.globals.bs) 
+            };
+            constants    = env.constants;
+            impdefs      = env.impdefs;
+            locals       = 
+            List.map (fun x -> { bs = 
+                List.fold_left (fun bs' (key, value) -> 
+                    Bindings.add key value bs'
+                ) Bindings.empty (Bindings.bindings x.bs) 
+            }) env.locals; 
+            returnSymbols= env.returnSymbols;
+            numSymbols   = env.numSymbols;
+            localPrefixes= env.localPrefixes;
+            implicitLevels = env.implicitLevels;
+        }
+
+    let compareLocals (env1: t) (env2: t): bool =
+        List.for_all2 (fun scope1 scope2 -> 
+            List.for_all (fun (key, value) ->
+                if not (Bindings.mem key scope2.bs) then begin Printf.printf "%s not in second environment\n" (pprint_ident key); false
+                end else if Bindings.find key scope2.bs <> value then begin Printf.printf "%s has mismatched value: %s | %s\n" (pprint_ident key) (pp_value value) (pp_value (Bindings.find key scope2.bs)); false
+                end else true
+            ) (Bindings.bindings scope1.bs) 
+            ||
+            List.for_all (fun (key, value) ->
+                if not (Bindings.mem key scope1.bs) then begin Printf.printf "%s not in first environment\n" (pprint_ident key); false
+                end else if Bindings.find key scope1.bs <> value then begin Printf.printf "%s has mismatched value: %s | %s\n" (pprint_ident key) (pp_value value) (pp_value (Bindings.find key scope1.bs)); false
+                end else true
+            ) (Bindings.bindings scope2.bs);
+        ) env1.locals env2.locals
+
+    let compare (env1: t) (env2: t): bool =
+            List.for_all (fun (key, value) ->
+                if not (Bindings.mem key env2.globals.bs) then begin Printf.printf "%s not in second environment\n" (pprint_ident key); false
+                end else if Bindings.find key env2.globals.bs <> value then begin Printf.printf "%s has mismatched value: %s | %s\n" (pprint_ident key) (pp_value value) (pp_value (Bindings.find key env2.globals.bs)); false
+                end else true
+            ) (Bindings.bindings env1.globals.bs) 
+            ||
+            List.for_all (fun (key, value) ->
+                if not (Bindings.mem key env1.globals.bs) then begin Printf.printf "%s not in first environment\n" (pprint_ident key); false
+                end else if Bindings.find key env1.globals.bs <> value then begin Printf.printf "%s has mismatched value: %s | %s\n" (pprint_ident key) (pp_value value) (pp_value (Bindings.find key env1.globals.bs)); false
+                end else true
+            ) (Bindings.bindings env2.globals.bs)
 
     let addLocalVar (loc: l) (env: t) (x: ident) (v: value): unit =
         if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident x) (pp_value v);
@@ -380,38 +447,38 @@ end = struct
         | [] -> raise (EvalError (Unknown, "No levels exist"))
         | (level::levels) -> env.implicitLevels <- levels; level
 
-    let copy (env: t): t =
-        {
-            decoders     = env.decoders;
-            instructions = env.instructions;
-            functions    = env.functions;
-            enums        = env.enums;
-            enumEqs      = env.enumEqs;
-            enumNeqs     = env.enumNeqs;
-            records      = env.records;
-            typedefs     = env.typedefs;
-            globals      = env.globals;
-            constants    = env.constants;
-            impdefs      = env.impdefs;
-            locals       = List.map (fun x -> 
-                let bs = List.fold_left (fun bs (key, value) -> 
-                    Bindings.add key value bs
-                ) Bindings.empty (Bindings.bindings x.bs) in { bs }
-            ) env.locals; (* copy *)
-            returnSymbols= env.returnSymbols;
-            numSymbols   = env.numSymbols;
-            localPrefixes= env.localPrefixes;
-            implicitLevels = env.implicitLevels;
-        }
-
     let setLocals (env: t) (xs: scope list): unit =
         env.locals <- xs
 
     let getLocals (env: t): scope list =
         env.locals
 
+    let getGlobals (env: t): scope =
+        env.globals
+
     let removeGlobals (env: t): unit =
         env.globals <- empty_scope ()
+
+    let initialize (env: t) (xs: int list): unit =
+        let setPVar = (fun f -> 
+            setVar 
+                Unknown 
+                env 
+                (Ident "PSTATE") 
+                (VRecord (Bindings.update (Ident f) (fun _ -> 
+                    Some (VBits { n = 1; v = (Z.of_int 0)})
+                ) (match getVar Unknown env (Ident "PSTATE") with VRecord bs -> bs | _ -> raise (EvalError (Unknown, "PSTATE should be a record")))))) in
+        setPVar "N";
+        setPVar "Z";
+        setPVar "C";
+        setPVar "V";
+        addGlobalVar 
+            env 
+            (Ident "_R") 
+            (VArray (List.fold_left2 (fun arr n v -> 
+                ImmutableArray.add n (VBits { n = 64; v = (Z.of_int v)}) arr
+            ) ImmutableArray.empty (Utils.range 0 (List.length xs)) xs, VUninitialized))
+
 end
 
 let isGlobalConst (env: Env.t) (id: AST.ident): bool =
@@ -983,7 +1050,56 @@ and eval_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: valu
                     false
                 end
         | DecoderBody_Decoder (fs, c, loc) ->
-                let env = Env.empty in (* todo: this seems to share a single mutable object far too widely *)
+                (* let env = Env.empty in  *)
+                List.iter (function (IField_Field (f, lo, wd)) ->
+                    Env.addLocalVar loc env f (extract_bits' loc op lo wd)
+                ) fs;
+                eval_decode_case loc env c op;
+                true
+        )
+    else
+        false
+
+(** Evaluates instruction but draw statements from list, not specification *)
+and eval_stmt_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value) (xs: stmt list): unit =
+    (match x with
+    | DecoderCase_Case (ss, alts, loc) ->
+            let vs = List.map (fun s -> eval_decode_slice loc env s op) ss in
+            let rec eval alts =
+                (match alts with
+                | (alt :: alts') ->
+                        if eval_stmt_alt loc env alt vs op xs then
+                            ()
+                        else
+                            eval alts'
+                | [] ->
+                        raise (EvalError (loc, "unmatched decode pattern"))
+                )
+            in
+            eval alts
+    )
+
+and eval_stmt_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value) (xs: stmt list): bool =
+    if List.for_all2 (eval_decode_pattern loc) ps vs then
+        (match b with
+        | DecoderBody_UNPRED loc -> raise (Throw (loc, Exc_Unpredictable))
+        | DecoderBody_UNALLOC loc -> raise (Throw (loc, Exc_Undefined))
+        | DecoderBody_NOP loc -> true
+        | DecoderBody_Encoding (enc, l) ->
+                let (enc, opost, cond, exec) = Env.getInstruction loc env enc in
+                if eval_encoding env enc op then begin
+                    (match opost with
+                    | Some post -> List.iter (eval_stmt env) post
+                    | None -> ()
+                    );
+                    (* todo: should evaluate ConditionHolds to decide whether to execute body *)
+                    List.iter (eval_stmt env) xs;
+                    true
+                end else begin
+                    false
+                end
+        | DecoderBody_Decoder (fs, c, loc) ->
+                (* let env = Env.empty in  *)
                 List.iter (function (IField_Field (f, lo, wd)) ->
                     Env.addLocalVar loc env f (extract_bits' loc op lo wd)
                 ) fs;

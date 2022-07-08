@@ -7,6 +7,8 @@
 
 module AST = Asl_ast
 
+open Asl_utils
+
 type cpu = {
     env      : Eval.Env.t;
     reset    : unit -> unit;
@@ -48,7 +50,7 @@ let mkCPU (env : Eval.Env.t): cpu =
     and sem (iset: string) (opcode: Primops.bigint): unit =
         let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) opcode) in
         let decoder = Eval.Env.getDecoder env (Ident iset) in
-        Dis.dis_decode_case AST.Unknown env decoder op
+        List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (Dis.dis_decode_case AST.Unknown env decoder op)
 
     in
     {
