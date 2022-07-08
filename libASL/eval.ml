@@ -133,6 +133,10 @@ module Env : sig
     val addImplicitValue    : t -> ident -> value -> unit
     val addImplicitLevel    : t -> unit
     val getImplicitLevel    : t -> (ident * value) list
+    val copy                : t -> t
+    val setLocals           : t -> scope list -> unit
+    val getLocals           : t -> scope list
+    val removeGlobals       : t -> unit
 
 end = struct
     type t = {
@@ -375,6 +379,39 @@ end = struct
         match env.implicitLevels with
         | [] -> raise (EvalError (Unknown, "No levels exist"))
         | (level::levels) -> env.implicitLevels <- levels; level
+
+    let copy (env: t): t =
+        {
+            decoders     = env.decoders;
+            instructions = env.instructions;
+            functions    = env.functions;
+            enums        = env.enums;
+            enumEqs      = env.enumEqs;
+            enumNeqs     = env.enumNeqs;
+            records      = env.records;
+            typedefs     = env.typedefs;
+            globals      = env.globals;
+            constants    = env.constants;
+            impdefs      = env.impdefs;
+            locals       = List.map (fun x -> 
+                let bs = List.fold_left (fun bs (key, value) -> 
+                    Bindings.add key value bs
+                ) Bindings.empty (Bindings.bindings x.bs) in { bs }
+            ) env.locals; (* copy *)
+            returnSymbols= env.returnSymbols;
+            numSymbols   = env.numSymbols;
+            localPrefixes= env.localPrefixes;
+            implicitLevels = env.implicitLevels;
+        }
+
+    let setLocals (env: t) (xs: scope list): unit =
+        env.locals <- xs
+
+    let getLocals (env: t): scope list =
+        env.locals
+
+    let removeGlobals (env: t): unit =
+        env.globals <- empty_scope ()
 end
 
 let isGlobalConst (env: Env.t) (id: AST.ident): bool =

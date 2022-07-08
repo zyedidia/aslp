@@ -20,32 +20,50 @@ type result_or_simplified =
     | Result of value
     | Simplified of AST.expr
 
-type 'a writer = 'a * stmt list * Env.t
+type 'a writer = 'a * stmt list
 
-let return x = (x, [], Env.empty)
+let return x = (x, [])
 
-let write s = ((),[s], Env.empty)
+let write s = ((),[s])
 
-let write_multi ss = ((), ss, Env.empty)
+let write_multi ss = ((), ss)
 
 let ( let* ) (x: 'a writer) (f: 'a -> 'b writer): 'b writer =
-    let (ex, stmts1, env1) = x in
-    let (ex', stmts2, env2) = f ex in
-    (ex', stmts1 @ stmts2, env1)
+    let (ex, stmts1) = x in
+    let (ex', stmts2) = f ex in
+    (ex', stmts1 @ stmts2)
 
 let (let**) (xs: ('a writer) list) (f: 'a list -> 'b writer): 'b writer =
-    let xsa = List.map (fun (a, _, _) -> a) xs in
-    let xsbs = List.concat (List.map (fun (_, bs, _) -> bs) xs) in
-    let (ex', stmts, env) = f xsa in
-    (ex', xsbs @ stmts, env)
+    let xsa = List.map (fun (a, _) -> a) xs in
+    let xsbs = List.concat (List.map (fun (_, bs) -> bs) xs) in
+    let (ex', stmts) = f xsa in
+    (ex', xsbs @ stmts)
 
 let read (w: 'a writer): stmt list =
-    match w with (_, stmts, _) -> stmts
+    match w with (_, stmts) -> stmts
 
 let pp_result_or_simplified (rs: result_or_simplified): string = 
     match rs with
     | Result v -> pp_value v
     | Simplified e -> pp_expr e
+
+let mergeEnv (xLocals: scope list) (yLocals: scope list): scope list =
+    if List.length xLocals <> List.length yLocals then raise (EvalError (Unknown, "Scope lengths should be the same"));
+    if List.length xLocals = 0 then [] else
+    (* New list of scopes with merged locals *)
+    (List.map2 (fun xScope yScope -> 
+        let bs =
+        (let xbs = Bindings.bindings xScope.bs in
+        List.fold_left (fun bs (xKey, xV) ->
+            let ybs = yScope.bs in
+            if Bindings.find xKey ybs <> xV then
+                Bindings.update xKey (fun xo -> match xo with Some x -> Some VUninitialized | None -> raise (EvalError (Unknown, "Unreachable"))) bs
+            else
+                Bindings.add xKey xV bs
+        ) Bindings.empty xbs) in
+        { bs }
+    ) xLocals yLocals)
+        
 
 (** Convert value to a simple expression containing that value, so we can
     print it or use it symbolically *)
@@ -286,9 +304,13 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified writer =
                         (* Print whatever the rest of the branches turn out to be *)
                         eval_if xs' d
                 | Simplified cond'' -> 
-                    let* b' = dis_expr loc env b in
-                    let* els' = dis_if_expr_no_remove loc env els in
-                    let* e' = dis_expr loc env e in
+                    let tEnv = Env.copy env in
+                    let elsEnv = List.map (fun _ -> Env.copy env) (Utils.range 0 (List.length els)) in
+                    let eEnv = Env.copy env in
+                    let* b' = Env.nest (fun env' -> dis_expr loc env' b) tEnv in
+                    let* els' = dis_if_expr_no_remove loc elsEnv els in
+                    let* e' = Env.nest (fun env' -> dis_expr loc env' e) eEnv in
+                    Env.setLocals env (List.fold_left mergeEnv (Env.getLocals tEnv) ((Env.getLocals eEnv)::(List.map Env.getLocals elsEnv)));
                     return (Simplified (Expr_If(
                         cond'', 
                         to_expr (b'),
@@ -356,17 +378,18 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified writer =
     | x -> try (match eval_expr loc env x with VUninitialized -> return (Simplified x) | v -> return (Result v)) with EvalError (loc, message) -> return (Simplified x)
 
 (** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
-and dis_if_expr_no_remove (loc: l) (env: Env.t) (xs: e_elsif list): e_elsif list writer = 
-    match xs with
-    | [] -> return []
-    | (AST.E_Elsif_Cond (cond, b)::xs') ->
+and dis_if_expr_no_remove (loc: l) (envs: Env.t list) (xs: e_elsif list): e_elsif list writer = 
+    match (xs, envs) with
+    | ([], []) -> return []
+    | ((AST.E_Elsif_Cond (cond, b)::xs'), (env::envs')) ->
         let* cond' = dis_expr loc env cond in
-        let* b' = dis_expr loc env b in
-        let* els' = dis_if_expr_no_remove loc env xs' in
+        let* b' = Env.nest (fun env' -> dis_expr loc env' b) env in
+        let* els' = dis_if_expr_no_remove loc envs' xs' in
         return (AST.E_Elsif_Cond(
             to_expr (cond'), 
             to_expr (b')
         ) :: (els'))
+    | _ -> raise (EvalError (loc, "Env and e_elsif list must have the same length"))
 
 and dis_lexpr (loc: l) (env: Env.t) (x: AST.lexpr) (r: result_or_simplified): unit writer =
     match x with
@@ -403,14 +426,15 @@ and dis_stmts (env: Env.t) (xs: AST.stmt list): unit writer =
     write_multi (List.concat (List.map read (List.map (dis_stmt env) xs)))
 
 (** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
-and dis_if_stmt_no_remove (loc: l) (env: Env.t) (xs: s_elsif list): s_elsif list writer = 
-    match xs with
-    | [] -> return []
-    | (AST.S_Elsif_Cond (cond, b)::xs') ->
+and dis_if_stmt_no_remove (loc: l) (envs: Env.t list) (xs: s_elsif list): s_elsif list writer = 
+    match (xs, envs) with
+    | ([], []) -> return []
+    | ((AST.S_Elsif_Cond (cond, b)::xs'), (env::envs')) ->
         let* cond' = dis_expr loc env cond in
-        let* els' = dis_if_stmt_no_remove loc env xs' in
-        let b' = dis_stmts env b in
+        let* els' = dis_if_stmt_no_remove loc envs' xs' in
+        let b' = Env.nest (fun env' -> dis_stmts env' b) env in
         return (AST.S_Elsif_Cond(to_expr cond', read (b'))::(els'))
+    | _ -> raise (EvalError (loc, "Env list and s_elsif list must be the same length"))
 
 (** Disassemble statement *)
 and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
@@ -473,9 +497,13 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
                    whether or not this one is true. We can still simplify 
                    guards and bodies though *)
                 | Simplified cond'' -> 
-                    let t' = read (dis_stmts env t) in
-                    let* els' = dis_if_stmt_no_remove loc env els in
-                    let e' = read (dis_stmts env e) in
+                    let tEnv = Env.copy env in
+                    let elsEnv = List.map (fun _ -> Env.copy env) (Utils.range 0 (List.length els)) in
+                    let eEnv = Env.copy env in
+                    let t' = read (Env.nest (fun env' -> dis_stmts env' t) tEnv) in
+                    let* els' = dis_if_stmt_no_remove loc elsEnv els in
+                    let e' = read (Env.nest (fun env' -> dis_stmts env' e) eEnv) in
+                    Env.setLocals env (List.fold_left mergeEnv (Env.getLocals tEnv) ((Env.getLocals eEnv)::(List.map Env.getLocals elsEnv)));
                     write (Stmt_If(cond'', t', els', e', loc))
                 )
         in
@@ -518,12 +546,16 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
         (match e' with
         | Result v -> eval v alts
         | Simplified e'' ->
-            write (Stmt_Case(
+            let altEnvs = List.map (fun _ -> Env.copy env) (Utils.range 0 (List.length alts)) in
+            let defEnv = Env.copy env in
+            let result = write (Stmt_Case(
                 e'', 
-                List.map (fun (Alt_Alt(ps, oc, s)) -> Alt_Alt(ps, oc, read (dis_stmts env s))) alts, 
-                (match odefault with None -> None | Some s -> Some (read (dis_stmts env s))), 
+                List.map2 (fun (Alt_Alt(ps, oc, s)) altEnv -> Alt_Alt(ps, oc, read (Env.nest (fun env' -> (dis_stmts env' s)) altEnv))) alts altEnvs, 
+                (match odefault with None -> None | Some s -> Some (read (Env.nest (fun env' -> (dis_stmts env s)) defEnv))), 
                 loc
-            ))
+            )) in
+            Env.setLocals env (List.fold_left mergeEnv (Env.getLocals defEnv) (List.map Env.getLocals altEnvs));
+            result
         ))
     | x -> write x
     )
@@ -563,6 +595,7 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     Printf.printf "Dissasm: %s\n" (pprint_ident inst);
                     (* Uncomment this if you want to see output with no evaluation *)
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) exec; *)
+                    Env.removeGlobals env;
                     let stmts = read (dis_stmts env exec) in
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts; *)
                     List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts))));
