@@ -59,14 +59,16 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
     | [":compare"; iset; opcode] -> 
         let op = Z.of_int (int_of_string opcode) in
         Printf.printf "Comparing instruction %s %s\n" iset (Z.format "%x" op);
-        Eval.Env.initialize cpu.env (Utils.range 0 64);
+
+        let initializedEnv = Eval.Env.copy cpu.env in
+        Eval.Env.initialize initializedEnv (Utils.range 0 64);
         let op' = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) op) in
-        let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
+        let decoder = Eval.Env.getDecoder initializedEnv (Ident iset) in
 
         (* Set up our environments *)
-        let evalEnv = Eval.Env.copy cpu.env in 
-        let disEnv = Eval.Env.copy cpu.env in
-        let disEvalEnv = Eval.Env.copy cpu.env in
+        let evalEnv = Eval.Env.copy initializedEnv in 
+        let disEnv = Eval.Env.copy initializedEnv in
+        let disEvalEnv = Eval.Env.copy initializedEnv in
 
         (* Evaluate original instruction *)
         Eval.eval_decode_case AST.Unknown evalEnv decoder op';
