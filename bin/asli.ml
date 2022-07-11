@@ -56,24 +56,34 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
     (match String.split_on_char ' ' input with
     | [""] ->
         ()
-    | [":compare"; iset; opcode] -> 
-        let op = Z.of_int (int_of_string opcode) in
-        Printf.printf "Comparing instruction %s %s\n" iset (Z.format "%x" op);
-        Eval.Env.initialize cpu.env (Utils.range 0 64);
-        let op' = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) op) in
-        let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
+    | [":compare"; iset; file] -> 
+        let initializedEnv = Eval.Env.copy cpu.env in
+        Random.self_init ();
+        Eval.Env.initialize initializedEnv (List.map (fun _ -> Z.of_int64 (Random.int64 Int64.max_int)) (Utils.range 0 64));
+        let decoder = Eval.Env.getDecoder initializedEnv (Ident iset) in
 
         (* Set up our environments *)
-        let evalEnv = Eval.Env.copy cpu.env in 
+        let evalEnv = Eval.Env.copy initializedEnv in 
         let disEnv = Eval.Env.copy cpu.env in
-        let disEvalEnv = Eval.Env.copy cpu.env in
+        let disEvalEnv = Eval.Env.copy initializedEnv in
+        
+        let inchan = open_in file in
+        (try
+            while true do
+                let opcode = input_line inchan in
+                let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))) in
 
-        (* Evaluate original instruction *)
-        Eval.eval_decode_case AST.Unknown evalEnv decoder op';
-
-        (* Generate and evaluate partially evaluated instruction *)
-        let disStmts = Dis.dis_decode_case AST.Unknown disEnv decoder op' in
-        Eval.eval_stmt_case Unknown disEvalEnv decoder op' disStmts;
+                (* Evaluate original instruction *)
+                Eval.eval_decode_case AST.Unknown evalEnv decoder op;
+                
+                (* Generate and evaluate partially evaluated instruction *)
+                let disStmts = Dis.dis_decode_case AST.Unknown disEnv decoder op in
+                Eval.eval_stmt_case Unknown disEvalEnv decoder op disStmts;
+            done
+        with
+        | End_of_file ->
+            close_in inchan
+        );
 
         if Eval.Env.compare evalEnv disEvalEnv then Printf.printf "No errors detected\n" else Printf.printf "Environments not equal\n";
         ()
