@@ -15,10 +15,11 @@ open AST
 open Asl_utils
 open Value
 open Eval
+open Symbolic
 
-type result_or_simplified =
-    | Result of value
-    | Simplified of AST.expr
+type sym =
+    | Val of value
+    | Exp of AST.expr
 
 type 'a writer = 'a * stmt list
 
@@ -42,10 +43,10 @@ let (let**) (xs: ('a writer) list) (f: 'a list -> 'b writer): 'b writer =
 let read (w: 'a writer): stmt list =
     match w with (_, stmts) -> stmts
 
-let pp_result_or_simplified (rs: result_or_simplified): string = 
+let pp_result_or_simplified (rs: sym): string = 
     match rs with
-    | Result v -> pp_value v
-    | Simplified e -> pp_expr e
+    | Val v -> pp_value v
+    | Exp e -> pp_expr e
 
 let mergeEnv (xLocals: scope list) (yLocals: scope list): scope list =
     if List.length xLocals <> List.length yLocals then raise (EvalError (Unknown, "Scope lengths should be the same"));
@@ -67,9 +68,9 @@ let mergeEnv (xLocals: scope list) (yLocals: scope list): scope list =
 
 (** Convert value to a simple expression containing that value, so we can
     print it or use it symbolically *)
-let rec to_expr (v: result_or_simplified): AST.expr = 
+let rec to_expr (v: sym): AST.expr = 
     match v with
-    | Result x ->
+    | Val x ->
         (match x with 
         | VBool b -> Expr_LitInt(if b then "1" else "0")
         | VEnum (id, n) -> Expr_LitInt(string_of_int n)
@@ -77,11 +78,11 @@ let rec to_expr (v: result_or_simplified): AST.expr =
         | VReal n -> Expr_LitReal(Q.to_string n)
         | VBits {n; v} -> Expr_LitInt(Z.to_string v)
         | VString s -> Expr_LitString(s)
-        | VTuple vs -> Expr_Tuple(List.map (fun v -> to_expr (Result v)) vs)
+        | VTuple vs -> Expr_Tuple(List.map (fun v -> to_expr (Val v)) vs)
         (* TODO: definitely get rid of this. Should convert every case *)
         | x -> raise (EvalError (Unknown, "Casting unhandled value type to expression"))
         )
-    | Simplified x -> x
+    | Exp x -> x
 
 let is_val (x: AST.expr): bool =
     (match x with 
@@ -95,17 +96,17 @@ let is_val (x: AST.expr): bool =
 (** Converts a result_or_simplified to a value. 
     Raises an exception if an expression is given, as an expression cannot be casted to a value. 
     Requires checking beforehand *)
-let to_value (v: result_or_simplified): value = 
+let to_value (v: sym): value = 
     match v with 
-    | Result v' -> v' 
-    | Simplified _ -> raise (EvalError (Unknown, "Unreachable"))
+    | Val v' -> v' 
+    | Exp _ -> raise (EvalError (Unknown, "Unreachable"))
 
-let is_expr (v: result_or_simplified): bool =
+let is_expr (v: sym): bool =
     match v with
-    | Result _ -> false
-    | Simplified _ -> true
+    | Val _ -> false
+    | Exp _ -> true
 
-let contains_expr (xs: result_or_simplified list): bool =
+let contains_expr (xs: sym list): bool =
     List.exists is_expr xs
 
 (** Dissassemble type *)
@@ -113,40 +114,33 @@ let rec dis_type (loc: l) (env: Env.t) (t: ty): ty writer =
     match t with
     | Type_Bits ex ->
         let* ex' = dis_expr loc env ex in
-        return (Type_Bits (match ex' with | Result v -> to_expr (Result v) | Simplified x -> x))
+        return (Type_Bits (match ex' with | Val v -> to_expr (Val v) | Exp x -> x))
     | Type_OfExpr ex ->
         let* ex' = dis_expr loc env ex in
-        return (Type_OfExpr (match ex' with | Result v -> to_expr (Result v) | Simplified x -> x))
+        return (Type_OfExpr (match ex' with | Val v -> to_expr (Val v) | Exp x -> x))
     | Type_Tuple tys ->
         let** exprs = List.map (dis_type loc env) tys in
         return (Type_Tuple (exprs))
     | t' -> return t'
 
 (** Dissassemble list of expressions *)
-and dis_exprs (loc: l) (env: Env.t) (xs: AST.expr list): result_or_simplified list writer =
+and dis_exprs (loc: l) (env: Env.t) (xs: AST.expr list): sym list writer =
     let** exprs = List.map (dis_expr loc env) xs in return exprs
 
 (** Evaluate bitslice bounds *)
-and dis_slice (loc: l) (env: Env.t) (x: AST.slice): (result_or_simplified * result_or_simplified) writer =
+and dis_slice (loc: l) (env: Env.t) (x: AST.slice): (sym * sym) writer =
     (match x with
     | Slice_Single(i) ->
             let* i' = dis_expr loc env i in
-            return (i', Result (VInt Z.one))
+            return (i', Val (VInt Z.one))
     | Slice_HiLo(hi, lo) ->
             let* hi' = dis_expr loc env hi in
             let* lo' = dis_expr loc env lo in
-            (match hi' with
-            | Result vh -> 
-                (match lo' with
-                | Result vl -> return (Result vl, Result (eval_add_int loc (eval_sub_int loc vh vl) (VInt Z.one)))
-                | Simplified el -> return (Simplified el, Simplified (Expr_Binop(Expr_Binop(to_expr (Result vh), Binop_Minus, el), Binop_Plus, to_expr (Result (VInt Z.one)))))
-                )
-            | Simplified eh -> 
-                (match lo' with
-                | Result vl -> return (Result vl, Simplified (Expr_Binop(Expr_Binop(eh, Binop_Minus, to_expr (Result vl)), Binop_Plus, to_expr (Result (VInt Z.one)))))
-                | Simplified el -> return (Simplified el, Simplified (Expr_Binop(Expr_Binop(eh, Binop_Minus, el), Binop_Plus, to_expr (Result (VInt Z.one)))))
-                )
-            )
+            return (match (lo',hi') with
+            | (Val vl, Val vh) -> (Val vl, Val (eval_add_int loc (eval_sub_int loc vh vl) (VInt Z.one)))
+            | (Val vl, Exp eh) -> (Val vl, Exp (Expr_Binop(Expr_Binop(eh, Binop_Minus, to_expr (Val vl)), Binop_Plus, to_expr (Val (VInt Z.one)))))
+            | (Exp el, Val vh) -> (Exp el, Exp (Expr_Binop(Expr_Binop(to_expr (Val vh), Binop_Minus, el), Binop_Plus, to_expr (Val (VInt Z.one)))))
+            | (Exp el, Exp eh) -> (Exp el, Exp (Expr_Binop(Expr_Binop(eh, Binop_Minus, el), Binop_Plus, to_expr (Val (VInt Z.one))))))
     | Slice_LoWd(lo, wd) ->
             let* lo' = dis_expr loc env lo in
             let* wd' = dis_expr loc env wd in
@@ -154,17 +148,17 @@ and dis_slice (loc: l) (env: Env.t) (x: AST.slice): (result_or_simplified * resu
     )
 
 (** Dissassemble a function call *)
-and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr list): result_or_simplified writer =
+and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym writer =
     if name_of_FIdent f = "and_bool" then begin
         (match (tes, es) with
         | ([], [x; y]) -> 
             let* x' = dis_expr loc env x in
             (match x' with
-            | Result v -> 
-                if to_bool loc v then dis_expr loc env y else return (Result (from_bool false))
-            | Simplified e -> 
+            | Val v -> 
+                if to_bool loc v then dis_expr loc env y else return (Val (from_bool false))
+            | Exp e -> 
                 let* y' = dis_expr loc env y in
-                return (Simplified (Expr_TApply(f, tes, [e; to_expr y'])))
+                return (Exp (Expr_TApply(f, tes, [e; to_expr y'])))
             )
         | _ ->
             raise (EvalError (loc, "malformed and_bool expression"))
@@ -174,11 +168,11 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
         | ([], [x; y]) -> 
             let* x' = dis_expr loc env x in
             (match x' with
-            | Result v -> 
-                if to_bool loc v then return (Result (from_bool true)) else dis_expr loc env y
-            | Simplified e -> 
+            | Val v -> 
+                if to_bool loc v then return (Val (from_bool true)) else dis_expr loc env y
+            | Exp e -> 
                 let* y' = dis_expr loc env y in
-                return (Simplified (Expr_TApply(f, tes, [e; to_expr y'])))
+                return (Exp (Expr_TApply(f, tes, [e; to_expr y'])))
             )
         | _ ->
             raise (EvalError (loc, "malformed or_bool expression"))
@@ -188,11 +182,11 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
         | ([], [x; y]) -> 
             let* x' = dis_expr loc env x in
             (match x' with
-            | Result v -> 
-                if to_bool loc v then dis_expr loc env y else return (Result (from_bool true))
-            | Simplified e -> 
+            | Val v -> 
+                if to_bool loc v then dis_expr loc env y else return (Val (from_bool true))
+            | Exp e -> 
                 let* y' = dis_expr loc env y in
-                return (Simplified (Expr_TApply(f, tes, [e; to_expr y'])))
+                return (Exp (Expr_TApply(f, tes, [e; to_expr y'])))
             )
         | _ ->
             raise (EvalError (loc, "malformed implies_bool expression"))
@@ -209,8 +203,8 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
                 let* e' = dis_expr loc env e in
                 (try (Env.addImplicitValue env arg (Env.getVar loc env arg)) with EvalError _ -> ());
                 (match e' with
-                | Result v -> return (Env.addLocalVar loc env arg v)
-                | Simplified _ -> return ()
+                | Val v -> return (Env.addLocalVar loc env arg v)
+                | Exp _ -> return ()
                 )
             ) 
         ) targs tes)) in
@@ -254,8 +248,8 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
             read (
                 let* ex' = dis_expr loc env ex in 
                 (match ex' with 
-                | Result v -> Env.addLocalVar loc env (Ident (localPrefix ^ pprint_ident arg)) v
-                | Simplified ex'' -> Env.addLocalVar loc env (Ident (localPrefix ^ pprint_ident arg)) VUninitialized
+                | Val v -> Env.addLocalVar loc env (Ident (localPrefix ^ pprint_ident arg)) v
+                | Exp ex'' -> Env.addLocalVar loc env (Ident (localPrefix ^ pprint_ident arg)) VUninitialized
                 );
                 let* ty' = dis_type loc env ty in
                 write (Stmt_VarDecl(ty', Ident (localPrefix ^ (pprint_ident arg)), to_expr ex', loc))
@@ -272,22 +266,22 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
         List.iter (fun (arg, v) -> Env.addLocalVar loc env arg v) (Env.getImplicitLevel env);
 
         (* Return the return symbol to be used in expressions e.g. assignments *)
-        return (Simplified rv)
+        return (Exp rv)
     | None ->
         let* tes' = dis_exprs loc env tes in
         let* es' = dis_exprs loc env es in
         (match eval_prim 
             (name_of_FIdent f) 
-            (List.map (fun v -> match v with | Result v -> v | Simplified _ -> VUninitialized) tes') 
-            (List.map (fun v -> match v with | Result v -> v | Simplified _ -> VUninitialized) es') with
-        | Some VUninitialized -> return (Simplified (Expr_TApply(f, List.map to_expr tes', List.map to_expr es')))
-        | Some v -> return (Result v)
-        | None -> return (Simplified (Expr_TApply(f, List.map to_expr tes', List.map to_expr es')))
+            (List.map (fun v -> match v with | Val v -> v | Exp _ -> VUninitialized) tes') 
+            (List.map (fun v -> match v with | Val v -> v | Exp _ -> VUninitialized) es') with
+        | Some VUninitialized -> return (Exp (Expr_TApply(f, List.map to_expr tes', List.map to_expr es')))
+        | Some v -> return (Val v)
+        | None -> return (Exp (Expr_TApply(f, List.map to_expr tes', List.map to_expr es')))
         )
     )
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
-and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified writer =
+and dis_expr (loc: l) (env: Env.t) (x: AST.expr): sym writer =
     match x with
     | Expr_If(c, t, els, e) ->
         let rec eval_if xs d = match xs with
@@ -296,14 +290,14 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified writer =
             | AST.E_Elsif_Cond (cond, b)::xs' -> 
                 let* cond' = dis_expr loc env cond in
                 match cond' with
-                | Result v ->
+                | Val v ->
                     if to_bool loc v then
                         (* Just print this branch *)
                         dis_expr loc env b
                     else
                         (* Print whatever the rest of the branches turn out to be *)
                         eval_if xs' d
-                | Simplified cond'' -> 
+                | Exp cond'' -> 
                     let tEnv = Env.copy env in
                     let elsEnv = List.map (fun _ -> Env.copy env) (Utils.range 0 (List.length els)) in
                     let eEnv = Env.copy env in
@@ -311,7 +305,7 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified writer =
                     let* els' = dis_if_expr_no_remove loc elsEnv els in
                     let* e' = Env.nest (fun env' -> dis_expr loc env' e) eEnv in
                     Env.setLocals env (List.fold_left mergeEnv (Env.getLocals tEnv) ((Env.getLocals eEnv)::(List.map Env.getLocals elsEnv)));
-                    return (Simplified (Expr_If(
+                    return (Exp (Expr_If(
                         cond'', 
                         to_expr (b'),
                         els',
@@ -325,35 +319,35 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified writer =
     | Expr_Var id ->
         (try 
             (match (Env.getVar loc env (Ident ((Env.getLocalPrefix loc env) ^ pprint_ident id))) with 
-            | VUninitialized -> return (Simplified (Expr_Var(Ident ((Env.getLocalPrefix loc env) ^ pprint_ident id))))
-            | v -> return (Result v))
+            | VUninitialized -> return (Exp (Expr_Var(Ident ((Env.getLocalPrefix loc env) ^ pprint_ident id))))
+            | v -> return (Val v))
         with EvalError _ ->
             (try 
                 (match (Env.getVar loc env id) with 
-                | VUninitialized -> return (Simplified x)
-                | v -> return (Result v))
-            with EvalError _ -> return (Simplified x)))
+                | VUninitialized -> return (Exp x)
+                | v -> return (Val v))
+            with EvalError _ -> return (Exp x)))
     | Expr_In(e, p) ->
         let* e' = dis_expr loc env e in
         (match e' with
-        | Result v -> return (Result (from_bool (eval_pattern loc env v p)))
-        | Simplified _ -> return (Simplified x))
+        | Val v -> return (Val (from_bool (eval_pattern loc env v p)))
+        | Exp _ -> return (Exp x))
     | Expr_Slices(e, ss) ->
         let** transformedSlices = List.map (fun s -> dis_slice loc env s) ss in
         let* e' = dis_expr loc env e in
         (match e' with
-        | Result v ->
-            if List.exists (fun ts -> match ts with (Simplified _, _) -> true | (_, Simplified _) -> true | (_, _) -> false) transformedSlices then
-                return (Simplified (Expr_Slices(to_expr (Result v), List.map (fun (i, w) -> Slice_HiLo(to_expr i, to_expr w)) transformedSlices)))
+        | Val v ->
+            if List.exists (fun ts -> match ts with (Exp _, _) -> true | (_, Exp _) -> true | (_, _) -> false) transformedSlices then
+                return (Exp (Expr_Slices(to_expr (Val v), List.map (fun (i, w) -> Slice_HiLo(to_expr i, to_expr w)) transformedSlices)))
             else
                 let vs = List.map (fun s -> 
                     (match s with
-                    | (Result v1, Result v2) -> extract_bits loc v v1 v2
+                    | (Val v1, Val v2) -> extract_bits loc v v1 v2
                     | _ -> raise (EvalError (loc, "Unreachable: Shouldn't have expression in bit slice\n")))
                     ) transformedSlices in
-                    return (Result (eval_concat loc vs))
-        | Simplified e' -> 
-            return (Simplified (Expr_Slices(e', List.map2 (fun (i, w) s ->
+                    return (Val (eval_concat loc vs))
+        | Exp e' -> 
+            return (Exp (Expr_Slices(e', List.map2 (fun (i, w) s ->
                 (match s with
                 | Slice_Single _ -> Slice_Single(to_expr i)
                 | Slice_HiLo _ -> Slice_LoWd(to_expr i, to_expr w)
@@ -363,19 +357,19 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified writer =
     | Expr_Tuple(es) ->
         let** transformedExprs = List.map (dis_expr loc env) es in
         if contains_expr transformedExprs then
-            return (Simplified (Expr_Tuple(List.map to_expr transformedExprs)))
+            return (Exp (Expr_Tuple(List.map to_expr transformedExprs)))
         else
-            return (Result (VTuple (List.map to_value transformedExprs)))
+            return (Val (VTuple (List.map to_value transformedExprs)))
     | Expr_Array(a, i) ->
         let* a' = dis_expr loc env a in
         let* i' = dis_expr loc env i in
         if is_expr a' || is_expr i' then
-            return (Simplified (Expr_Array(a, to_expr i')))
+            return (Exp (Expr_Array(a, to_expr i')))
         else
             (match (get_array loc (to_value a') (to_value i')) with
-            | VUninitialized -> return (Simplified (Expr_Array(a, to_expr i')))
-            | v -> return (Result v))
-    | x -> try (match eval_expr loc env x with VUninitialized -> return (Simplified x) | v -> return (Result v)) with EvalError (loc, message) -> return (Simplified x)
+            | VUninitialized -> return (Exp (Expr_Array(a, to_expr i')))
+            | v -> return (Val v))
+    | x -> try (match eval_expr loc env x with VUninitialized -> return (Exp x) | v -> return (Val v)) with EvalError (loc, message) -> return (Exp x)
 
 (** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
 and dis_if_expr_no_remove (loc: l) (envs: Env.t list) (xs: e_elsif list): e_elsif list writer = 
@@ -391,7 +385,7 @@ and dis_if_expr_no_remove (loc: l) (envs: Env.t list) (xs: e_elsif list): e_elsi
         ) :: (els'))
     | _ -> raise (EvalError (loc, "Env and e_elsif list must have the same length"))
 
-and dis_lexpr (loc: l) (env: Env.t) (x: AST.lexpr) (r: result_or_simplified): unit writer =
+and dis_lexpr (loc: l) (env: Env.t) (x: AST.lexpr) (r: sym): unit writer =
     match x with
     | LExpr_Write(setter, tes, es) ->
         let** tvs = List.map (dis_expr loc env) tes in
@@ -412,9 +406,9 @@ and dis_lexpr (loc: l) (env: Env.t) (x: AST.lexpr) (r: result_or_simplified): un
             (Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v)))) 
         with EvalError _ -> v in
         (match r with
-        | Result r' -> 
+        | Val r' -> 
             return (Env.setVar loc env v' r')
-        | Simplified e -> 
+        | Exp e -> 
             Env.setVar loc env v' VUninitialized;
             write (Stmt_Assign(LExpr_Var(v'), e, loc)))
     | LExpr_Wildcard -> return ()
@@ -453,8 +447,8 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
         (* Add the variable *)
         let* i' = dis_expr loc env i in
         (match i' with
-        | Result i' -> return (Env.addLocalVar loc env v' i')
-        | Simplified ex ->
+        | Val i' -> return (Env.addLocalVar loc env v' i')
+        | Exp ex ->
             Env.addLocalVar loc env v' VUninitialized;
             let* ty' = dis_type loc env ty in
             write (Stmt_VarDecl(ty', v', ex, loc))
@@ -464,8 +458,8 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
         let v' = try Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v)) with EvalError _ -> v in
         let* i' = dis_expr loc env i in
         (match i' with
-        | Result i' -> return (Env.addLocalConst loc env v' i')
-        | Simplified ex -> 
+        | Val i' -> return (Env.addLocalConst loc env v' i')
+        | Exp ex -> 
             (* Declare constant with uninitialized value and just use symbolically *)
             Env.addLocalConst loc env v' VUninitialized;
             let* ty' = dis_type loc env ty in
@@ -474,7 +468,7 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
     | Stmt_Assign(l, r, loc) ->
         let* r' = dis_expr loc env r in
         (match (l, r') with
-        | (LExpr_Tuple(les), Simplified Expr_Tuple(es)) ->
+        | (LExpr_Tuple(les), Exp Expr_Tuple(es)) ->
             let** _ = List.map2 (fun le e -> dis_stmt env (Stmt_Assign(le, e, loc))) les es in
             return ()
         | _ ->
@@ -486,7 +480,7 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
             | AST.S_Elsif_Cond (cond, b)::xs' ->
                 let* cond' = dis_expr loc env cond in
                 (match cond' with
-                | Result v -> 
+                | Val v -> 
                     if to_bool loc v then
                         (* Just print this branch *)
                         dis_stmts env b
@@ -496,7 +490,7 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
                 (* We have to print out all branches now because we don't know
                    whether or not this one is true. We can still simplify 
                    guards and bodies though *)
-                | Simplified cond'' -> 
+                | Exp cond'' -> 
                     let tEnv = Env.copy env in
                     let elsEnv = List.map (fun _ -> Env.copy env) (Utils.range 0 (List.length els)) in
                     let eEnv = Env.copy env in
@@ -511,7 +505,7 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
     | Stmt_FunReturn(e, loc) ->
         let* e' = dis_expr loc env e in
         (match (e', Env.getReturnSymbol loc env) with
-        | (Simplified (Expr_Tuple(es)), Expr_Tuple(les)) ->
+        | (Exp (Expr_Tuple(es)), Expr_Tuple(les)) ->
             write_multi (List.map2 (fun le e -> 
                 Stmt_Assign((match le with Expr_Var(ident) -> LExpr_Var(ident) | _ -> raise (EvalError (loc, "Unexpected expression type in return symbol"))), e, loc)
             ) les es)
@@ -521,9 +515,9 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
     | Stmt_Assert(e, loc) ->
         let* e' = dis_expr loc env e in
         (match e' with 
-        | Result v -> return (if not (to_bool loc v) then
+        | Val v -> return (if not (to_bool loc v) then
             raise (EvalError (loc, "assertion failure")))
-        | Simplified e'' ->
+        | Exp e'' ->
             write (Stmt_Assert(e'', loc))
         )
     | Stmt_Case(e, alts, odefault, loc) ->
@@ -544,8 +538,8 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
         in
         let* e' = dis_expr loc env e in
         (match e' with
-        | Result v -> eval v alts
-        | Simplified e'' ->
+        | Val v -> eval v alts
+        | Exp e'' ->
             let altEnvs = List.map (fun _ -> Env.copy env) (Utils.range 0 (List.length alts)) in
             let defEnv = Env.copy env in
             let result = write (Stmt_Case(
