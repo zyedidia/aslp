@@ -73,13 +73,13 @@ let rec to_expr (v: result_or_simplified): AST.expr =
         (match x with 
         | VBool b -> Expr_LitInt(if b then "1" else "0")
         | VEnum (id, n) -> Expr_LitInt(string_of_int n)
-        | VInt n -> Expr_LitInt(string_of_int (Z.to_int n))
-        | VReal n -> Expr_LitReal(string_of_float (Q.to_float n))
-        | VBits {n; v} -> Expr_LitInt(string_of_int (Z.to_int v))
+        | VInt n -> Expr_LitInt(Z.to_string n)
+        | VReal n -> Expr_LitReal(Q.to_string n)
+        | VBits {n; v} -> Expr_LitInt(Z.to_string v)
         | VString s -> Expr_LitString(s)
         | VTuple vs -> Expr_Tuple(List.map (fun v -> to_expr (Result v)) vs)
         (* TODO: definitely get rid of this. Should convert every case *)
-        | x -> Printf.printf "WARNING: converting unknown structure to 0\n"; Expr_LitInt("0")
+        | x -> raise (EvalError (Unknown, "Casting unhandled value type to expression"))
         )
     | Simplified x -> x
 

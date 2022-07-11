@@ -59,12 +59,12 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
     | [":compare"; iset; file] -> 
         let initializedEnv = Eval.Env.copy cpu.env in
         Random.self_init ();
-        Eval.Env.initialize initializedEnv (List.map (fun _ -> Random.int (65536)) (Utils.range 0 64));
+        Eval.Env.initialize initializedEnv (List.map (fun _ -> Z.of_int64 (Random.int64 Int64.max_int)) (Utils.range 0 64));
         let decoder = Eval.Env.getDecoder initializedEnv (Ident iset) in
 
         (* Set up our environments *)
         let evalEnv = Eval.Env.copy initializedEnv in 
-        let disEnv = Eval.Env.copy initializedEnv in
+        let disEnv = Eval.Env.copy cpu.env in
         let disEvalEnv = Eval.Env.copy initializedEnv in
         
         let inchan = open_in file in

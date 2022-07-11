@@ -147,7 +147,7 @@ module Env : sig
     val getGlobals          : t -> scope
     val removeGlobals       : t -> unit
 
-    val initialize          : t -> int list -> unit
+    val initialize          : t -> bigint list -> unit
 
 end = struct
     type t = {
@@ -459,7 +459,7 @@ end = struct
     let removeGlobals (env: t): unit =
         env.globals <- empty_scope ()
 
-    let initialize (env: t) (xs: int list): unit =
+    let initialize (env: t) (xs: bigint list): unit =
         let setPVar = (fun f -> 
             setVar 
                 Unknown 
@@ -476,7 +476,7 @@ end = struct
             env 
             (Ident "_R") 
             (VArray (List.fold_left2 (fun arr n v -> 
-                ImmutableArray.add n (VBits { n = 64; v = (Z.of_int v)}) arr
+                ImmutableArray.add n (VBits { n = 64; v}) arr
             ) ImmutableArray.empty (Utils.range 0 (List.length xs)) xs, VUninitialized))
 
 end
