@@ -1,0 +1,22 @@
+name: Test partial eval
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+      - uses: actions/checkout@v3
+      
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v1.1.11
+        with:
+          ocaml-version: 4.09.0
+
+      - name: Do the test!
+        run: |
+          opam install . --deps-only --with-test
+          opam exec -- dune build
+          opam exec -- dune runtest
