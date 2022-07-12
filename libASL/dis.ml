@@ -15,11 +15,9 @@ open AST
 open Asl_utils
 open Value
 open Eval
+
 open Symbolic
 
-type sym =
-    | Val of value
-    | Exp of AST.expr
 
 type 'a writer = 'a * stmt list
 
@@ -47,6 +45,72 @@ let pp_result_or_simplified (rs: sym): string =
     match rs with
     | Val v -> pp_value v
     | Exp e -> pp_expr e
+
+
+module LocalEnv = struct
+    type t = {
+        locals          : value Bindings.t list;
+        returnSymbols   : AST.expr list;
+        numSymbols      : int;
+        localPrefixes   : string list;
+        implicitLevels  : (ident * value) list list
+    }
+
+    let empty () =
+        {
+            locals = [];
+            returnSymbols = [];
+            numSymbols = 0;
+            localPrefixes = [];
+            implicitLevels = [];
+        }
+
+    let fromEvalEnv (env: Env.t): t =
+        { (empty ()) with locals = Env.readLocals env }
+
+    let addLocalVar (loc: l) (k: ident) (v: value) (env: t): t =
+        if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident k) (pp_value v);
+        match env.locals with
+        | (bs :: rest) -> {env with locals = (Bindings.add k v bs :: rest)}
+        | []        -> raise (EvalError (loc, "LocalEnv::addLocalVar"))
+
+    let addReturnSymbol (e: AST.expr) (env: t): t =
+        {env with returnSymbols = e :: env.returnSymbols}
+
+    let removeReturnSymbol (env: t): t =
+        match env.returnSymbols with
+        | [] -> env
+        | (s::ss) -> {env with returnSymbols = ss} 
+
+    let addLocalPrefix (s: string) (env: t): t =
+        {env with localPrefixes = s :: env.localPrefixes}
+
+    let removeLocalPrefix (env: t): t =
+        (match env.localPrefixes with
+        | [] -> env
+        | (s::ss) -> {env with localPrefixes = ss}
+        )
+
+    let addImplicitValue (arg: ident) (v: value) (env: t): t =
+        match env.implicitLevels with
+        | [] -> raise (EvalError (Unknown, "No levels exist"))
+        | (level::levels) -> 
+            {env with implicitLevels = ((arg, v)::level)::levels}
+
+    let addImplicitLevel (env: t): t =
+        {env with implicitLevels = []::env.implicitLevels}
+end
+
+module DisEnv = Rws.Make(struct
+    type r = Env.t
+    type w = stmt list
+    type s = LocalEnv.t
+    let mempty = []
+    let mappend = (@)
+end)
+
+
+let a = DisEnv.read Env.empty (LocalEnv.empty ());;
 
 let mergeEnv (xLocals: scope list) (yLocals: scope list): scope list =
     if List.length xLocals <> List.length yLocals then raise (EvalError (Unknown, "Scope lengths should be the same"));
@@ -136,11 +200,7 @@ and dis_slice (loc: l) (env: Env.t) (x: AST.slice): (sym * sym) writer =
     | Slice_HiLo(hi, lo) ->
             let* hi' = dis_expr loc env hi in
             let* lo' = dis_expr loc env lo in
-            return (match (lo',hi') with
-            | (Val vl, Val vh) -> (Val vl, Val (eval_add_int loc (eval_sub_int loc vh vl) (VInt Z.one)))
-            | (Val vl, Exp eh) -> (Val vl, Exp (Expr_Binop(Expr_Binop(eh, Binop_Minus, to_expr (Val vl)), Binop_Plus, to_expr (Val (VInt Z.one)))))
-            | (Exp el, Val vh) -> (Exp el, Exp (Expr_Binop(Expr_Binop(to_expr (Val vh), Binop_Minus, el), Binop_Plus, to_expr (Val (VInt Z.one)))))
-            | (Exp el, Exp eh) -> (Exp el, Exp (Expr_Binop(Expr_Binop(eh, Binop_Minus, el), Binop_Plus, to_expr (Val (VInt Z.one))))))
+            return (lo', sym_add_int loc (sym_sub_int loc hi' lo') (Val (VInt Z.one)))
     | Slice_LoWd(lo, wd) ->
             let* lo' = dis_expr loc env lo in
             let* wd' = dis_expr loc env wd in
@@ -593,6 +653,7 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     let stmts = read (dis_stmts env exec) in
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts; *)
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
+                    (* Some stmts *)
                     Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts))));
                 end else begin
                     None
@@ -608,19 +669,19 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
       None
 
 and remove_unused (xs: stmt list): stmt list =
-    match List.fold_right (fun stmt (acc, idents) ->
+     fst @@ List.fold_right (fun stmt (acc, idents) ->
         let newIdents = IdentSet.union idents (fv_stmt stmt) in
         match stmt with
         | Stmt_VarDeclsNoInit(ty, vs, loc) -> 
             (match List.filter (fun ident -> IdentSet.mem ident idents) vs with
             | [] -> (acc, idents)
-            | xs -> (Stmt_VarDeclsNoInit(ty, xs, loc) :: acc, idents)
+            | xs -> (stmt :: acc, idents)
             )
         | Stmt_VarDecl(ty, v, i, loc) -> if IdentSet.mem v idents then (stmt :: acc, newIdents) else (acc, idents)
         | Stmt_ConstDecl(ty, v, i, loc) -> if IdentSet.mem v idents then (stmt :: acc, newIdents) else (acc, idents)
         | Stmt_Assign(LExpr_Var(v), r, loc) -> if IdentSet.mem v idents then (stmt :: acc, newIdents) else (acc, idents)
         | x -> (x :: acc, newIdents)
-    ) xs ([], IdentSet.empty) with (acc, idents) -> acc
+    ) xs ([], IdentSet.empty)
 
 and constant_propagation (xs: stmt list): stmt list =
     match List.fold_left (fun (acc, bs) stmt -> 

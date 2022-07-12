@@ -81,8 +81,7 @@ let set_scope (k: ident) (v: value) (s: scope): unit =
 (** {2 Mutable bindings}                                        *)
 (****************************************************************)
 
-(** Environment representing both global and local state of the system *)
-module Env : sig
+module type ImmEnv_type = sig
     type t
     val empty               : t
     val nestTop             : (t -> 'a) -> (t -> 'a)
@@ -91,64 +90,85 @@ module Env : sig
     val compare             : t -> t -> bool
     val compareLocals       : t -> t -> bool
 
+
+    val getGlobalConst      : t -> ident -> value
+
+    val getEnum             : t -> ident -> (value list) option
+    val isEnumEq            : t -> ident -> bool
+    val isEnumNeq           : t -> ident -> bool
+
+    val getRecord           : t -> ident -> (AST.ty * ident) list option
+
+    val getTypedef          : t -> ident -> AST.ty option
+
+    val getVar              : AST.l -> t -> ident -> value
+
+    val getFun              : AST.l -> t -> ident -> (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list)
+
+    val getInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list)
+
+    val getDecoder          : t -> ident -> decode_case
+
+    val getImpdef           : AST.l -> t -> string -> value
+
+    val getReturnSymbol     : AST.l -> t -> AST.expr
+
+    val getNumSymbols       : t -> int
+
+    val getLocalPrefix      : AST.l -> t -> string
+
+    val getImplicitLevel    : t -> (ident * value) list
+    
+    val readLocals          : t -> value Bindings.t list
+    val readGlobals         : t -> value Bindings.t
+end
+
+(** Environment representing both global and local state of the system *)
+module Env : sig
+    include ImmEnv_type
+
     val addLocalVar         : AST.l -> t -> ident -> value -> unit
     val addLocalConst       : AST.l -> t -> ident -> value -> unit
 
     val addGlobalConst      : t -> ident -> value -> unit
-    val getGlobalConst      : t -> ident -> value
 
     (* to support generation of unknown values, we need to remember the structure
      * of user-defined types such as enumerations and records
      *)
     val addEnum             : t -> ident -> value list -> unit
-    val getEnum             : t -> ident -> (value list) option
-    val isEnumEq            : t -> ident -> bool
-    val isEnumNeq           : t -> ident -> bool
 
     val addRecord           : t -> ident -> (AST.ty * ident) list -> unit
-    val getRecord           : t -> ident -> (AST.ty * ident) list option
 
     val addTypedef          : t -> ident -> AST.ty -> unit
-    val getTypedef          : t -> ident -> AST.ty option
 
     val addGlobalVar        : t -> ident -> value -> unit
-    val getVar              : AST.l -> t -> ident -> value
     val setVar              : AST.l -> t -> ident -> value -> unit
 
-    val getFun              : AST.l -> t -> ident -> (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list)
     val addFun              : AST.l -> t -> ident -> (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) -> unit
 
-    val getInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list)
     val addInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list) -> unit
 
-    val getDecoder          : t -> ident -> decode_case
     val addDecoder          : t -> ident -> decode_case -> unit
 
     val setImpdef           : t -> string -> value -> unit
-    val getImpdef           : AST.l -> t -> string -> value
 
-    val getReturnSymbol     : AST.l -> t -> AST.expr
     val addReturnSymbol     : t -> AST.expr -> unit
     val removeReturnSymbol  : t -> unit
-
-    val getNumSymbols       : t -> int
-
-    val getLocalPrefix      : AST.l -> t -> string
+    
     val addLocalPrefix      : t -> string -> unit
     val removeLocalPrefix   : t -> unit
 
     val addImplicitValue    : t -> ident -> value -> unit
     val addImplicitLevel    : t -> unit
-    val getImplicitLevel    : t -> (ident * value) list
     
-    val setLocals           : t -> scope list -> unit
+    (* these are considered mutating operations because "scope" is mutable. *)
     val getLocals           : t -> scope list
+    val setLocals           : t -> scope list -> unit
 
     val getGlobals          : t -> scope
     val removeGlobals       : t -> unit
 
     val initialize          : t -> bigint list -> unit
-
 end = struct
     type t = {
         mutable instructions : (encoding * (stmt list) option * bool * stmt list) Bindings.t;
@@ -459,6 +479,12 @@ end = struct
     let removeGlobals (env: t): unit =
         env.globals <- empty_scope ()
 
+    let readLocals (env: t): value Bindings.t list =
+        List.map (fun x -> x.bs) env.locals
+
+    let readGlobals (env: t): value Bindings.t =
+        env.globals.bs
+
     let initialize (env: t) (xs: bigint list): unit =
         let setPVar = (fun f -> 
             setVar 
@@ -480,6 +506,7 @@ end = struct
             ) ImmutableArray.empty (Utils.range 0 (List.length xs)) xs, VUninitialized))
 
 end
+
 
 let isGlobalConst (env: Env.t) (id: AST.ident): bool =
     match Env.getGlobalConst env id with
