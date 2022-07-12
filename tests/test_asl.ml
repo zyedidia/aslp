@@ -10,7 +10,22 @@ open LibASL
 module TC  = Tcheck
 module AST = Asl_ast
 
-let mra_tools () = ["../../../../mra_tools/arch/regs.asl"; "../../../../mra_tools/types.asl"; "../../../../mra_tools/arch/arch.asl"; "../../../../mra_tools/arch/arch_instrs.asl"; "../../../../mra_tools/arch/arch_decode.asl"; "../../../../mra_tools/support/aes.asl"; "../../../../mra_tools/support/barriers.asl"; "../../../../mra_tools/support/debug.asl"; "../../../../mra_tools/support/feature.asl"; "../../../../mra_tools/support/hints.asl"; "../../../../mra_tools/support/interrupts.asl"; "../../../../mra_tools/support/memory.asl"; "../../../../mra_tools/support/stubs.asl"; "../../../../mra_tools/support/fetchdecode.asl"]
+let mra_tools () = [
+    "../../../mra_tools/arch/regs.asl"; 
+    "../../../mra_tools/types.asl"; 
+    "../../../mra_tools/arch/arch.asl"; 
+    "../../../mra_tools/arch/arch_instrs.asl"; 
+    "../../../mra_tools/arch/arch_decode.asl"; 
+    "../../../mra_tools/support/aes.asl"; 
+    "../../../mra_tools/support/barriers.asl"; 
+    "../../../mra_tools/support/debug.asl"; 
+    "../../../mra_tools/support/feature.asl"; 
+    "../../../mra_tools/support/hints.asl"; 
+    "../../../mra_tools/support/interrupts.asl"; 
+    "../../../mra_tools/support/memory.asl"; 
+    "../../../mra_tools/support/stubs.asl"; 
+    "../../../mra_tools/support/fetchdecode.asl"
+]
 
 let format_value f v = Format.fprintf f "%s" (Value.pp_value v)
 let format_bool f v = Format.fprintf f "%s" (Bool.to_string v)
@@ -40,7 +55,7 @@ let test_compare env () : unit =
     let disEnv = Eval.Env.copy env in
     let disEvalEnv = Eval.Env.copy initializedEnv in
     
-    let inchan = open_in "../../../comp/comp.txt" in
+    let inchan = open_in "../../../tests/instructions.txt" in
     (try
         while true do
             let opcode = input_line inchan in
@@ -63,7 +78,6 @@ let test_compare env () : unit =
 
 let tests : unit Alcotest.test_case list =
     let prelude = LoadASL.read_file "../../../prelude.asl" true false in
-    (* TODO upload the tools to github to get the paths to work. Also the test file *)
     let mra = List.map (fun tool -> LoadASL.read_file tool false false) (mra_tools ()) in
     let tcenv   = TC.Env.mkEnv TC.env0 in
     let env     = Eval.build_evaluation_environment (List.concat (prelude::mra)) in
