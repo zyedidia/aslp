@@ -6,15 +6,19 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: ocaml/opam:ubuntu-ocaml-4.09
     steps:
       - name: Checkout code
-        uses: actions/checkout@partial_eval
+        uses: actions/checkout@v3
+
+      - name: Use OCaml
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: 4.09.0
 
       - name: Do the test!
         run: |
-          sudo apt-get install gmp mpir
-          opam install menhir ocamlfind ott linenoise pprint z3.4.7.1
+          opam install . --deps-only --with-test
           eval `opam config env`
           export LD_LIBRARY_PATH=`opam config var z3:lib`
-          dune test
+          dune build
+          dune runtest
