@@ -1,6 +1,9 @@
 name: Test partial eval
 
 on:
+  push:
+    branches:
+      - partial_eval 
   workflow_dispatch:
 
 jobs:

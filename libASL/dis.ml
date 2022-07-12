@@ -591,14 +591,8 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                         (*List.iter (eval_stmt env) post*)
                     | None -> ()
                     );
-                    (* todo: should evaluate ConditionHolds to decide whether to execute body *)
-                    Printf.printf "Dissasm: %s\n" (pprint_ident inst);
-                    (* Uncomment this if you want to see output with no evaluation *)
-                    (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) exec; *)
                     (* Env.removeGlobals env; *)
                     let stmts = read (dis_stmts env exec) in
-                    (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts; *)
-                    (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
                     Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts))));
                 end else begin
                     None
