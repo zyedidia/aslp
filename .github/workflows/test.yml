@@ -18,10 +18,16 @@ jobs:
         with:
           ocaml-compiler: 4.09.0
 
-      - name: Do the test!
+      - name: Opam install
+        run: opam install . --deps-only --with-test
+
+      - name: Environment setup
         run: |
-          opam install . --deps-only --with-test
           eval `opam config env`
           export LD_LIBRARY_PATH=`opam config var z3:lib`
-          dune build
-          dune runtest
+
+      - name: Build
+        run: dune build
+
+      - name: Test
+        run: dune runtest
