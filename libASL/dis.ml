@@ -58,7 +58,7 @@ module LocalEnv = struct
 
     let empty () =
         {
-            locals = [];
+            locals = [Bindings.empty];
             returnSymbols = [];
             numSymbols = 0;
             localPrefixes = [];
@@ -66,13 +66,18 @@ module LocalEnv = struct
         }
 
     let fromEvalEnv (env: Env.t): t =
-        { (empty ()) with locals = Env.readLocals env }
+        { (empty ()) with locals = Bindings.empty :: Env.readLocals env }
 
     let addLocalVar (loc: l) (k: ident) (v: value) (env: t): t =
         if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident k) (pp_value v);
         match env.locals with
         | (bs :: rest) -> {env with locals = (Bindings.add k v bs :: rest)}
         | []        -> raise (EvalError (loc, "LocalEnv::addLocalVar"))
+
+    let getReturnSymbol (loc: l) (env: t): AST.expr =
+        match env.returnSymbols with
+        | [] -> raise (EvalError (loc, "Return not in function"))
+        | (e :: rs) -> e
 
     let addReturnSymbol (e: AST.expr) (env: t): t =
         {env with returnSymbols = e :: env.returnSymbols}
@@ -81,6 +86,12 @@ module LocalEnv = struct
         match env.returnSymbols with
         | [] -> env
         | (s::ss) -> {env with returnSymbols = ss} 
+
+    let getNumSymbols (env: t): int =
+        env.numSymbols
+
+    let incNumSymbols (env: t): t =
+        {env with numSymbols = env.numSymbols + 1}
 
     let addLocalPrefix (s: string) (env: t): t =
         {env with localPrefixes = s :: env.localPrefixes}
@@ -99,18 +110,53 @@ module LocalEnv = struct
 
     let addImplicitLevel (env: t): t =
         {env with implicitLevels = []::env.implicitLevels}
+
+    let popImplicitLevel (env: t): (ident * value) list * t =
+        match env.implicitLevels with
+        | [] -> raise (EvalError (Unknown, "No levels exist"))
+        | (level::levels) -> (level, {env with implicitLevels = levels})
+
+    let rec search (x: ident) (bss : value Bindings.t list): value Bindings.t option =
+        match bss with
+        | (bs :: bss') ->
+            if Bindings.mem x bs then Some bs else search x bss'
+        | [] -> None
 end
 
-module DisEnv = Rws.Make(struct
-    type r = Env.t
-    type w = stmt list
-    type s = LocalEnv.t
-    let mempty = []
-    let mappend = (@)
-end)
+module DisEnv = struct
+    include Rws.Make(struct
+        type r = Env.t
+        type w = stmt list
+        type s = LocalEnv.t
+        let mempty = []
+        let mappend = (@)
+    end)
+
+    let incNumSymbols: int rws =
+        modify LocalEnv.incNumSymbols 
+        >>= fun _ -> gets LocalEnv.getNumSymbols
 
 
-let a = DisEnv.read Env.empty (LocalEnv.empty ());;
+    let getVar (loc: l) (x: ident): value rws = 
+        fun env lenv -> 
+        let v = match (LocalEnv.search x lenv.locals) with
+            | Some b -> Bindings.find x b
+            | None -> Env.getVar loc env x
+        in (v, lenv, mempty)
+
+    let getFun (loc: l) (x: ident): (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) option rws =
+        reads (fun env ->
+            try Some (Env.getFun loc env x)
+            with EvalError _ -> None)
+end
+
+type 'a rws = 'a DisEnv.rws
+
+let (let@) = DisEnv.Let.(let*)
+let (and@) = DisEnv.Let.(and*)
+let (let+) = DisEnv.Let.(let+)
+let (and+) = DisEnv.Let.(and+)
+
 
 let mergeEnv (xLocals: scope list) (yLocals: scope list): scope list =
     if List.length xLocals <> List.length yLocals then raise (EvalError (Unknown, "Scope lengths should be the same"));
@@ -173,52 +219,55 @@ let is_expr (v: sym): bool =
 let contains_expr (xs: sym list): bool =
     List.exists is_expr xs
 
+let dis_expr' (loc: l) (ex: expr): sym rws = assert false
+
 (** Dissassemble type *)
-let rec dis_type (loc: l) (env: Env.t) (t: ty): ty writer =
+let rec dis_type (loc: l) (t: ty): ty rws =
     match t with
     | Type_Bits ex ->
-        let* ex' = dis_expr loc env ex in
-        return (Type_Bits (match ex' with | Val v -> to_expr (Val v) | Exp x -> x))
+        let+ ex' = dis_expr' loc ex in
+        (Type_Bits (sym_expr ex'))
     | Type_OfExpr ex ->
-        let* ex' = dis_expr loc env ex in
-        return (Type_OfExpr (match ex' with | Val v -> to_expr (Val v) | Exp x -> x))
+        let+ ex' = dis_expr' loc ex in
+        (Type_OfExpr (sym_expr ex'))
     | Type_Tuple tys ->
-        let** exprs = List.map (dis_type loc env) tys in
-        return (Type_Tuple (exprs))
-    | t' -> return t'
+        let+ exprs = DisEnv.traverse (dis_type loc) tys in
+        (Type_Tuple exprs)
+    | t' -> DisEnv.pure t'
 
 (** Dissassemble list of expressions *)
-and dis_exprs (loc: l) (env: Env.t) (xs: AST.expr list): sym list writer =
-    let** exprs = List.map (dis_expr loc env) xs in return exprs
+and dis_exprs (loc: l) (xs: AST.expr list): sym list rws =
+    assert false;
+    (* DisEnv.traverse (dis_expr loc) xs *)
 
 (** Evaluate bitslice bounds *)
-and dis_slice (loc: l) (env: Env.t) (x: AST.slice): (sym * sym) writer =
+and dis_slice (loc: l) (x: AST.slice): (sym * sym) rws =
     (match x with
     | Slice_Single(i) ->
-            let* i' = dis_expr loc env i in
-            return (i', Val (VInt Z.one))
+            let+ i' = dis_expr' loc i in
+            (i', Val (VInt Z.one))
     | Slice_HiLo(hi, lo) ->
-            let* hi' = dis_expr loc env hi in
-            let* lo' = dis_expr loc env lo in
-            return (lo', sym_add_int loc (sym_sub_int loc hi' lo') (Val (VInt Z.one)))
+            let+ hi' = dis_expr' loc hi
+            and+ lo' = dis_expr' loc lo in
+            (lo', sym_add_int loc (sym_sub_int loc hi' lo') (Val (VInt Z.one)))
     | Slice_LoWd(lo, wd) ->
-            let* lo' = dis_expr loc env lo in
-            let* wd' = dis_expr loc env wd in
-            return (lo', wd')
+            let+ lo' = dis_expr' loc lo
+            and+ wd' = dis_expr' loc wd in
+            (lo', wd')
     )
 
 (** Dissassemble a function call *)
-and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym writer =
+and dis_fun (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym rws =
     if name_of_FIdent f = "and_bool" then begin
         (match (tes, es) with
         | ([], [x; y]) -> 
-            let* x' = dis_expr loc env x in
+            let@ x' = dis_expr' loc x in
             (match x' with
             | Val v -> 
-                if to_bool loc v then dis_expr loc env y else return (Val (from_bool false))
+                if to_bool loc v then dis_expr' loc y else DisEnv.pure sym_false
             | Exp e -> 
-                let* y' = dis_expr loc env y in
-                return (Exp (Expr_TApply(f, tes, [e; to_expr y'])))
+                let+ y' = dis_expr' loc y in
+                (Exp (Expr_TApply(f, tes, [e; to_expr y'])))
             )
         | _ ->
             raise (EvalError (loc, "malformed and_bool expression"))
@@ -226,13 +275,13 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
     end else if name_of_FIdent f = "or_bool" then begin
         (match (tes, es) with
         | ([], [x; y]) -> 
-            let* x' = dis_expr loc env x in
+            let@ x' = dis_expr' loc x in
             (match x' with
             | Val v -> 
-                if to_bool loc v then return (Val (from_bool true)) else dis_expr loc env y
+                if to_bool loc v then DisEnv.pure sym_true else dis_expr' loc y
             | Exp e -> 
-                let* y' = dis_expr loc env y in
-                return (Exp (Expr_TApply(f, tes, [e; to_expr y'])))
+                let+ y' = dis_expr' loc y in
+                (Exp (Expr_TApply(f, tes, [e; to_expr y'])))
             )
         | _ ->
             raise (EvalError (loc, "malformed or_bool expression"))
@@ -240,105 +289,122 @@ and dis_fun (loc: l) (env: Env.t) (f: ident) (tes: AST.expr list) (es: AST.expr 
     end else if name_of_FIdent f = "implies_bool" then begin
         (match (tes, es) with
         | ([], [x; y]) -> 
-            let* x' = dis_expr loc env x in
+            let@ x' = dis_expr' loc x in
             (match x' with
             | Val v -> 
-                if to_bool loc v then dis_expr loc env y else return (Val (from_bool true))
+                if to_bool loc v then dis_expr' loc y else DisEnv.pure sym_true
             | Exp e -> 
-                let* y' = dis_expr loc env y in
-                return (Exp (Expr_TApply(f, tes, [e; to_expr y'])))
+                let+ y' = dis_expr' loc y in
+                (Exp (Expr_TApply(f, tes, [e; to_expr y'])))
             )
         | _ ->
             raise (EvalError (loc, "malformed implies_bool expression"))
         )
-    end else (match (try (Some (Env.getFun loc env f)) with EvalError _ -> None) with
-    | Some (rty, atys, targs, args, loc, b) ->
+    end else 
+        let@ fn = DisEnv.getFun loc f in
+        (match fn with
+        | Some (rty, atys, targs, args, loc, b) ->
 
-        (* Add return type variables *)
-        (* For each of these, if one already exists, add it to a stack to be restored after *)
-        Env.addImplicitLevel env;
-        let* _ =
-        write_multi (List.concat (List.map2 (fun arg e -> 
-            read (
-                let* e' = dis_expr loc env e in
-                (try (Env.addImplicitValue env arg (Env.getVar loc env arg)) with EvalError _ -> ());
-                (match e' with
-                | Val v -> return (Env.addLocalVar loc env arg v)
-                | Exp _ -> return ()
-                )
-            ) 
-        ) targs tes)) in
+            (* Add return type variables *)
+            (* For each of these, if one already exists, add it to a stack to be restored after *)
+            let@ () = DisEnv.modify LocalEnv.addImplicitLevel in
+            let@ () = DisEnv.sequence_ @@ List.map2 (fun arg e -> 
+                let@ v' = DisEnv.getVar loc arg in
+                let@ () = DisEnv.modify (LocalEnv.addImplicitValue arg v') in
 
-        (* Add return variable declarations *)
-        let fName = name_of_FIdent f in
-        let* _ = (match rty with 
-            | Some t -> 
-                (match t with
-                | Type_Tuple(ts) -> 
-                    let** ts' = List.map (dis_type loc env) ts in
-                    let varNames = List.map (fun _ -> Ident (fName ^ "Var" ^ string_of_int (Env.getNumSymbols env))) ts in
-                    Env.addReturnSymbol env (Expr_Tuple(List.map (fun n -> Expr_Var n) varNames));
-                    let** _ = (List.map2 (fun t' name ->
-                        write (Stmt_VarDeclsNoInit(
+                let@ e' = dis_expr' loc e in
+                match e' with
+                | Val v -> DisEnv.modify (LocalEnv.addLocalVar loc arg v)
+                | Exp _ -> DisEnv.unit
+            ) targs tes in
+            (* let _ =
+            write_multi (List.concat (List.map2 (fun arg e -> 
+                read (
+                    let* e' = dis_expr loc env e in
+                    (try (Env.addImplicitValue env arg (Env.getVar loc env arg)) with EvalError _ -> ());
+                    (match e' with
+                    | Val v -> return (Env.addLocalVar loc env arg v)
+                    | Exp _ -> return ()
+                    )
+                ) 
+            ) targs tes)) in *)
+
+            (* Add return variable declarations *)
+            let fName = name_of_FIdent f in
+            let@ rv = (match rty with 
+                | Some (Type_Tuple ts) -> 
+                    let@ num = DisEnv.incNumSymbols in
+                    let varNames = List.map (fun _ -> Ident (fName ^ "Var" ^ string_of_int num)) ts in
+                    let symbol = (Expr_Tuple(List.map (fun n -> Expr_Var n) varNames)) in
+                    let@ () = DisEnv.modify (LocalEnv.addReturnSymbol symbol) in
+
+                    let@ ts' = DisEnv.traverse (dis_type loc) ts in
+                    let+ () = DisEnv.write (List.map2 (fun t' name ->
+                        (Stmt_VarDeclsNoInit(
                             t',
                             [name], 
                             Unknown
                         ))
-                    ) ts' varNames) in return ()
-                | _ -> 
-                    let* t' = dis_type loc env t in
-                    let varName = Ident (fName ^ "Var" ^ string_of_int (Env.getNumSymbols env)) in
-                    Env.addReturnSymbol env (Expr_Var(varName));
-                    write (Stmt_VarDeclsNoInit(
+                    ) ts' varNames) in
+                    symbol
+                | Some t -> 
+                    let@ num = DisEnv.incNumSymbols in
+                    let varName = Ident (fName ^ "Var" ^ string_of_int num) in
+                    let symbol = (Expr_Var(varName)) in
+                    let@ () = DisEnv.modify (LocalEnv.addReturnSymbol symbol) in
+
+                    let@ t' = dis_type loc t in
+                    let+ () = DisEnv.write [Stmt_VarDeclsNoInit(
                         t',
                         [varName], 
                         Unknown
-                    ))
-                )
-            | None -> raise (EvalError (loc, "Unexpected function return type"))
-        ) in
+                    )] in
+                    symbol
+                | None -> raise (EvalError (loc, "Unexpected function return type")))
+            in
 
-        (* Get the return symbol we just made so we can return it later *)
-        let rv = Env.getReturnSymbol loc env in
+            (* Get the return symbol we just made so we can return it later *)
+            (* let@ rv = DisEnv.gets (LocalEnv.getReturnSymbol loc) in *)
 
-        (* Add local parameters, avoiding name collisions *)
-        (* Also print what the parameter refers to *)
-        let localPrefix = fName ^ string_of_int (Env.getNumSymbols env) in
-        let* _ = write_multi (List.concat (Utils.map3 (fun (ty, _) arg ex -> 
-            read (
-                let* ex' = dis_expr loc env ex in 
-                (match ex' with 
-                | Val v -> Env.addLocalVar loc env (Ident (localPrefix ^ pprint_ident arg)) v
-                | Exp ex'' -> Env.addLocalVar loc env (Ident (localPrefix ^ pprint_ident arg)) VUninitialized
-                );
-                let* ty' = dis_type loc env ty in
-                write (Stmt_VarDecl(ty', Ident (localPrefix ^ (pprint_ident arg)), to_expr ex', loc))
+            (* Add local parameters, avoiding name collisions *)
+            (* Also print what the parameter refers to *)
+            let@ num = DisEnv.incNumSymbols in
+            let localPrefix = fName ^ string_of_int num in
+            let@ () = DisEnv.sequence_ (Utils.map3 (fun (ty, _) arg ex -> 
+                let@ ex' = dis_expr' loc ex in 
+                let v = match ex' with 
+                | Val v -> v
+                | Exp _ -> VUninitialized in
+                let name = (Ident (localPrefix ^ pprint_ident arg)) in
+                let@ () = DisEnv.modify (LocalEnv.addLocalVar loc  name v) in
+                let@ ty' = dis_type loc ty in
+                DisEnv.write [Stmt_VarDecl(ty', Ident (localPrefix ^ (pprint_ident arg)), to_expr ex', loc)]
+                
+            ) atys args es) in
+
+            (* print out the body *)
+            let@ () = DisEnv.modify (LocalEnv.addLocalPrefix localPrefix) in
+            let@ () = dis_stmts env b in
+            let@ () = DisEnv.modify (LocalEnv.removeReturnSymbol)
+            and@ () = DisEnv.modify (LocalEnv.removeLocalPrefix) in
+
+            (* Restore implicit values *)
+            List.iter (fun (arg, v) -> Env.addLocalVar loc env arg v) (Env.getImplicitLevel env);
+
+            (* Return the return symbol to be used in expressions e.g. assignments *)
+            return (Exp rv)
+        | None ->
+            let* tes' = dis_exprs loc env tes in
+            let* es' = dis_exprs loc env es in
+            (match eval_prim 
+                (name_of_FIdent f) 
+                (List.map (fun v -> match v with | Val v -> v | Exp _ -> VUninitialized) tes') 
+                (List.map (fun v -> match v with | Val v -> v | Exp _ -> VUninitialized) es') with
+            | Some VUninitialized -> return (Exp (Expr_TApply(f, List.map to_expr tes', List.map to_expr es')))
+            | Some v -> return (Val v)
+            | None -> return (Exp (Expr_TApply(f, List.map to_expr tes', List.map to_expr es')))
             )
-        ) atys args es)) in
-
-        (* print out the body *)
-        Env.addLocalPrefix env localPrefix;
-        let* _ = dis_stmts env b in
-        Env.removeReturnSymbol env;
-        Env.removeLocalPrefix env;
-
-        (* Restore implicit values *)
-        List.iter (fun (arg, v) -> Env.addLocalVar loc env arg v) (Env.getImplicitLevel env);
-
-        (* Return the return symbol to be used in expressions e.g. assignments *)
-        return (Exp rv)
-    | None ->
-        let* tes' = dis_exprs loc env tes in
-        let* es' = dis_exprs loc env es in
-        (match eval_prim 
-            (name_of_FIdent f) 
-            (List.map (fun v -> match v with | Val v -> v | Exp _ -> VUninitialized) tes') 
-            (List.map (fun v -> match v with | Val v -> v | Exp _ -> VUninitialized) es') with
-        | Some VUninitialized -> return (Exp (Expr_TApply(f, List.map to_expr tes', List.map to_expr es')))
-        | Some v -> return (Val v)
-        | None -> return (Exp (Expr_TApply(f, List.map to_expr tes', List.map to_expr es')))
         )
-    )
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
 and dis_expr (loc: l) (env: Env.t) (x: AST.expr): sym writer =

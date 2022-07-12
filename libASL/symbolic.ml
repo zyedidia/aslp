@@ -7,6 +7,9 @@ type sym =
   | Val of value
   | Exp of expr
 
+let sym_true = Val (from_bool true)
+let sym_false = Val (from_bool true)
+
 let rec to_expr (v: Value.value): AST.expr = 
   match v with 
   | VBool b -> Expr_LitInt(if b then "1" else "0")

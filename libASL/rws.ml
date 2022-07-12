@@ -24,6 +24,8 @@ module Make (T : S) = struct
       let (b, s'', w') = f a r s' in
       (b, s'', T.mappend w w')
 
+  let (>>=) = bind
+
   (* monad and applicative syntax for rws *)
 
   module Let = struct
@@ -52,15 +54,22 @@ module Make (T : S) = struct
         (x :: xs)
     | [] -> pure []
 
+    
   let sequence_ (xs : 'a rws list): unit rws =
     let+ _ = sequence xs in ()
 
+  let traverse (f: 'a -> 'b rws) (x: 'a list): 'b list rws =
+    sequence (List.map f x)
+
   (* rws-specific utility functions *)
+
+  let unit: unit rws = pure ()
 
   (* reader monad *)
 
   (** A computation returning the immutable reader environment. *)
   let read: r rws = fun r s -> (r, s, mempty)
+  let reads (f: r -> 'a): 'a rws = fun r s -> (f r, s, mempty)
 
   let write (w: w): unit rws = fun _ s -> ((), s, w)
 
@@ -93,14 +102,17 @@ module Test = struct
   let a = let* x = test and* y = pure "a" in pure x;;
 
   let main = 
+    let* xx =
+      try reads (fun e -> (* raise (Invalid_argument "a"); *) 99999)
+      with Invalid_argument _ -> pure 55 in 
     let* a = Hi.pure "asdf"
-    and* b = test
-    and* c = test in
+    and+ b = test
+    and+ c = test in
       Printf.printf "%s %d\n" a b;
+      Printf.printf "xx = %d\n" xx;
       pure a;;
 
   List.iter (fun x -> Printf.printf "() ") (match (main () ()) with (a, s, w) -> w);;
 
   Printf.printf "asdfdasf";
-
-end
+end;;
