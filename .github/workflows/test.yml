@@ -17,17 +17,14 @@ jobs:
         uses: ocaml/setup-ocaml@v2
         with:
           ocaml-compiler: 4.09.0
+          dune-cache: true
 
       - name: Opam install
         run: opam install . --deps-only --with-test
 
-      - name: Environment setup
+      - name: Build and test
         run: |
           eval `opam config env`
           export LD_LIBRARY_PATH=`opam config var z3:lib`
-
-      - name: Build
-        run: dune build
-
-      - name: Test
-        run: dune runtest
+          dune build
+          dune runtest
