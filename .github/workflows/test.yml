@@ -9,7 +9,7 @@ jobs:
     container: ocaml/opam:ubuntu-ocaml-4.09
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@partial_eval
 
       - name: Do the test!
         run: |
