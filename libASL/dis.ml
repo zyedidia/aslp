@@ -90,8 +90,17 @@ module LocalEnv = struct
     let getNumSymbols (env: t): int =
         env.numSymbols
 
-    let incNumSymbols (env: t): t =
-        {env with numSymbols = env.numSymbols + 1}
+    let incNumSymbols (env: t): int * t =
+        let env' = {env with numSymbols = env.numSymbols + 1} in
+        (env'.numSymbols, env')
+
+    let getLocalPrefix (env: t): string =
+        match env.localPrefixes with
+        | [] -> ""
+        | x::_ -> x
+
+    let getLocalName (x: ident) (env: t): ident =
+        Ident (getLocalPrefix env ^ pprint_ident x)
 
     let addLocalPrefix (s: string) (env: t): t =
         {env with localPrefixes = s :: env.localPrefixes}
@@ -121,6 +130,17 @@ module LocalEnv = struct
         | (bs :: bss') ->
             if Bindings.mem x bs then Some bs else search x bss'
         | [] -> None
+
+    let setVar (loc: l) (x: ident) (v: value) (env: t): t =
+        if !trace_write then Printf.printf "TRACE: write %s = %s\n" (pprint_ident x) (pp_value v);
+        (match search x env.locals with
+        (* FIXME: this incorrectly adds the variable into the most local scope.
+           it should find the appropriate scope and change it. that said, maybe
+           it is better to rework this to be a single "stack frame" instead of
+           a list of scopes. *)
+        | Some bs -> addLocalVar loc x v env
+        | None    -> raise (EvalError (loc, "LocalEnv::setVar " ^ pprint_ident x))
+        )
 end
 
 module DisEnv = struct
@@ -132,22 +152,45 @@ module DisEnv = struct
         let mappend = (@)
     end)
 
-    let incNumSymbols: int rws =
-        modify LocalEnv.incNumSymbols 
-        >>= fun _ -> gets LocalEnv.getNumSymbols
+    open Let
 
+    let catch (f: 'b -> 'a) (x: 'b): 'a option =
+        try Some (f x)
+        with EvalError _ -> None
 
     let getVar (loc: l) (x: ident): value rws = 
-        fun env lenv -> 
-        let v = match (LocalEnv.search x lenv.locals) with
-            | Some b -> Bindings.find x b
-            | None -> Env.getVar loc env x
-        in (v, lenv, mempty)
+        let* v = gets (fun lenv -> LocalEnv.search x lenv.locals) in
+        match (v) with
+            | Some b -> pure (Bindings.find x b)
+            | None -> reads (fun env -> Env.getVar loc env x)
+
+    let getVarOpt (loc: l) (x: ident): value option rws = 
+        let* v = gets (fun lenv -> LocalEnv.search x lenv.locals) in
+        match (v) with
+            | Some b -> pure (Some (Bindings.find x b))
+            | None -> reads (catch (fun env -> Env.getVar loc env x))
+
+    let getLocalName (x: ident): ident rws = 
+        let+ prefix = gets LocalEnv.getLocalPrefix in
+        Ident (prefix ^ pprint_ident x)
+
+    let findVar (loc: l) (id: ident): ident option rws =
+        let* localid = gets (LocalEnv.getLocalName id) in
+        let* v = getVarOpt loc localid in
+        match v with
+        | Some v -> pure (Some localid)
+        | None -> 
+            let+ v = getVarOpt loc id in 
+            (match val_opt_initialised v with
+            | Some v -> Some id
+            | None -> None)
 
     let getFun (loc: l) (x: ident): (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) option rws =
-        reads (fun env ->
-            try Some (Env.getFun loc env x)
-            with EvalError _ -> None)
+        reads (catch (fun env -> Env.getFun loc env x))
+
+    let nextVarName (prefix: string): ident rws =
+        let+ num = stateful LocalEnv.incNumSymbols in
+        Ident (prefix ^ "Var" ^ string_of_int num)
 end
 
 type 'a rws = 'a DisEnv.rws
@@ -219,16 +262,14 @@ let is_expr (v: sym): bool =
 let contains_expr (xs: sym list): bool =
     List.exists is_expr xs
 
-let dis_expr' (loc: l) (ex: expr): sym rws = assert false
-
 (** Dissassemble type *)
 let rec dis_type (loc: l) (t: ty): ty rws =
     match t with
     | Type_Bits ex ->
-        let+ ex' = dis_expr' loc ex in
+        let+ ex' = dis_expr loc ex in
         (Type_Bits (sym_expr ex'))
     | Type_OfExpr ex ->
-        let+ ex' = dis_expr' loc ex in
+        let+ ex' = dis_expr loc ex in
         (Type_OfExpr (sym_expr ex'))
     | Type_Tuple tys ->
         let+ exprs = DisEnv.traverse (dis_type loc) tys in
@@ -244,15 +285,15 @@ and dis_exprs (loc: l) (xs: AST.expr list): sym list rws =
 and dis_slice (loc: l) (x: AST.slice): (sym * sym) rws =
     (match x with
     | Slice_Single(i) ->
-            let+ i' = dis_expr' loc i in
+            let+ i' = dis_expr loc i in
             (i', Val (VInt Z.one))
     | Slice_HiLo(hi, lo) ->
-            let+ hi' = dis_expr' loc hi
-            and+ lo' = dis_expr' loc lo in
+            let+ hi' = dis_expr loc hi
+            and+ lo' = dis_expr loc lo in
             (lo', sym_add_int loc (sym_sub_int loc hi' lo') (Val (VInt Z.one)))
     | Slice_LoWd(lo, wd) ->
-            let+ lo' = dis_expr' loc lo
-            and+ wd' = dis_expr' loc wd in
+            let+ lo' = dis_expr loc lo
+            and+ wd' = dis_expr loc wd in
             (lo', wd')
     )
 
@@ -261,12 +302,12 @@ and dis_fun (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym rw
     if name_of_FIdent f = "and_bool" then begin
         (match (tes, es) with
         | ([], [x; y]) -> 
-            let@ x' = dis_expr' loc x in
+            let@ x' = dis_expr loc x in
             (match x' with
             | Val v -> 
-                if to_bool loc v then dis_expr' loc y else DisEnv.pure sym_false
+                if to_bool loc v then dis_expr loc y else DisEnv.pure sym_false
             | Exp e -> 
-                let+ y' = dis_expr' loc y in
+                let+ y' = dis_expr loc y in
                 (Exp (Expr_TApply(f, tes, [e; to_expr y'])))
             )
         | _ ->
@@ -275,12 +316,12 @@ and dis_fun (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym rw
     end else if name_of_FIdent f = "or_bool" then begin
         (match (tes, es) with
         | ([], [x; y]) -> 
-            let@ x' = dis_expr' loc x in
+            let@ x' = dis_expr loc x in
             (match x' with
             | Val v -> 
-                if to_bool loc v then DisEnv.pure sym_true else dis_expr' loc y
+                if to_bool loc v then DisEnv.pure sym_true else dis_expr loc y
             | Exp e -> 
-                let+ y' = dis_expr' loc y in
+                let+ y' = dis_expr loc y in
                 (Exp (Expr_TApply(f, tes, [e; to_expr y'])))
             )
         | _ ->
@@ -289,12 +330,12 @@ and dis_fun (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym rw
     end else if name_of_FIdent f = "implies_bool" then begin
         (match (tes, es) with
         | ([], [x; y]) -> 
-            let@ x' = dis_expr' loc x in
+            let@ x' = dis_expr loc x in
             (match x' with
             | Val v -> 
-                if to_bool loc v then dis_expr' loc y else DisEnv.pure sym_true
+                if to_bool loc v then dis_expr loc y else DisEnv.pure sym_true
             | Exp e -> 
-                let+ y' = dis_expr' loc y in
+                let+ y' = dis_expr loc y in
                 (Exp (Expr_TApply(f, tes, [e; to_expr y'])))
             )
         | _ ->
@@ -312,7 +353,7 @@ and dis_fun (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym rw
                 let@ v' = DisEnv.getVar loc arg in
                 let@ () = DisEnv.modify (LocalEnv.addImplicitValue arg v') in
 
-                let@ e' = dis_expr' loc e in
+                let@ e' = dis_expr loc e in
                 match e' with
                 | Val v -> DisEnv.modify (LocalEnv.addLocalVar loc arg v)
                 | Exp _ -> DisEnv.unit
@@ -331,174 +372,176 @@ and dis_fun (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym rw
 
             (* Add return variable declarations *)
             let fName = name_of_FIdent f in
-            let@ rv = (match rty with 
+            let make_return_vars (t: ty): ident rws =
+                let@ n = DisEnv.stateful LocalEnv.incNumSymbols in
+                let name = Ident (fName ^ "Var" ^ string_of_int n) in
+                
+                let@ t' = dis_type loc t in
+                let+ () = DisEnv.write [Stmt_VarDeclsNoInit(
+                    t', [name], Unknown
+                )] in
+                name in 
+            let@ rv = (match rty with
                 | Some (Type_Tuple ts) -> 
-                    let@ num = DisEnv.incNumSymbols in
-                    let varNames = List.map (fun _ -> Ident (fName ^ "Var" ^ string_of_int num)) ts in
-                    let symbol = (Expr_Tuple(List.map (fun n -> Expr_Var n) varNames)) in
-                    let@ () = DisEnv.modify (LocalEnv.addReturnSymbol symbol) in
-
-                    let@ ts' = DisEnv.traverse (dis_type loc) ts in
-                    let+ () = DisEnv.write (List.map2 (fun t' name ->
-                        (Stmt_VarDeclsNoInit(
-                            t',
-                            [name], 
-                            Unknown
-                        ))
-                    ) ts' varNames) in
-                    symbol
+                    let+ names = DisEnv.traverse make_return_vars ts in
+                    Expr_Tuple (List.map (fun n -> Expr_Var n) names)
                 | Some t -> 
-                    let@ num = DisEnv.incNumSymbols in
-                    let varName = Ident (fName ^ "Var" ^ string_of_int num) in
-                    let symbol = (Expr_Var(varName)) in
-                    let@ () = DisEnv.modify (LocalEnv.addReturnSymbol symbol) in
-
-                    let@ t' = dis_type loc t in
-                    let+ () = DisEnv.write [Stmt_VarDeclsNoInit(
-                        t',
-                        [varName], 
-                        Unknown
-                    )] in
-                    symbol
-                | None -> raise (EvalError (loc, "Unexpected function return type")))
-            in
+                    let+ name = make_return_vars t in
+                    Expr_Var name
+                | None -> 
+                    raise (EvalError (loc, "Unexpected function return type"))) in            
 
             (* Get the return symbol we just made so we can return it later *)
             (* let@ rv = DisEnv.gets (LocalEnv.getReturnSymbol loc) in *)
 
             (* Add local parameters, avoiding name collisions *)
             (* Also print what the parameter refers to *)
-            let@ num = DisEnv.incNumSymbols in
+            let@ num = DisEnv.stateful LocalEnv.incNumSymbols in
             let localPrefix = fName ^ string_of_int num in
             let@ () = DisEnv.sequence_ (Utils.map3 (fun (ty, _) arg ex -> 
-                let@ ex' = dis_expr' loc ex in 
-                let v = match ex' with 
-                | Val v -> v
-                | Exp _ -> VUninitialized in
+                let@ ex' = dis_expr loc ex in 
+                let v = (match ex' with 
+                    | Val v -> v
+                    | Exp _ -> VUninitialized) in
                 let name = (Ident (localPrefix ^ pprint_ident arg)) in
                 let@ () = DisEnv.modify (LocalEnv.addLocalVar loc  name v) in
                 let@ ty' = dis_type loc ty in
-                DisEnv.write [Stmt_VarDecl(ty', Ident (localPrefix ^ (pprint_ident arg)), to_expr ex', loc)]
+                DisEnv.write [Stmt_VarDecl(ty', name, to_expr ex', loc)]
                 
             ) atys args es) in
 
             (* print out the body *)
-            let@ () = DisEnv.modify (LocalEnv.addLocalPrefix localPrefix) in
-            let@ () = dis_stmts env b in
-            let@ () = DisEnv.modify (LocalEnv.removeReturnSymbol)
+            let@ () = DisEnv.modify (LocalEnv.addLocalPrefix localPrefix)
+            and@ () = dis_stmts b
+            and@ () = DisEnv.modify (LocalEnv.removeReturnSymbol)
             and@ () = DisEnv.modify (LocalEnv.removeLocalPrefix) in
 
             (* Restore implicit values *)
-            List.iter (fun (arg, v) -> Env.addLocalVar loc env arg v) (Env.getImplicitLevel env);
+            let@ level = DisEnv.stateful LocalEnv.popImplicitLevel in
+            let@ () = DisEnv.traverse_ (fun (arg, v) -> 
+                DisEnv.modify (LocalEnv.addLocalVar loc arg v)) level in
 
             (* Return the return symbol to be used in expressions e.g. assignments *)
-            return (Exp rv)
+            DisEnv.pure (Exp rv)
         | None ->
-            let* tes' = dis_exprs loc env tes in
-            let* es' = dis_exprs loc env es in
-            (match eval_prim 
-                (name_of_FIdent f) 
-                (List.map (fun v -> match v with | Val v -> v | Exp _ -> VUninitialized) tes') 
-                (List.map (fun v -> match v with | Val v -> v | Exp _ -> VUninitialized) es') with
-            | Some VUninitialized -> return (Exp (Expr_TApply(f, List.map to_expr tes', List.map to_expr es')))
-            | Some v -> return (Val v)
-            | None -> return (Exp (Expr_TApply(f, List.map to_expr tes', List.map to_expr es')))
-            )
+            let+ tes' = dis_exprs loc tes
+            and+ es' = dis_exprs loc es in
+
+            let tes_vals = (List.map sym_val_or_uninit tes')
+            and es_vals = (List.map sym_val_or_uninit es') in
+
+            (* unwrap evaluated value only if it is not uninitialised *)
+            match val_opt_initialised (eval_prim (name_of_FIdent f) tes_vals es_vals) with
+            | Some v -> Val v
+            | None -> Exp (Expr_TApply(f, List.map to_expr tes', List.map to_expr es'))
         )
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
-and dis_expr (loc: l) (env: Env.t) (x: AST.expr): sym writer =
+and dis_expr (loc: l) (x: AST.expr): sym rws =
     match x with
     | Expr_If(c, t, els, e) ->
-        let rec eval_if xs d = match xs with
-            | [] -> dis_expr loc env d
+        let rec eval_if xs e: sym rws = match xs with
+            | [] -> dis_expr loc e
             (* If we cannot evaluate the condition, print the whole statement *)
-            | AST.E_Elsif_Cond (cond, b)::xs' -> 
-                let* cond' = dis_expr loc env cond in
+            | AST.E_Elsif_Cond (cond, branch)::xs' -> 
+                let@ cond' = dis_expr loc cond in
                 match cond' with
                 | Val v ->
                     if to_bool loc v then
                         (* Just print this branch *)
-                        dis_expr loc env b
+                        dis_expr loc branch
                     else
                         (* Print whatever the rest of the branches turn out to be *)
-                        eval_if xs' d
+                        eval_if xs' e
                 | Exp cond'' -> 
-                    let tEnv = Env.copy env in
+                    (* FIXME: in if expression case, we need to generate and if _statement_ which
+                       assigns to a new variable representing the if result. *)
+
+                    (* let tEnv = Env.copy env in
                     let elsEnv = List.map (fun _ -> Env.copy env) (Utils.range 0 (List.length els)) in
-                    let eEnv = Env.copy env in
-                    let* b' = Env.nest (fun env' -> dis_expr loc env' b) tEnv in
+                    let eEnv = Env.copy env in *)
+                    let@ (b',benv,bstmts) = DisEnv.locally (dis_expr loc branch) in
+                    (* FIXME: the branch's statements should only be executed when cond evaluates to true. *)
+                    let@ () = DisEnv.write bstmts in 
+                    let@ (xs',xsenv,xsstmts) = DisEnv.locally (eval_if xs' e) in
+                    let@ () = DisEnv.write xsstmts in 
+                    
+
+                    (* let* b' = Env.nest (fun env' -> dis_expr loc env' branch) tEnv in
                     let* els' = dis_if_expr_no_remove loc elsEnv els in
-                    let* e' = Env.nest (fun env' -> dis_expr loc env' e) eEnv in
-                    Env.setLocals env (List.fold_left mergeEnv (Env.getLocals tEnv) ((Env.getLocals eEnv)::(List.map Env.getLocals elsEnv)));
-                    return (Exp (Expr_If(
+                    let* e' = Env.nest (fun env' -> dis_expr loc env' e) eEnv in *)
+                    (* Env.setLocals env (List.fold_left mergeEnv (Env.getLocals tEnv) ((Env.getLocals eEnv)::(List.map Env.getLocals elsEnv))); *)
+                    DisEnv.pure (Exp (Expr_If(
                         cond'', 
-                        to_expr (b'),
-                        els',
-                        to_expr (e')
+                        to_expr b',
+                        [],
+                        to_expr xs'
                     )))
         in
         eval_if (E_Elsif_Cond(c, t)::els) e
     (* NOTE: This does not consider early returns currently. It also doesn't handle recursive calls *)
     | Expr_TApply(f, tes, es) ->
-        dis_fun loc env f tes es
+        dis_fun loc f tes es
     | Expr_Var id ->
-        (try 
-            (match (Env.getVar loc env (Ident ((Env.getLocalPrefix loc env) ^ pprint_ident id))) with 
-            | VUninitialized -> return (Exp (Expr_Var(Ident ((Env.getLocalPrefix loc env) ^ pprint_ident id))))
-            | v -> return (Val v))
-        with EvalError _ ->
-            (try 
-                (match (Env.getVar loc env id) with 
-                | VUninitialized -> return (Exp x)
-                | v -> return (Val v))
-            with EvalError _ -> return (Exp x)))
+        let@ idopt = DisEnv.findVar loc id in
+        (match idopt with
+        (* variable not found *)
+        | None -> DisEnv.pure (Exp (Expr_Var id))
+        | Some id' -> 
+            let+ v = DisEnv.getVar loc id' in
+            (match v with
+            | VUninitialized -> (Exp (Expr_Var id'))
+            | v -> (Val v)))
     | Expr_In(e, p) ->
-        let* e' = dis_expr loc env e in
+        let@ e' = dis_expr loc e in
         (match e' with
-        | Val v -> return (Val (from_bool (eval_pattern loc env v p)))
-        | Exp _ -> return (Exp x))
+        | Val v -> 
+            let+ v' = DisEnv.reads (fun env -> eval_pattern loc env v p) in 
+            (Val (from_bool v'))
+        | Exp _ -> DisEnv.pure (Exp x))
     | Expr_Slices(e, ss) ->
-        let** transformedSlices = List.map (fun s -> dis_slice loc env s) ss in
-        let* e' = dis_expr loc env e in
+        let@ ss' = DisEnv.traverse (dis_slice loc) ss in
+        let@ e' = dis_expr loc e in
         (match e' with
         | Val v ->
-            if List.exists (fun ts -> match ts with (Exp _, _) -> true | (_, Exp _) -> true | (_, _) -> false) transformedSlices then
-                return (Exp (Expr_Slices(to_expr (Val v), List.map (fun (i, w) -> Slice_HiLo(to_expr i, to_expr w)) transformedSlices)))
+            if List.exists sym_pair_has_exp ss' then
+                DisEnv.pure (Exp (Expr_Slices(to_expr (Val v), 
+                    List.map (fun (i, w) -> Slice_LoWd(to_expr i, to_expr w)) ss')))
             else
                 let vs = List.map (fun s -> 
                     (match s with
                     | (Val v1, Val v2) -> extract_bits loc v v1 v2
+                    (* should never reach this _ case due to List.exists check above. *)
                     | _ -> raise (EvalError (loc, "Unreachable: Shouldn't have expression in bit slice\n")))
-                    ) transformedSlices in
-                    return (Val (eval_concat loc vs))
+                    ) ss' in
+                DisEnv.pure (Val (eval_concat loc vs))
         | Exp e' -> 
-            return (Exp (Expr_Slices(e', List.map2 (fun (i, w) s ->
-                (match s with
-                | Slice_Single _ -> Slice_Single(to_expr i)
-                | Slice_HiLo _ -> Slice_LoWd(to_expr i, to_expr w)
-                | Slice_LoWd _ -> Slice_LoWd(to_expr i, to_expr w)
-                )
-            ) transformedSlices ss))))
+            DisEnv.pure (Exp (Expr_Slices(e', List.map (fun (l,w) ->
+                Slice_LoWd(to_expr l, to_expr w)
+            ) ss'))))
     | Expr_Tuple(es) ->
-        let** transformedExprs = List.map (dis_expr loc env) es in
-        if contains_expr transformedExprs then
-            return (Exp (Expr_Tuple(List.map to_expr transformedExprs)))
-        else
-            return (Val (VTuple (List.map to_value transformedExprs)))
+        let+ es' = DisEnv.traverse (dis_expr loc) es in
+        (match sym_collect_list es' with
+        | Right vals -> Val (VTuple vals)
+        | Left exps -> Exp (Expr_Tuple exps))
     | Expr_Array(a, i) ->
-        let* a' = dis_expr loc env a in
-        let* i' = dis_expr loc env i in
-        if is_expr a' || is_expr i' then
-            return (Exp (Expr_Array(a, to_expr i')))
-        else
-            (match (get_array loc (to_value a') (to_value i')) with
-            | VUninitialized -> return (Exp (Expr_Array(a, to_expr i')))
-            | v -> return (Val v))
-    | x -> try (match eval_expr loc env x with VUninitialized -> return (Exp x) | v -> return (Val v)) with EvalError (loc, message) -> return (Exp x)
+        let@ a' = dis_expr loc a in
+        let+ i' = dis_expr loc i in
+        (match (a',i') with
+        | Val av, Val iv -> 
+            (match get_array loc av iv with
+            | VUninitialized -> Exp (Expr_Array(a, val_expr iv))
+            | v -> Val v)
+        | _ -> Exp (Expr_Array(a, to_expr i')))
+    | x -> 
+        (* FIXME: dangerous use of eval_expr in default case of dis_expr *)
+        let+ x' = DisEnv.reads (DisEnv.catch (fun env -> (eval_expr loc env x))) in
+        match val_opt_initialised x' with
+        | None -> Exp x
+        | Some v -> Val v
 
 (** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
-and dis_if_expr_no_remove (loc: l) (envs: Env.t list) (xs: e_elsif list): e_elsif list writer = 
+(* and dis_if_expr_no_remove (loc: l) (envs: Env.t list) (xs: e_elsif list): e_elsif list writer = 
     match (xs, envs) with
     | ([], []) -> return []
     | ((AST.E_Elsif_Cond (cond, b)::xs'), (env::envs')) ->
@@ -509,44 +552,51 @@ and dis_if_expr_no_remove (loc: l) (envs: Env.t list) (xs: e_elsif list): e_elsi
             to_expr (cond'), 
             to_expr (b')
         ) :: (els'))
-    | _ -> raise (EvalError (loc, "Env and e_elsif list must have the same length"))
+    | _ -> raise (EvalError (loc, "Env and e_elsif list must have the same length")) *)
 
-and dis_lexpr (loc: l) (env: Env.t) (x: AST.lexpr) (r: sym): unit writer =
+and dis_lexpr (loc: l) (x: AST.lexpr) (r: sym): unit rws =
     match x with
     | LExpr_Write(setter, tes, es) ->
-        let** tvs = List.map (dis_expr loc env) tes in
-        let** vs = List.map (dis_expr loc env) es in
-        if contains_expr tvs || contains_expr vs || contains_expr [r] then
-            write (Stmt_Assign(LExpr_Write(setter, List.map to_expr tvs, List.map to_expr vs), to_expr r, loc))
-        else begin
-            return (eval_proccall 
-            loc 
-            env 
-            setter 
-            (List.map (to_value) tvs) 
-            ((List.map to_value vs) @ [to_value r]))
-        end
+        let@ tvs = DisEnv.traverse (dis_expr loc) tes in
+        let@ vs = DisEnv.traverse (dis_expr loc) es in
+        (match (sym_collect_list tvs, sym_collect_list vs, r) with
+        | Right tvs', Right vs', Val r' -> 
+            (* FIXME: use of eval_proccall in dis_lexpr *)
+            DisEnv.reads (fun env -> 
+                eval_proccall loc env setter tvs' (vs' @ [r']))
+        | _, _, _ -> 
+            DisEnv.write [Stmt_Assign(LExpr_Write(
+                setter, List.map to_expr tvs, List.map to_expr vs), sym_expr r, loc)])
     | LExpr_Var(v) ->
-        let v' = try 
-            (ignore (Env.getVar loc env (Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v)))); 
-            (Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v)))) 
-        with EvalError _ -> v in
+        let@ idopt = DisEnv.findVar loc v in
+        let v' = (match idopt with 
+        | Some v' -> v' 
+        | None -> v) in
         (match r with
         | Val r' -> 
-            return (Env.setVar loc env v' r')
+            DisEnv.modify (LocalEnv.setVar loc v' r')
         | Exp e -> 
-            Env.setVar loc env v' VUninitialized;
-            write (Stmt_Assign(LExpr_Var(v'), e, loc)))
-    | LExpr_Wildcard -> return ()
-    | _ -> try (return (eval_lexpr loc env x (to_value r))) with EvalError _ ->
-        write (Stmt_Assign(x, to_expr r, loc))
+            let@ () = DisEnv.modify (LocalEnv.setVar loc v' VUninitialized) in
+            DisEnv.write [Stmt_Assign(LExpr_Var(v'), e, loc)])
+    | LExpr_Wildcard -> DisEnv.unit
+    | _ -> 
+        match r with
+        | Val rv -> 
+            (* FIXME: dangerous use of eval_lexpr in dis_lexpr fallback case. *)
+            let+ opt = DisEnv.reads (DisEnv.catch 
+                (fun env -> eval_lexpr loc env x rv)) in
+            (match opt with
+            | Some () -> ()
+            | None -> raise (EvalError (loc, "error in eval_lexpr fallback of dis_lexpr")))
+        | Exp re -> DisEnv.write [Stmt_Assign(x, re, loc)]
 
 (** Dissassemble list of statements *)
-and dis_stmts (env: Env.t) (xs: AST.stmt list): unit writer =
-    write_multi (List.concat (List.map read (List.map (dis_stmt env) xs)))
+and dis_stmts (xs: AST.stmt list): unit rws =
+    assert false
+    (* write_multi (List.concat (List.map read (List.map (dis_stmt env) xs))) *)
 
 (** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
-and dis_if_stmt_no_remove (loc: l) (envs: Env.t list) (xs: s_elsif list): s_elsif list writer = 
+(* and dis_if_stmt_no_remove (loc: l) (envs: Env.t list) (xs: s_elsif list): s_elsif list writer = 
     match (xs, envs) with
     | ([], []) -> return []
     | ((AST.S_Elsif_Cond (cond, b)::xs'), (env::envs')) ->
@@ -554,7 +604,7 @@ and dis_if_stmt_no_remove (loc: l) (envs: Env.t list) (xs: s_elsif list): s_elsi
         let* els' = dis_if_stmt_no_remove loc envs' xs' in
         let b' = Env.nest (fun env' -> dis_stmts env' b) env in
         return (AST.S_Elsif_Cond(to_expr cond', read (b'))::(els'))
-    | _ -> raise (EvalError (loc, "Env list and s_elsif list must be the same length"))
+    | _ -> raise (EvalError (loc, "Env list and s_elsif list must be the same length")) *)
 
 (** Disassemble statement *)
 and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
