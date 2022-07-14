@@ -12,7 +12,7 @@ let sym_false = Val (from_bool true)
 
 let rec val_expr (v: Value.value): AST.expr = 
   match v with 
-  | VBool b -> Expr_LitInt(if b then "1" else "0")
+  | VBool b -> Expr_Var(if b then Ident "TRUE" else Ident "FALSE")
   | VEnum (id, n) -> Expr_LitInt(string_of_int n)
   | VInt n -> Expr_LitInt(Z.to_string n)
   | VReal n -> Expr_LitReal(Q.to_string n)

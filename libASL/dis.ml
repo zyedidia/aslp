@@ -74,6 +74,8 @@ module LocalEnv = struct
         | (bs :: rest) -> {env with locals = (Bindings.add k v bs :: rest)}
         | []        -> raise (EvalError (loc, "LocalEnv::addLocalVar"))
 
+    let addLocalConst = addLocalVar
+
     let getReturnSymbol (loc: l) (env: t): AST.expr =
         match env.returnSymbols with
         | [] -> raise (EvalError (loc, "Return not in function"))
@@ -221,21 +223,7 @@ let mergeEnv (xLocals: scope list) (yLocals: scope list): scope list =
 
 (** Convert value to a simple expression containing that value, so we can
     print it or use it symbolically *)
-let rec to_expr (v: sym): AST.expr = 
-    match v with
-    | Val x ->
-        (match x with 
-        | VBool b -> Expr_LitInt(if b then "1" else "0")
-        | VEnum (id, n) -> Expr_LitInt(string_of_int n)
-        | VInt n -> Expr_LitInt(Z.to_string n)
-        | VReal n -> Expr_LitReal(Q.to_string n)
-        | VBits {n; v} -> Expr_LitInt(Z.to_string v)
-        | VString s -> Expr_LitString(s)
-        | VTuple vs -> Expr_Tuple(List.map (fun v -> to_expr (Val v)) vs)
-        (* TODO: definitely get rid of this. Should convert every case *)
-        | x -> raise (EvalError (Unknown, "Casting unhandled value type to expression"))
-        )
-    | Exp x -> x
+let to_expr = sym_expr
 
 let is_val (x: AST.expr): bool =
     (match x with 
@@ -607,116 +595,158 @@ and dis_stmts (xs: AST.stmt list): unit rws =
     | _ -> raise (EvalError (loc, "Env list and s_elsif list must be the same length")) *)
 
 (** Disassemble statement *)
-and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
+and dis_stmt (x: AST.stmt): unit rws =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
         (* If a local prefix exists, add it *)
-        let vs' = try (List.map (fun v -> Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v))) vs) with EvalError _ -> vs in
+        let@ vs' = DisEnv.traverse DisEnv.getLocalName vs in
         (* Add the variables *)
-        List.iter (fun v -> Env.addLocalVar loc env v VUninitialized) vs';
+        let@ () = DisEnv.traverse_ (fun v -> 
+            DisEnv.modify (LocalEnv.addLocalVar loc v VUninitialized)) vs' in
         (* Print the declarations *)
-        let* ty' = dis_type loc env ty in
-        write (Stmt_VarDeclsNoInit(ty', vs', loc))
+        let@ ty' = dis_type loc ty in
+        DisEnv.write [Stmt_VarDeclsNoInit(ty', vs', loc)]
     | Stmt_VarDecl(ty, v, i, loc) ->
         (* If a local prefix exists, add it *)
-        let v' = try Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v)) with EvalError _ -> v in
+        let@ v' = DisEnv.getLocalName v in
         (* Add the variable *)
-        let* i' = dis_expr loc env i in
+        let@ i' = dis_expr loc i in
         (match i' with
-        | Val i' -> return (Env.addLocalVar loc env v' i')
+        | Val i' -> DisEnv.modify (LocalEnv.addLocalVar loc v' i')
         | Exp ex ->
-            Env.addLocalVar loc env v' VUninitialized;
-            let* ty' = dis_type loc env ty in
-            write (Stmt_VarDecl(ty', v', ex, loc))
+            let@ () = DisEnv.modify (LocalEnv.addLocalVar loc v' VUninitialized) in
+            let@ ty' = dis_type loc ty in
+            DisEnv.write [Stmt_VarDecl(ty', v', ex, loc)]
         )
     | Stmt_ConstDecl(ty, v, i, loc) ->
         (* If a local prefix exists, add it *)
-        let v' = try Ident ((Env.getLocalPrefix loc env) ^ (pprint_ident v)) with EvalError _ -> v in
-        let* i' = dis_expr loc env i in
+        let@ v' = DisEnv.getLocalName v in
+        let@ i' = dis_expr loc i in
         (match i' with
-        | Val i' -> return (Env.addLocalConst loc env v' i')
+        | Val i' -> DisEnv.modify (LocalEnv.addLocalConst loc v' i')
         | Exp ex -> 
             (* Declare constant with uninitialized value and just use symbolically *)
-            Env.addLocalConst loc env v' VUninitialized;
-            let* ty' = dis_type loc env ty in
-            write (Stmt_ConstDecl(ty', v', ex, loc))
+            let@ () = DisEnv.modify (LocalEnv.addLocalConst loc v' VUninitialized) in
+            let@ ty' = dis_type loc ty in
+            DisEnv.write [Stmt_ConstDecl(ty', v', ex, loc)]
         )
     | Stmt_Assign(l, r, loc) ->
-        let* r' = dis_expr loc env r in
+        let@ r' = dis_expr loc r in
         (match (l, r') with
         | (LExpr_Tuple(les), Exp Expr_Tuple(es)) ->
-            let** _ = List.map2 (fun le e -> dis_stmt env (Stmt_Assign(le, e, loc))) les es in
-            return ()
+            (* unpack tuple destructuring. *)
+            (DisEnv.sequence_ @@ List.map2 (fun le e -> 
+                dis_stmt (Stmt_Assign(le, e, loc))) les es)
         | _ ->
-            dis_lexpr loc env l r' (* TODO: double check that both statements are added *)
+            dis_lexpr loc l r' (* TODO: double check that both statements are added *)
         )
     | Stmt_If(c, t, els, e, loc) ->
-        let rec eval_if xs d = match xs with
-            | [] -> dis_stmts env e
+        let rec eval_if (xs: s_elsif list) (e: stmt list): unit rws = 
+            match xs with
+            | [] -> dis_stmts e
             | AST.S_Elsif_Cond (cond, b)::xs' ->
-                let* cond' = dis_expr loc env cond in
+                let@ cond' = dis_expr loc cond in
                 (match cond' with
                 | Val v -> 
                     if to_bool loc v then
                         (* Just print this branch *)
-                        dis_stmts env b
+                        dis_stmts b
                     else
                         (* Print whatever the rest of the branches turn out to be *)
-                        eval_if xs' d
+                        eval_if xs' e
                 (* We have to print out all branches now because we don't know
                    whether or not this one is true. We can still simplify 
                    guards and bodies though *)
-                | Exp cond'' -> 
-                    let tEnv = Env.copy env in
+                | Exp cond'' ->
+                    let@ (_,benv,bstmts) = DisEnv.locally (dis_stmts b) in
+                    (* let@ () = DisEnv.write bstmts in  *)
+                    let@ (_,xsenv,xsstmts) = DisEnv.locally (eval_if xs' e) in
+                    (* let@ () = DisEnv.write xsstmts in  *)
+
+                    (* FIXME: check Stmt_If in dis_stmt, incorrectly assumes environment after if is not modified. *)
+                    DisEnv.write [Stmt_If(
+                        cond'', 
+                        bstmts,
+                        [],
+                        xsstmts,
+                        loc
+                    )]
+                     
+                    (* let tEnv = Env.copy env in
                     let elsEnv = List.map (fun _ -> Env.copy env) (Utils.range 0 (List.length els)) in
                     let eEnv = Env.copy env in
                     let t' = read (Env.nest (fun env' -> dis_stmts env' t) tEnv) in
                     let* els' = dis_if_stmt_no_remove loc elsEnv els in
                     let e' = read (Env.nest (fun env' -> dis_stmts env' e) eEnv) in
                     Env.setLocals env (List.fold_left mergeEnv (Env.getLocals tEnv) ((Env.getLocals eEnv)::(List.map Env.getLocals elsEnv)));
-                    write (Stmt_If(cond'', t', els', e', loc))
+                    write (Stmt_If(cond'', t', els', e', loc)) *)
                 )
         in
         eval_if (S_Elsif_Cond(c, t)::els) e
     | Stmt_FunReturn(e, loc) ->
-        let* e' = dis_expr loc env e in
-        (match (e', Env.getReturnSymbol loc env) with
+        let@ e' = dis_expr loc e in
+        let@ rv = DisEnv.gets (LocalEnv.getReturnSymbol loc) in
+        (match (e', rv) with
         | (Exp (Expr_Tuple(es)), Expr_Tuple(les)) ->
-            write_multi (List.map2 (fun le e -> 
-                Stmt_Assign((match le with Expr_Var(ident) -> LExpr_Var(ident) | _ -> raise (EvalError (loc, "Unexpected expression type in return symbol"))), e, loc)
-            ) les es)
-        | (_, Expr_Var(i)) -> write (Stmt_Assign(LExpr_Var(i), to_expr e', loc))
+            DisEnv.write @@ List.map2 (fun le e -> 
+                Stmt_Assign((
+                    match le with 
+                    | Expr_Var(ident) -> LExpr_Var(ident) 
+                    | _ -> raise (EvalError (loc, "Unexpected expression type in return symbol"))), 
+                    e, loc)
+            ) les es
+        | (_, Expr_Var(i)) -> DisEnv.write [Stmt_Assign(LExpr_Var(i), to_expr e', loc)]
         | _ -> raise (EvalError (loc, "TODO"))
         )
     | Stmt_Assert(e, loc) ->
-        let* e' = dis_expr loc env e in
+        let@ e' = dis_expr loc e in
         (match e' with 
-        | Val v -> return (if not (to_bool loc v) then
-            raise (EvalError (loc, "assertion failure")))
+        | Val v -> 
+            if not (to_bool loc v) then
+                raise (EvalError (loc, "assertion failure during symbolic phase"))
+            else 
+                DisEnv.unit
         | Exp e'' ->
-            write (Stmt_Assert(e'', loc))
+            DisEnv.write [Stmt_Assert(e'', loc)]
         )
     | Stmt_Case(e, alts, odefault, loc) ->
-        (let rec eval v alts =
-            (match alts with
-            | [] ->
-                    (match odefault with
-                    | None -> raise (EvalError (loc, "unmatched case"))
-                    | Some s -> dis_stmts env s
-                    )
-            | (Alt_Alt(ps, oc, s) :: alts') ->
-                    if List.exists (eval_pattern loc env v) ps && Utils.from_option
-                    (Utils.map_option (to_bool loc) (Utils.map_option (eval_expr loc env) oc)) (fun _ -> true) then
-                        dis_stmts env s
-                    else
-                        eval v alts'
-            )
-        in
-        let* e' = dis_expr loc env e in
+        let rec dis_alts_val (alts: alt list) (d: stmt list option) (v: value): unit rws = (
+            match alts with
+            | [] -> (match d with
+                | None -> raise (EvalError (loc, "unmatched case"))
+                | Some s -> dis_stmts s)
+            | Alt_Alt(ps, oc, s) :: alts' ->
+                let cond = (match oc with
+                | Some c -> c
+                | None -> val_expr (VBool true)) in
+                (* FIXME: unnchecked use of global environment in eval_pattern and eval_expr. *)
+                let@ env = DisEnv.read in
+                (* FIXME: should use dis_expr to partially evaluate condition as well. *)
+                if List.exists (eval_pattern loc env v) ps && to_bool loc (eval_expr loc env cond) then
+                    dis_stmts s
+                else
+                    dis_alts_val alts' d v
+        ) in
+        let rec dis_alts_exp (alts: alt list) (e: expr): alt list rws = (
+            match alts with
+            | [] -> DisEnv.pure []
+            | Alt_Alt(ps, oc, s) :: alts' ->
+                let@ (_,caseenv,casestmts) = DisEnv.locally (dis_stmts s) in
+                let@ (restalts,restenv,reststmts) = DisEnv.locally (dis_alts_exp alts' e) in
+                (* FIXME: needs to merge resulting localenv states. *)
+                (* NOTE: guard condition "oc" is not visited by disassembly. *)
+                DisEnv.pure (Alt_Alt(ps, oc, casestmts) :: restalts)
+        ) in
+        let@ e' = dis_expr loc e in
         (match e' with
-        | Val v -> eval v alts
-        | Exp e'' ->
-            let altEnvs = List.map (fun _ -> Env.copy env) (Utils.range 0 (List.length alts)) in
+        | Val v -> dis_alts_val alts odefault v
+        | Exp e'' -> 
+            let@ alts' = dis_alts_exp alts e'' in
+            (* NOTE: default case "odefault" is not visited. *)
+            DisEnv.write [
+                Stmt_Case(e'', alts', odefault, loc)
+            ]
+            (* let altEnvs = List.map (fun _ -> Env.copy env) (Utils.range 0 (List.length alts)) in
             let defEnv = Env.copy env in
             let result = write (Stmt_Case(
                 e'', 
@@ -725,9 +755,9 @@ and dis_stmt (env: Env.t) (x: AST.stmt): unit writer =
                 loc
             )) in
             Env.setLocals env (List.fold_left mergeEnv (Env.getLocals defEnv) (List.map Env.getLocals altEnvs));
-            result
-        ))
-    | x -> write x
+            result *)
+        )
+    | x -> DisEnv.write [x]
     )
 
 (* Duplicate of eval_decode_case modified to print rather than eval *)
@@ -766,7 +796,10 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     (* Uncomment this if you want to see output with no evaluation *)
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) exec; *)
                     (* Env.removeGlobals env; *)
-                    let stmts = read (dis_stmts env exec) in
+
+                    (* execute disassembly inside newly created local environment. *)
+                    let lenv = LocalEnv.fromEvalEnv env in
+                    let (_,lenv',stmts) = dis_stmts exec env lenv in
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts; *)
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
                     (* Some stmts *)
