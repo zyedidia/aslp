@@ -198,9 +198,9 @@ module DisEnv = struct
 
     let indent (x: 'a rws): 'a rws = 
         let* () = modify (fun l -> {l with indent = l.indent + 1}) in
-        let* x in
+        let* x' = x in
         let+ () = modify (fun l -> {l with indent = l.indent - 1}) in
-        x
+        x'
 
     let log (f: unit -> 'a) = 
         let* i = gets (fun l -> l.indent) in
