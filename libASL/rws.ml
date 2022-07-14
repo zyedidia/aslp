@@ -147,6 +147,10 @@ module Make (T : S) = struct
       let (a,s',w) = x r s in 
       ((a,s',w), s, T.mempty)
 
+  let defer (f: unit -> 'a): 'a rws = 
+    fun r s ->
+      (f (), s, T.mempty)
+
 end
 
 

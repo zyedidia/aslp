@@ -53,7 +53,8 @@ module LocalEnv = struct
         returnSymbols   : AST.expr list;
         numSymbols      : int;
         localPrefixes   : string list;
-        implicitLevels  : (ident * value) list list
+        implicitLevels  : (ident * value) list list;
+        indent          : int;
     }
 
     let empty () =
@@ -63,6 +64,7 @@ module LocalEnv = struct
             numSymbols = 0;
             localPrefixes = [];
             implicitLevels = [];
+            indent = 0;
         }
 
     let fromEvalEnv (env: Env.t): t =
@@ -193,6 +195,17 @@ module DisEnv = struct
     let nextVarName (prefix: string): ident rws =
         let+ num = stateful LocalEnv.incNumSymbols in
         Ident (prefix ^ "Var" ^ string_of_int num)
+
+    let indent (x: 'a rws): 'a rws = 
+        let* () = modify (fun l -> {l with indent = l.indent + 1}) in
+        let* x in
+        let+ () = modify (fun l -> {l with indent = l.indent - 1}) in
+        x
+
+    let log (f: unit -> 'a) = 
+        let* i = gets (fun l -> l.indent) in
+        ignore (List.init i (fun _ -> Printf.printf " "));
+        (defer f)
 end
 
 type 'a rws = 'a DisEnv.rws
@@ -266,8 +279,7 @@ let rec dis_type (loc: l) (t: ty): ty rws =
 
 (** Dissassemble list of expressions *)
 and dis_exprs (loc: l) (xs: AST.expr list): sym list rws =
-    assert false;
-    (* DisEnv.traverse (dis_expr loc) xs *)
+    DisEnv.traverse (dis_expr loc) xs
 
 (** Evaluate bitslice bounds *)
 and dis_slice (loc: l) (x: AST.slice): (sym * sym) rws =
@@ -286,7 +298,10 @@ and dis_slice (loc: l) (x: AST.slice): (sym * sym) rws =
     )
 
 (** Dissassemble a function call *)
-and dis_fun (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym rws =
+and dis_fun (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym rws
+    = DisEnv.indent (dis_fun' loc f tes es)
+and dis_fun' (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym rws =
+    let@ () = DisEnv.log (fun () -> Printf.printf "dis_fun <-f-- %s\n" (pprint_ident f)) in
     if name_of_FIdent f = "and_bool" then begin
         (match (tes, es) with
         | ([], [x; y]) -> 
@@ -338,13 +353,16 @@ and dis_fun (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym rw
             (* For each of these, if one already exists, add it to a stack to be restored after *)
             let@ () = DisEnv.modify LocalEnv.addImplicitLevel in
             let@ () = DisEnv.sequence_ @@ List.map2 (fun arg e -> 
-                let@ v' = DisEnv.getVar loc arg in
-                let@ () = DisEnv.modify (LocalEnv.addImplicitValue arg v') in
+                let@ v' = DisEnv.getVarOpt loc arg in
+                match v' with
+                | Some v' ->
+                    let@ () = DisEnv.modify (LocalEnv.addImplicitValue arg v') in
 
-                let@ e' = dis_expr loc e in
-                match e' with
-                | Val v -> DisEnv.modify (LocalEnv.addLocalVar loc arg v)
-                | Exp _ -> DisEnv.unit
+                    let@ e' = dis_expr loc e in
+                    (match e' with
+                    | Val v -> DisEnv.modify (LocalEnv.addLocalVar loc arg v)
+                    | Exp _ -> DisEnv.unit)
+                | None -> DisEnv.unit
             ) targs tes in
             (* let _ =
             write_multi (List.concat (List.map2 (fun arg e -> 
@@ -425,7 +443,9 @@ and dis_fun (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym rw
         )
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
-and dis_expr (loc: l) (x: AST.expr): sym rws =
+and dis_expr loc x = DisEnv.indent (dis_expr' loc x)
+and dis_expr' (loc: l) (x: AST.expr): sym rws =
+    let@ () = DisEnv.log (fun () -> Printf.printf "dis_expr <-e-- %s\n" (pp_expr x)) in
     match x with
     | Expr_If(c, t, els, e) ->
         let rec eval_if xs e: sym rws = match xs with
@@ -580,7 +600,7 @@ and dis_lexpr (loc: l) (x: AST.lexpr) (r: sym): unit rws =
 
 (** Dissassemble list of statements *)
 and dis_stmts (xs: AST.stmt list): unit rws =
-    assert false
+    DisEnv.traverse_ dis_stmt xs
     (* write_multi (List.concat (List.map read (List.map (dis_stmt env) xs))) *)
 
 (** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
@@ -595,7 +615,10 @@ and dis_stmts (xs: AST.stmt list): unit rws =
     | _ -> raise (EvalError (loc, "Env list and s_elsif list must be the same length")) *)
 
 (** Disassemble statement *)
-and dis_stmt (x: AST.stmt): unit rws =
+and dis_stmt x = DisEnv.indent (dis_stmt' x)
+and dis_stmt' (x: AST.stmt): unit rws =
+    (* Printf.printf "dis_stmt --s-> %s\n" (pp_stmt x); *)
+    let@ () = DisEnv.log (fun () -> Printf.printf "dis_stmt <-s-- %s\n" (pp_stmt x)) in
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
         (* If a local prefix exists, add it *)

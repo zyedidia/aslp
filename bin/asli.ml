@@ -12,6 +12,7 @@ open LibASL
 open Asl_ast
 open Value
 open Eval
+open Asl_utils
 
 module Parser = Asl_parser
 module TC     = Tcheck
@@ -101,6 +102,8 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         Printf.printf "Decoding and executing instruction %s %s\n" iset (Z.format "%x" op);
         cpu.opcode iset op
     | [":sem"; iset; opcode] ->
+        let cpuCopy = Cpu.mkCPU (Eval.Env.copy cpu.env) in
+        List.iter (fun (ident, _) -> Eval.Env.setVar Unknown cpuCopy.env ident VUninitialized) (Bindings.bindings (Eval.Env.getGlobals cpuCopy.env).bs);
         let op = Z.of_int (int_of_string opcode) in
         Printf.printf "Decoding instruction %s %s\n" iset (Z.format "%x" op);
         cpu.sem iset op
