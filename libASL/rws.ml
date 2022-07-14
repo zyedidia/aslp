@@ -1,4 +1,13 @@
 
+(** Types and supporting functions required for reader-writer-state monad.
+    
+    r is an immutable local environment passed to computations,
+    w is a type of values produced alongside main computation results, and
+    s is a local state which is passed to computations and can be modified.
+
+    Note: Here, "modified" means immutable updates and replacing the current 
+    value with a new augmented version.
+    *)
 module type S = sig
   type r
   type w
@@ -8,6 +17,18 @@ module type S = sig
   val mappend : w -> w -> w
 end
 
+(** Constructs a reader-writer-state monad using the given type specifications. 
+    
+    This provides a "rws" type which is parametrised by a result type. 
+    For example, "int rws" is a computation using the reader-writer-state 
+    types as described above and eventually returning an int result.
+
+    Also provides usual functional programming constructs for working
+    with the monadic type. 
+
+    In the Let module, bindings are given for let*, and*, let+, and and+ for
+    composing monadic computations using let syntax.
+    *)
 module Make (T : S) = struct
   include T
 
@@ -19,14 +40,18 @@ module Make (T : S) = struct
 
   (* monad definition for rws *)
 
+  (** Applies the given function to the result of the computation. *)
   let fmap (f: 'a -> 'b) (x: 'a rws): 'b rws =
     fun r s -> 
       let (a,s',w) = x r s in 
       (f a, s', w)
 
+  (** A computation returning a constant value and making no state changes. *)
   let pure (a: 'a): 'a rws =
     fun _ s -> (a, s, T.mempty)
 
+  (** Compose computations in sequence,
+      passing the result of the first into the second. *)
   let bind (x: 'a rws) (f: 'a -> 'b rws): 'b rws =
     fun r s -> 
       let (a, s', w) = x r s in
@@ -52,6 +77,8 @@ module Make (T : S) = struct
 
   (* higher-order functions and transformations *)
   
+  (** Performs a list of computations in sequence, resulting in a list
+      of their results.  *)
   let rec sequence (xs: 'a rws list): 'a list rws =
     match xs with
     | (x::xs) -> 
@@ -60,13 +87,18 @@ module Make (T : S) = struct
         (x :: xs)
     | [] -> pure []
 
-    
+  (** Performs a list of computations in sequence and discard their results
+      (but retains their state and writer effects).  *)
   let sequence_ (xs : 'a rws list): unit rws =
     let+ _ = sequence xs in ()
 
+  (** Uses the given function to create a list of computations which are
+      then run sequentially. Results in a list of their results.  *)
   let traverse (f: 'a -> 'b rws) (x: 'a list): 'b list rws =
     sequence (List.map f x)
 
+  (** Uses the given function to create a list of computations which are
+      then run sequentually. Discards their results. *)
   let traverse_ (f: 'a -> 'b rws) (x: 'a list): unit rws =
     let+ _ = sequence (List.map f x) in ()
 
@@ -109,11 +141,11 @@ module Make (T : S) = struct
 
 
   (** Runs a computation transiently without modifying the state or writer.
-      Instead, returns the final state and writer values. *)
+      Instead, returns the final state and writer values alongside the result. *)
   let locally (x: 'a rws): ('a * s * w) rws =
     fun r s -> 
       let (a,s',w) = x r s in 
-      ((a,s',w),s,T.mempty)
+      ((a,s',w), s, T.mempty)
 
 end
 
@@ -134,7 +166,7 @@ module Test = struct
 
   let a = let* x = test and* y = pure "a" in pure x;;
 
-  let main = 
+  let main () = 
     let* xx =
       try reads (fun e -> (* raise (Invalid_argument "a"); *) 99999)
       with Invalid_argument _ -> pure 55 in 
@@ -144,8 +176,4 @@ module Test = struct
       Printf.printf "%s %d\n" a b;
       Printf.printf "xx = %d\n" xx;
       pure a;;
-
-  List.iter (fun x -> Printf.printf "() ") (match (main () ()) with (a, s, w) -> w);;
-
-  Printf.printf "asdfdasf";
 end;;
