@@ -419,16 +419,14 @@ let eval_concat (loc: AST.l) (xs: value list): value =
  *)
 
 let eval_unknown_bits (wd: Primops.bigint): value =
-  VUninitialized
-    (*VBits (Primops.mkBits (Z.to_int wd) Z.zero)*)
+    VBits (Primops.mkBits (Z.to_int wd) Z.zero)
 
 let eval_unknown_ram (a: Primops.bigint): value =
-  VUninitialized
-    (*VRAM (Primops.init_ram (char_of_int 0))*)
+    VRAM (Primops.init_ram (char_of_int 0))
 
-let eval_unknown_integer (_: unit): value = VUninitialized (*VInt Z.zero*)
-let eval_unknown_real    (_: unit): value = VUninitialized (*VReal Q.zero*)
-let eval_unknown_string  (_: unit): value = VUninitialized (*VString "<UNKNOWN string>"*)
+let eval_unknown_integer (_: unit): value = VInt Z.zero
+let eval_unknown_real    (_: unit): value = VReal Q.zero
+let eval_unknown_string  (_: unit): value = VString "<UNKNOWN string>"
 
 (****************************************************************
  * End

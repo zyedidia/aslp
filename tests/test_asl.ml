@@ -46,26 +46,27 @@ let test_arith tcenv env () : unit =
 let compare_env (env1: Eval.Env.t) (env2: Eval.Env.t) (opcode: string): unit =
     List.iter (fun (key, v1) ->
         if not (Bindings.mem key (Eval.Env.getGlobals env2).bs) then 
-            Alcotest.check value (opcode ^ ": evalEnv." ^ (pprint_ident key) ^ " = disEvalEnv." ^ (pprint_ident key)) v1 VUninitialized
+            Alcotest.failf "disEvalEnv does not contain variable: %s\n" (pprint_ident key)
         else
             let v2 = Bindings.find key (Eval.Env.getGlobals env2).bs in
             Alcotest.check value (opcode ^ ": evalEnv." ^ (pprint_ident key) ^ " = disEvalEnv." ^ (pprint_ident key)) v1 v2
     ) (Bindings.bindings (Eval.Env.getGlobals env1).bs)
 
 let test_compare env () : unit =
-    let initializedEnv = Eval.Env.copy env in
-    Random.self_init ();
-    Eval.Env.initialize initializedEnv (List.map (fun _ -> Z.of_int64 (Random.int64 Int64.max_int)) (Utils.range 0 64));
-    let decoder = Eval.Env.getDecoder initializedEnv (Ident "A64") in
-
-    (* Set up our environments *)
-    let evalEnv = Eval.Env.copy initializedEnv in 
-    let disEnv = Eval.Env.copy env in
-    let disEvalEnv = Eval.Env.copy initializedEnv in
-    
+    let decoder = Eval.Env.getDecoder env (Ident "A64") in  
     let inchan = open_in "../../../tests/instructions_short.txt" in
     (try
         while true do
+            (* Set up our environments *)
+            let initializedEnv = Eval.Env.copy env in
+            Random.self_init ();
+            Eval.Env.initialize initializedEnv (List.map (fun _ -> Z.of_int64 (Random.int64 Int64.max_int)) (Utils.range 0 64));
+            let uninitializedEnv = Eval.Env.copy env in
+            List.iter (fun (ident, _) -> Eval.Env.setVar Unknown uninitializedEnv ident VUninitialized) (Bindings.bindings (Eval.Env.getGlobals uninitializedEnv).bs);
+            let evalEnv = Eval.Env.copy initializedEnv in 
+            let disEnv = Eval.Env.copy uninitializedEnv in
+            let disEvalEnv = Eval.Env.copy initializedEnv in
+
             let opcode = input_line inchan in
             let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))) in
 
@@ -83,7 +84,7 @@ let test_compare env () : unit =
                     Value.EvalError (loc, message) -> Alcotest.failf "Disassembled statement eval failed: %s\n" message
                 )
             with
-                Value.EvalError (loc, message) -> () (* We don't care what our implementation does if the original evaluation fails *)
+                Value.EvalError _ -> () (* We don't care what our implementation does if the original evaluation fails *)
             )
         done
     with
