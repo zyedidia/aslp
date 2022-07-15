@@ -396,6 +396,93 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
             (lo', wd')
     )
 
+(** Disassemble expression. This should never return Result VUninitialized *)
+and dis_expr loc x = DisEnv.indent (
+    let@ () = DisEnv.log (fun () -> Printf.printf "dis_expr <-e-- %s\n" (pp_expr x)) in
+    dis_expr' loc x)
+and dis_expr' (loc: l) (x: AST.expr): sym rws =
+    (match x with
+    | Expr_If(c, t, els, e) ->
+            let rec eval_if xs d : sym rws = match xs with
+                | [] -> dis_expr loc d
+                | AST.E_Elsif_Cond (c,b)::xs' ->
+                    sym_if loc (dis_expr loc c)
+                      (dis_expr loc b)
+                    (* else *)
+                      (eval_if xs' d)
+            in
+            eval_if (E_Elsif_Cond(c, t)::els) e
+    | Expr_Binop(a, op, b) ->
+            raise (EvalError (loc, "binary operation should have been removed in expression "
+                   ^ Utils.to_string (PP.pp_expr x)))
+    | Expr_Field(e, f) ->
+            let+ e' = dis_expr loc e in 
+            (match e' with
+            | Val v -> Val (get_field loc v f)
+            | Exp e -> Exp (Expr_Field(e,f)))
+    | Expr_Fields(e, fs) ->
+            let+ e' = dis_expr loc e in 
+            (match e' with
+            | Val v -> Val (eval_concat loc (List.map (get_field loc v) fs))
+            | Exp e -> Exp (Expr_Fields(e, fs)))
+    | Expr_Slices(e, ss) ->
+            let+ e' = dis_expr loc e 
+            and+ ss' = DisEnv.traverse (dis_slice loc) ss in
+            (match (e',List.exists sym_pair_has_exp ss') with
+            | (Val v, false) -> 
+                let vs = List.map (fun (l,w) -> extract_bits loc v (sym_val_or_uninit l) (sym_val_or_uninit w)) ss' in
+                Val (eval_concat loc vs)
+            | _ -> 
+                let vs = List.map (fun (l,w) -> Slice_LoWd(to_expr l, to_expr w)) ss' in
+                Exp (Expr_Slices(sym_expr e', vs)))
+    | Expr_In(e, p) ->
+            let@ e' = dis_expr loc e in
+            dis_pattern loc e' p
+    | Expr_Var id ->
+            let@ idopt = DisEnv.findVar loc id in
+            (match idopt with
+            (* variable not found *)
+            | None -> DisEnv.pure (Exp (Expr_Var id))
+            | Some id' -> 
+                let+ v = DisEnv.getVar loc id' in
+                (match v with
+                | VUninitialized -> (Exp (Expr_Var id'))
+                | v -> (Val v)))
+    | Expr_Parens(e) ->
+            let v = dis_expr loc e in
+            v
+    | Expr_TApply(f, tes, es) ->
+            dis_fun loc f tes es
+    | Expr_Tuple(es) ->
+            let+ es' = DisEnv.traverse (dis_expr loc) es in
+            (match sym_collect_list es' with
+            | Right vals -> Val (VTuple vals)
+            | Left exps -> Exp (Expr_Tuple exps))
+    | Expr_Unop(op, e) ->
+            raise (EvalError (loc, "unary operation should have been removed"))
+    | Expr_Unknown(t) ->
+            raise (EvalError (loc, "unknown expression"))
+    | Expr_ImpDef(t, Some(s)) ->
+            DisEnv.reads (fun env -> Val (Env.getImpdef loc env s))
+    | Expr_ImpDef(t, None) ->
+            raise (EvalError (loc, "unnamed IMPLEMENTATION_DEFINED behavior"))
+    | Expr_Array(a, i) ->
+            let@ a' = dis_expr loc a in
+            let+ i' = dis_expr loc i in
+            (match (a',i') with
+            | Val av, Val iv -> 
+                (match get_array loc av iv with
+                | VUninitialized -> Exp (Expr_Array(a, val_expr iv))
+                | v -> Val v)
+            | _ -> Exp (Expr_Array(a, to_expr i')))
+    | Expr_LitInt(i) ->    DisEnv.pure (Val (from_intLit i))
+    | Expr_LitHex(i) ->    DisEnv.pure (Val (from_hexLit i))
+    | Expr_LitReal(r) ->   DisEnv.pure (Val (from_realLit r))
+    | Expr_LitBits(b) ->   DisEnv.pure (Val (from_bitsLit b))
+    | Expr_LitMask(b) ->   DisEnv.pure (Val (from_maskLit b))
+    | Expr_LitString(s) -> DisEnv.pure (Val (from_stringLit s))
+    )
+
 (** Dissassemble a function call *)
 and dis_fun (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym rws
     = DisEnv.indent (dis_fun' loc f tes es)
@@ -541,92 +628,11 @@ and dis_fun' (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym r
             | None -> Exp (Expr_TApply(f, List.map to_expr tes', List.map to_expr es'))
         )
 
-(** Disassemble expression. This should never return Result VUninitialized *)
-and dis_expr loc x = DisEnv.indent (
-    let@ () = DisEnv.log (fun () -> Printf.printf "dis_expr <-e-- %s\n" (pp_expr x)) in
-    dis_expr' loc x)
-and dis_expr' (loc: l) (x: AST.expr): sym rws =
-    match x with
-    | Expr_If(c, t, els, e) ->
-        let rec eval_if xs d : sym rws = match xs with
-          | [] -> dis_expr loc d
-          | AST.E_Elsif_Cond (c,b)::xs' ->
-              sym_if loc (dis_expr loc c)
-                (dis_expr loc b)
-              (* else *)
-                (eval_if xs' d)
-          in
-          eval_if (E_Elsif_Cond(c, t)::els) e
-    | Expr_TApply(f, tes, es) ->
-        dis_fun loc f tes es
-    | Expr_Var id ->
-        let@ idopt = DisEnv.findVar loc id in
-        (match idopt with
-        (* variable not found *)
-        | None -> DisEnv.pure (Exp (Expr_Var id))
-        | Some id' -> 
-            let+ v = DisEnv.getVar loc id' in
-            (match v with
-            | VUninitialized -> (Exp (Expr_Var id'))
-            | v -> (Val v)))
-    | Expr_In(e, p) ->
-        let@ e' = dis_expr loc e in
-        dis_pattern loc e' p
-    | Expr_Slices(e, ss) ->
-        let@ ss' = DisEnv.traverse (dis_slice loc) ss in
-        let@ e' = dis_expr loc e in
-        (match e' with
-        | Val v ->
-            if List.exists sym_pair_has_exp ss' then
-                DisEnv.pure (Exp (Expr_Slices(to_expr (Val v), 
-                    List.map (fun (i, w) -> Slice_LoWd(to_expr i, to_expr w)) ss')))
-            else
-                let vs = List.map (fun s -> 
-                    (match s with
-                    | (Val v1, Val v2) -> extract_bits loc v v1 v2
-                    (* should never reach this _ case due to List.exists check above. *)
-                    | _ -> raise (EvalError (loc, "Unreachable: Shouldn't have expression in bit slice\n")))
-                    ) ss' in
-                DisEnv.pure (Val (eval_concat loc vs))
-        | Exp e' -> 
-            DisEnv.pure (Exp (Expr_Slices(e', List.map (fun (l,w) ->
-                Slice_LoWd(to_expr l, to_expr w)
-            ) ss'))))
-    | Expr_Tuple(es) ->
-        let+ es' = DisEnv.traverse (dis_expr loc) es in
-        (match sym_collect_list es' with
-        | Right vals -> Val (VTuple vals)
-        | Left exps -> Exp (Expr_Tuple exps))
-    | Expr_Array(a, i) ->
-        let@ a' = dis_expr loc a in
-        let+ i' = dis_expr loc i in
-        (match (a',i') with
-        | Val av, Val iv -> 
-            (match get_array loc av iv with
-            | VUninitialized -> Exp (Expr_Array(a, val_expr iv))
-            | v -> Val v)
-        | _ -> Exp (Expr_Array(a, to_expr i')))
-    | x -> 
-        (* FIXME: dangerous use of eval_expr in default case of dis_expr *)
-        let+ x' = DisEnv.reads (DisEnv.catch (fun env -> (eval_expr loc env x))) in
-        match val_opt_initialised x' with
-        | None -> Exp x
-        | Some v -> Val v
 
-(** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
-(* and dis_if_expr_no_remove (loc: l) (envs: Env.t list) (xs: e_elsif list): e_elsif list writer = 
-    match (xs, envs) with
-    | ([], []) -> return []
-    | ((AST.E_Elsif_Cond (cond, b)::xs'), (env::envs')) ->
-        let* cond' = dis_expr loc env cond in
-        let* b' = Env.nest (fun env' -> dis_expr loc env' b) env in
-        let* els' = dis_if_expr_no_remove loc envs' xs' in
-        return (AST.E_Elsif_Cond(
-            to_expr (cond'), 
-            to_expr (b')
-        ) :: (els'))
-    | _ -> raise (EvalError (loc, "Env and e_elsif list must have the same length")) *)
 
+
+ 
+    
 and dis_lexpr (loc: l) (x: AST.lexpr) (r: sym): unit rws =
     match x with
     | LExpr_Write(setter, tes, es) ->
