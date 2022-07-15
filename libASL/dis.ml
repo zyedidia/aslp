@@ -196,16 +196,28 @@ module DisEnv = struct
         let+ num = stateful LocalEnv.incNumSymbols in
         Ident (prefix ^ "Var" ^ string_of_int num)
 
-    let indent (x: 'a rws): 'a rws = 
-        let* () = modify (fun l -> {l with indent = l.indent + 1}) in
-        let* x' = x in
-        let+ () = modify (fun l -> {l with indent = l.indent - 1}) in
-        x'
+    let indent: string rws = 
+        let+ i = gets (fun l -> l.indent) in
+        let h = i / 2 in
+        let s = String.concat "" (List.init h (fun _ -> "\u{2502} \u{250a} ")) in
+        if i mod 2 == 0 then
+            s
+        else 
+            s ^ "\u{2502} "
 
-    let log (f: unit -> 'a) = 
-        let* i = gets (fun l -> l.indent) in
-        ignore (List.init i (fun _ -> Printf.printf " "));
-        (defer f)
+    let scope (name: string) (arg: string) (pp: 'a -> string) (x: 'a rws): 'a rws = 
+        let* i = indent in
+        Printf.printf "%s\u{256d}\u{2500} %s --> %s\n" i name arg;
+        let* () = modify (fun l -> {l with indent = l.indent + 1}) in
+        let* (x,s',w') = locally x in
+        (* let* i' = indent in
+        List.iter (fun s -> Printf.printf "%s %s\n" i' (pp_stmt s)) w'; *)
+        let* () = write w' 
+        and* () = put s' in
+        let+ () = modify (fun l -> {l with indent = l.indent - 1}) in
+        Printf.printf "%s\u{2570}\u{2500} = %s\n" i (pp x);
+        x
+
 end
 
 type 'a rws = 'a DisEnv.rws
@@ -396,10 +408,10 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
             (lo', wd')
     )
 
-(** Disassemble expression. This should never return Result VUninitialized *)
-and dis_expr loc x = DisEnv.indent (
-    let@ () = DisEnv.log (fun () -> Printf.printf "dis_expr <-e-- %s\n" (pp_expr x)) in
-    dis_expr' loc x)
+(** Dissassemble expression. This should never return Result VUninitialized *)
+and dis_expr loc x = 
+    DisEnv.scope "dis_expr" (pp_expr x) pp_result_or_simplified (dis_expr' loc x)
+
 and dis_expr' (loc: l) (x: AST.expr): sym rws =
     (match x with
     | Expr_If(c, t, els, e) ->
@@ -521,10 +533,13 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     )
 
 (** Disassemble a function call *)
-and dis_funcall (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws
-    = DisEnv.indent (dis_funcall' loc f tes es)
+and dis_funcall (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
+    DisEnv.scope "dis_funcall" 
+        (pp_expr (Expr_TApply (f, List.map sym_expr tes, List.map sym_expr es)))
+        pp_result_or_simplified 
+        (dis_funcall' loc f tes es)
+
 and dis_funcall' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
-    let@ () = DisEnv.log (fun () -> Printf.printf "dis_funcall <-f-- %s\n" (pprint_ident f)) in
     let@ fn = DisEnv.getFun loc f in
     (match fn with
     | Some (rty, atys, targs, args, loc, b) ->
@@ -534,13 +549,12 @@ and dis_funcall' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
         let@ () = DisEnv.modify LocalEnv.addImplicitLevel in
         let@ () = DisEnv.sequence_ @@ List.map2 (fun arg e -> 
             let@ v' = DisEnv.getVarOpt loc arg in
-            match v' with
-            | Some v' ->
-                let@ () = DisEnv.modify (LocalEnv.addImplicitValue arg v') in
-                (match e with
+            let@ () = (match v' with
+                | Some v' -> DisEnv.modify (LocalEnv.addImplicitValue arg v')
+                | None -> DisEnv.unit) in
+            (match e with
                 | Val v -> DisEnv.modify (LocalEnv.addLocalVar loc arg v)
                 | Exp _ -> DisEnv.unit)
-            | None -> DisEnv.unit
         ) targs tes in
         (* let _ =
         write_multi (List.concat (List.map2 (fun arg e -> 
@@ -575,6 +589,7 @@ and dis_funcall' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
             | None -> 
                 raise (EvalError (loc, "Unexpected function return type"))) in            
 
+        let@ () = DisEnv.modify (LocalEnv.addReturnSymbol rv) in
         (* Get the return symbol we just made so we can return it later *)
         (* let@ rv = DisEnv.gets (LocalEnv.getReturnSymbol loc) in *)
 
@@ -668,10 +683,9 @@ and dis_stmts (xs: AST.stmt list): unit rws =
     | _ -> raise (EvalError (loc, "Env list and s_elsif list must be the same length")) *)
 
 (** Disassemble statement *)
-and dis_stmt x = DisEnv.indent (dis_stmt' x)
+and dis_stmt x = DisEnv.scope "dis_stmt" (pp_stmt x) Utils.pp_unit (dis_stmt' x)
 and dis_stmt' (x: AST.stmt): unit rws =
     (* Printf.printf "dis_stmt --s-> %s\n" (pp_stmt x); *)
-    let@ () = DisEnv.log (fun () -> Printf.printf "dis_stmt <-s-- %s\n" (pp_stmt x)) in
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
         (* If a local prefix exists, add it *)
