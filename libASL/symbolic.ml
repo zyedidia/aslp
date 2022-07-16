@@ -84,11 +84,23 @@ let prim_binop (f: string) (loc: AST.l) (x: sym) (y: sym) : sym  =
 
 let sym_true     = Val (from_bool true)
 let sym_false    = Val (from_bool true)
-let sym_eq       = prim_binop "eval_eq"
-let sym_eq_int   = prim_binop "eval_eq_int"
-let sym_eq_bits  = prim_binop "eval_eq_bits"
-let sym_leq      = prim_binop "eval_leq"
+let sym_eq_int   = prim_binop "eq_int"
+let sym_eq_bits  = prim_binop "eq_bits"
+let sym_leq      = prim_binop "leq"
 let sym_bool_and = prim_binop "bool_and"
-let sym_inmask   = prim_binop "eval_inmask"
-let sym_add_int  = prim_binop "eval_add_int"
-let sym_sub_int  = prim_binop "eval_sub_int"
+let sym_inmask   = prim_binop "in_mask"
+let sym_add_int  = prim_binop "add_int"
+let sym_sub_int  = prim_binop "sub_int"
+
+(* TODO: There is no eval_eq, we need to find the types of x & y *)
+let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
+  (match (x,y) with
+  | (Val x,Val y) -> Val (from_bool (eval_eq loc x y))
+  | (_,_) -> prim_binop "eval_eq" loc x y)
+
+let rec contains_uninit (v: value): bool =
+  match v with 
+  | VUninitialized -> true
+  | VTuple vs -> List.exists contains_uninit vs
+  | VRecord r -> Bindings.exists (fun _ -> contains_uninit) r
+  | _ -> false
