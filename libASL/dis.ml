@@ -457,9 +457,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             | None -> DisEnv.pure (Exp (Expr_Var id))
             | Some id' -> 
                 let+ v = DisEnv.getVar loc id' in
-                (match v with
-                | VUninitialized -> (Exp (Expr_Var id'))
-                | v -> (Val v)))
+                if contains_uninit v then Exp (Expr_Var id') else Val v) (* TODO: Partially defined structures? *)
     | Expr_Parens(e) ->
             let v = dis_expr loc e in
             v
@@ -509,8 +507,9 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             | Left exps -> Exp (Expr_Tuple exps))
     | Expr_Unop(op, e) ->
             raise (EvalError (loc, "unary operation should have been removed"))
-    | Expr_Unknown(t) ->
-            raise (EvalError (loc, "unknown expression"))
+    | Expr_Unknown(t) -> (* TODO: Is this enough? *)
+            let+ t' = dis_type loc t in
+            Exp (Expr_Unknown(t'))
     | Expr_ImpDef(t, Some(s)) ->
             DisEnv.reads (fun env -> Val (Env.getImpdef loc env s))
     | Expr_ImpDef(t, None) ->
@@ -784,6 +783,14 @@ and dis_stmt' (x: AST.stmt): unit rws =
                     | Expr_Var(ident) -> LExpr_Var(ident) 
                     | _ -> raise (EvalError (loc, "Unexpected expression type in return symbol"))), 
                     e, loc)
+            ) les es
+        | (Val (VTuple(es)), Expr_Tuple(les)) ->
+            DisEnv.write @@ List.map2 (fun le e -> 
+                Stmt_Assign((
+                    match le with 
+                    | Expr_Var(ident) -> LExpr_Var(ident) 
+                    | _ -> raise (EvalError (loc, "Unexpected expression type in return symbol"))), 
+                    val_expr e, loc)
             ) les es
         | (_, Expr_Var(i)) -> DisEnv.write [Stmt_Assign(LExpr_Var(i), to_expr e', loc)]
         | _ -> raise (EvalError (loc, "TODO"))
