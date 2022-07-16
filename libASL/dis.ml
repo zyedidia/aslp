@@ -245,15 +245,6 @@ let mergeEnv (xLocals: scope list) (yLocals: scope list): scope list =
     print it or use it symbolically *)
 let to_expr = sym_expr
 
-let is_val (x: AST.expr): bool =
-    (match x with 
-    | Expr_LitInt _ -> true
-    | Expr_LitReal _ -> true
-    | Expr_LitString _ -> true
-    | Expr_Tuple _ -> true
-    | x -> false
-    )
-
 (** Converts a result_or_simplified to a value. 
     Raises an exception if an expression is given, as an expression cannot be casted to a value. 
     Requires checking beforehand *)

@@ -8,6 +8,16 @@ type sym =
   | Val of value
   | Exp of expr
 
+let is_val (x: AST.expr): bool =
+    (match x with 
+    | Expr_LitInt _ -> true
+    | Expr_LitBits _ -> true
+    | Expr_LitReal _ -> true
+    | Expr_LitString _ -> true
+    | Expr_Tuple _ -> true
+    | x -> false
+    )
+
 let rec val_expr (v: Value.value): AST.expr = 
   match v with 
   | VBool b -> Expr_Var(if b then Ident "TRUE" else Ident "FALSE")
