@@ -507,13 +507,13 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     )
 
 (** Disassemble a function call *)
-and dis_funcall (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
-    DisEnv.scope "dis_funcall" 
+and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
+    DisEnv.scope "dis_call"
         (pp_expr (Expr_TApply (f, List.map sym_expr tes, List.map sym_expr es)))
         pp_result_or_simplified 
-        (dis_funcall' loc f tes es)
+        (dis_call' loc f tes es)
 
-and dis_funcall' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
+and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
     let@ fn = DisEnv.getFun loc f in
     (match fn with
     | Some (rty, atys, targs, args, loc, b) ->
@@ -522,14 +522,15 @@ and dis_funcall' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
 
         (* Assign targs := tes *)
         let@ () = DisEnv.sequence_ @@ List.map2 (fun arg e -> 
-            DisEnv.modify (LocalEnv.addLocalVar loc arg (sym_val_or_uninit e))
+            let@ arg' = DisEnv.gets (LocalEnv.getLocalName arg) in
+            DisEnv.modify (LocalEnv.addLocalVar loc arg' (sym_val_or_uninit e))
         ) targs tes in
  
         (* Assign args := es *)
         let@ () = DisEnv.sequence_ (Utils.map3 (fun (ty, _) arg e -> 
             let@ arg' = DisEnv.gets (LocalEnv.getLocalName arg) in
             let@ ty' = dis_type loc ty in
-            let@ () = DisEnv.modify (LocalEnv.addLocalVar loc arg (sym_val_or_uninit e)) in
+            let@ () = DisEnv.modify (LocalEnv.addLocalVar loc arg' (sym_val_or_uninit e)) in
             DisEnv.write [Stmt_VarDecl(ty', arg', sym_expr e, loc)]
         ) atys args es) in
 
@@ -562,6 +563,14 @@ and dis_funcall' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
         | Some v -> DisEnv.pure (Val v)
         | None -> DisEnv.pure (Exp (Expr_TApply(f, List.map to_expr tes, List.map to_expr es)))
     )
+
+(** Disassemble call to function *)
+and dis_funcall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): sym rws =
+        dis_call loc f tvs vs
+
+(** Evaluate call to procedure *)
+and dis_proccall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): unit rws =
+        let+ _ = dis_call loc f tvs vs in ()
 
 and dis_lexpr (loc: l) (x: AST.lexpr) (r: sym): unit rws =
     match x with
@@ -729,6 +738,7 @@ and dis_stmt' (x: AST.stmt): unit rws =
         | (_, Expr_Var(i)) -> DisEnv.write [Stmt_Assign(LExpr_Var(i), to_expr e', loc)]
         | _ -> raise (EvalError (loc, "TODO"))
         )
+    | Stmt_ProcReturn(loc) -> DisEnv.unit
     | Stmt_Assert(e, loc) ->
         let@ e' = dis_expr loc e in
         (match e' with 
