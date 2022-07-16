@@ -98,36 +98,21 @@ module LocalEnv = struct
         let env' = {env with numSymbols = env.numSymbols + 1} in
         (env'.numSymbols, env')
 
+    (* TODO: 0 should not map to "" *)
     let getLocalPrefix (env: t): string =
-        match env.localPrefixes with
-        | [] -> ""
-        | x::_ -> x
+        let l = List.length env.locals in
+        if l = 0 then "" else string_of_int l
 
     let getLocalName (x: ident) (env: t): ident =
-        Ident (getLocalPrefix env ^ pprint_ident x)
+        Ident (pprint_ident x ^ getLocalPrefix env)
 
-    let addLocalPrefix (s: string) (env: t): t =
-        {env with localPrefixes = s :: env.localPrefixes}
+    let addLevel (env: t): t =
+        {env with locals = (Bindings.empty)::env.locals}
 
-    let removeLocalPrefix (env: t): t =
-        (match env.localPrefixes with
-        | [] -> env
-        | (s::ss) -> {env with localPrefixes = ss}
-        )
-
-    let addImplicitValue (arg: ident) (v: value) (env: t): t =
-        match env.implicitLevels with
+    let popLevel (env: t): t =
+        match env.locals with
         | [] -> raise (EvalError (Unknown, "No levels exist"))
-        | (level::levels) -> 
-            {env with implicitLevels = ((arg, v)::level)::levels}
-
-    let addImplicitLevel (env: t): t =
-        {env with implicitLevels = []::env.implicitLevels}
-
-    let popImplicitLevel (env: t): (ident * value) list * t =
-        match env.implicitLevels with
-        | [] -> raise (EvalError (Unknown, "No levels exist"))
-        | (level::levels) -> (level, {env with implicitLevels = levels})
+        | (_::ls) -> {env with locals = ls}
 
     let rec search (x: ident) (bss : value Bindings.t list): value Bindings.t option =
         match bss with
@@ -175,8 +160,7 @@ module DisEnv = struct
             | None -> reads (catch (fun env -> Env.getVar loc env x))
 
     let getLocalName (x: ident): ident rws = 
-        let+ prefix = gets LocalEnv.getLocalPrefix in
-        Ident (prefix ^ pprint_ident x)
+        gets (LocalEnv.getLocalName x)
 
     let findVar (loc: l) (id: ident): ident option rws =
         let* localid = gets (LocalEnv.getLocalName id) in
@@ -542,82 +526,41 @@ and dis_funcall' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
     let@ fn = DisEnv.getFun loc f in
     (match fn with
     | Some (rty, atys, targs, args, loc, b) ->
+        (* Nest enviroment *)
+        let@ () = DisEnv.modify LocalEnv.addLevel in
 
-        (* Add return type variables *)
-        (* For each of these, if one already exists, add it to a stack to be restored after *)
-        let@ () = DisEnv.modify LocalEnv.addImplicitLevel in
+        (* Assign targs := tes *)
         let@ () = DisEnv.sequence_ @@ List.map2 (fun arg e -> 
-            let@ v' = DisEnv.getVarOpt loc arg in
-            let@ () = (match v' with
-                | Some v' -> DisEnv.modify (LocalEnv.addImplicitValue arg v')
-                | None -> DisEnv.unit) in
-            (match e with
-                | Val v -> DisEnv.modify (LocalEnv.addLocalVar loc arg v)
-                | Exp _ -> DisEnv.unit)
+            DisEnv.modify (LocalEnv.addLocalVar loc arg (sym_val_or_uninit e))
         ) targs tes in
-        (* let _ =
-        write_multi (List.concat (List.map2 (fun arg e -> 
-            read (
-                let* e' = dis_expr loc env e in
-                (try (Env.addImplicitValue env arg (Env.getVar loc env arg)) with EvalError _ -> ());
-                (match e' with
-                | Val v -> return (Env.addLocalVar loc env arg v)
-                | Exp _ -> return ()
-                )
-            ) 
-        ) targs tes)) in *)
-
-        (* Add return variable declarations *)
-        let fName = name_of_FIdent f in
-        let make_return_vars (t: ty): ident rws =
-            let@ n = DisEnv.stateful LocalEnv.incNumSymbols in
-            let name = Ident (fName ^ "Var" ^ string_of_int n) in
-            
-            let@ t' = dis_type loc t in
-            let+ () = DisEnv.write [Stmt_VarDeclsNoInit(
-                t', [name], Unknown
-            )] in
-            name in 
-        let@ rv = (match rty with
-            | Some (Type_Tuple ts) -> 
-                let+ names = DisEnv.traverse make_return_vars ts in
-                Expr_Tuple (List.map (fun n -> Expr_Var n) names)
-            | Some t -> 
-                let+ name = make_return_vars t in
-                Expr_Var name
-            | None -> 
-                raise (EvalError (loc, "Unexpected function return type"))) in            
-
-        let@ () = DisEnv.modify (LocalEnv.addReturnSymbol rv) in
-        (* Get the return symbol we just made so we can return it later *)
-        (* let@ rv = DisEnv.gets (LocalEnv.getReturnSymbol loc) in *)
-
-        (* Add local parameters, avoiding name collisions *)
-        (* Also print what the parameter refers to *)
-        let@ num = DisEnv.stateful LocalEnv.incNumSymbols in
-        let localPrefix = fName ^ string_of_int num in
-        let@ () = DisEnv.sequence_ (Utils.map3 (fun (ty, _) arg ex -> 
-            let v = (match ex with 
-                | Val v -> v
-                | Exp _ -> VUninitialized) in
-            let name = (Ident (localPrefix ^ pprint_ident arg)) in
-            let@ () = DisEnv.modify (LocalEnv.addLocalVar loc  name v) in
+ 
+        (* Assign args := es *)
+        let@ () = DisEnv.sequence_ (Utils.map3 (fun (ty, _) arg e -> 
+            let@ arg' = DisEnv.gets (LocalEnv.getLocalName arg) in
             let@ ty' = dis_type loc ty in
-            DisEnv.write [Stmt_VarDecl(ty', name, to_expr ex, loc)]
+            let@ () = DisEnv.modify (LocalEnv.addLocalVar loc arg (sym_val_or_uninit e)) in
+            DisEnv.write [Stmt_VarDecl(ty', arg', sym_expr e, loc)]
         ) atys args es) in
 
-        (* print out the body *)
-        let@ () = DisEnv.modify (LocalEnv.addLocalPrefix localPrefix)
-        and@ () = dis_stmts b
-        and@ () = DisEnv.modify (LocalEnv.removeReturnSymbol)
-        and@ () = DisEnv.modify (LocalEnv.removeLocalPrefix) in
+        (* Create return variable (if necessary) *)
+        let@ rv = (match rty with
+            | Some (Type_Tuple ts) -> 
+                let+ names = DisEnv.traverse (fun t -> let@ t' = dis_type loc t in fresh_var loc t) ts in
+                Expr_Tuple (List.map (fun n -> Expr_Var n) names)
+            | Some t -> 
+                let@ t' = dis_type loc t in
+                let+ name = fresh_var loc t' in 
+                Expr_Var name
+            | None -> 
+                DisEnv.pure (Expr_Unknown type_unknown)) in
 
-        (* Restore implicit values *)
-        let@ level = DisEnv.stateful LocalEnv.popImplicitLevel in
-        let@ () = DisEnv.traverse_ (fun (arg, v) -> 
-            DisEnv.modify (LocalEnv.addLocalVar loc arg v)) level in
+        (* Evaluate body with new return symbol *)
+        let@ _ = DisEnv.modify (LocalEnv.addReturnSymbol rv) in
+        let@ () = dis_stmts b in
+        let@ () = DisEnv.modify (LocalEnv.removeReturnSymbol) in
 
-        (* Return the return symbol to be used in expressions e.g. assignments *)
+        (* Pop enviroment *)
+        let@ () = DisEnv.modify LocalEnv.popLevel in
         DisEnv.pure (Exp rv)
     | None ->
         let tes_vals = (List.map sym_val_or_uninit tes)
