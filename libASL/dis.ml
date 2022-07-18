@@ -18,17 +18,39 @@ open Eval
 
 open Symbolic
 
-let rec expr_to_lexpr (e: expr): lexpr =
-    match e with
-    | Expr_Var v -> LExpr_Var v
-    | Expr_Tuple es -> LExpr_Tuple (List.map expr_to_lexpr es) 
-    | _ -> raise (EvalError (Unknown, "unexpected expression in expr_to_lexpr coercion: " ^ pp_expr e))
+
+type 'a writer = 'a * stmt list
+
+let return x = (x, [])
+
+let write s = ((),[s])
+
+let write_multi ss = ((), ss)
+
+let ( let* ) (x: 'a writer) (f: 'a -> 'b writer): 'b writer =
+    let (ex, stmts1) = x in
+    let (ex', stmts2) = f ex in
+    (ex', stmts1 @ stmts2)
+
+let (let**) (xs: ('a writer) list) (f: 'a list -> 'b writer): 'b writer =
+    let xsa = List.map (fun (a, _) -> a) xs in
+    let xsbs = List.concat (List.map (fun (_, bs) -> bs) xs) in
+    let (ex', stmts) = f xsa in
+    (ex', xsbs @ stmts)
+
+let read (w: 'a writer): stmt list =
+    match w with (_, stmts) -> stmts
+
+let pp_result_or_simplified (rs: sym): string = 
+    match rs with
+    | Val v -> pp_value v
+    | Exp e -> pp_expr e
 
 
 module LocalEnv = struct
     type t = {
         locals          : value Bindings.t list;
-        returnSymbols   : AST.lexpr list;
+        returnSymbols   : AST.expr list;
         numSymbols      : int;
         localPrefixes   : string list;
         implicitLevels  : (ident * value) list list;
@@ -45,11 +67,8 @@ module LocalEnv = struct
             indent = 0;
         }
 
-    let pp_locals (env: t): string = 
-        Printf.sprintf "{ locals = [%s] }" (Utils.pp_list (pp_bindings pp_value) env.locals)
-
     let fromEvalEnv (env: Env.t): t =
-        { (empty ()) with locals = Bindings.empty :: [] }
+        { (empty ()) with locals = Bindings.empty :: Env.readLocals env }
 
     let addLocalVar (loc: l) (k: ident) (v: value) (env: t): t =
         if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident k) (pp_value v);
@@ -59,12 +78,12 @@ module LocalEnv = struct
 
     let addLocalConst = addLocalVar
 
-    let getReturnSymbol (loc: l) (env: t): lexpr =
+    let getReturnSymbol (loc: l) (env: t): AST.expr =
         match env.returnSymbols with
         | [] -> raise (EvalError (loc, "Return not in function"))
         | (e :: rs) -> e
 
-    let addReturnSymbol (e: lexpr) (env: t): t =
+    let addReturnSymbol (e: AST.expr) (env: t): t =
         {env with returnSymbols = e :: env.returnSymbols}
 
     let removeReturnSymbol (env: t): t =
@@ -124,7 +143,7 @@ module LocalEnv = struct
            it is better to rework this to be a single "stack frame" instead of
            a list of scopes. *)
         | Some bs -> addLocalVar loc x v env
-        | None    -> raise (EvalError (loc, "LocalEnv::setVar " ^ pprint_ident x ^ " " ^ pp_locals env))
+        | None    -> raise (EvalError (loc, "LocalEnv::setVar " ^ pprint_ident x))
         )
 end
 
@@ -193,9 +212,9 @@ module DisEnv = struct
         let* (x,s',w') = locally x in
         (* let* i' = indent in
         List.iter (fun s -> Printf.printf "%s %s\n" i' (pp_stmt s)) w'; *)
-        let+ () = write w'
-        and+ () = put s'
-        and+ () = modify (fun l -> {l with indent = l.indent - 1}) in
+        let* () = write w' 
+        and* () = put s' in
+        let+ () = modify (fun l -> {l with indent = l.indent - 1}) in
         Printf.printf "%s\u{2570}\u{2500} = %s\n" i (pp x);
         x
 
@@ -294,7 +313,7 @@ and dis_slice (loc: l) (x: AST.slice): (sym * sym) rws =
 and dis_fun (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym rws = 
     DisEnv.scope "dis_fun" 
         (pp_expr (Expr_TApply (f, tes, es)))
-        pp_sym 
+        pp_result_or_simplified 
         (dis_fun' loc f tes es)
 
 and dis_fun' (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym rws =
@@ -356,7 +375,7 @@ and dis_fun' (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym r
                 let@ e' = dis_expr loc e in
                 (match e' with
                     | Val v -> DisEnv.modify (LocalEnv.addLocalVar loc arg v)
-                    | Exp _ -> raise (Invalid_argument "asdf"))
+                    | Exp _ -> DisEnv.unit)
             ) targs tes in
             (* let _ =
             write_multi (List.concat (List.map2 (fun arg e -> 
@@ -372,21 +391,26 @@ and dis_fun' (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym r
 
             (* Add return variable declarations *)
             let fName = name_of_FIdent f in
-            let make_return_vars (i: int) (t: ty): ident rws =
-                let name = Ident (Printf.sprintf "%s_return%d" fName i) in
-                let+ () = dis_stmt (Stmt_VarDeclsNoInit(t, [name], Unknown)) in
+            let make_return_vars (t: ty): ident rws =
+                let@ n = DisEnv.stateful LocalEnv.incNumSymbols in
+                let name = Ident (fName ^ "Var" ^ string_of_int n) in
+                
+                let@ t' = dis_type loc t in
+                let+ () = DisEnv.write [Stmt_VarDeclsNoInit(
+                    t', [name], Unknown
+                )] in
                 name in 
             let@ rv = (match rty with
                 | Some (Type_Tuple ts) -> 
                     let+ names = DisEnv.traverse make_return_vars ts in
-                    Expr_Tuple (List.mapi (fun i n -> Expr_Var n) names)
+                    Expr_Tuple (List.map (fun n -> Expr_Var n) names)
                 | Some t -> 
                     let+ name = make_return_vars t in
                     Expr_Var name
                 | None -> 
                     raise (EvalError (loc, "Unexpected function return type"))) in            
 
-            let@ () = DisEnv.modify (LocalEnv.addReturnSymbol (expr_to_lexpr rv)) in
+            let@ () = DisEnv.modify (LocalEnv.addReturnSymbol rv) in
             (* Get the return symbol we just made so we can return it later *)
             (* let@ rv = DisEnv.gets (LocalEnv.getReturnSymbol loc) in *)
 
@@ -434,7 +458,7 @@ and dis_fun' (loc: l) (f: ident) (tes: AST.expr list) (es: AST.expr list): sym r
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
 and dis_expr loc x = 
-    DisEnv.scope "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x)
+    DisEnv.scope "dis_expr" (pp_expr x) pp_result_or_simplified (dis_expr' loc x)
 and dis_expr' (loc: l) (x: AST.expr): sym rws =
     match x with
     | Expr_If(c, t, els, e) ->
@@ -577,16 +601,6 @@ and dis_lexpr (loc: l) (x: AST.lexpr) (r: sym): unit rws =
             let@ () = DisEnv.modify (LocalEnv.setVar loc v' VUninitialized) in
             DisEnv.write [Stmt_Assign(LExpr_Var(v'), e, loc)])
     | LExpr_Wildcard -> DisEnv.unit
-    | LExpr_Tuple ls ->
-        let rs = (match r with
-        | Val (VTuple vs) -> Some (List.map (fun x -> Val x) vs)
-        | Exp (Expr_Tuple es) -> Some (List.map (fun x -> Exp x) es)
-        | _ -> None) in
-        (match rs with
-        | Some rs -> 
-            DisEnv.sequence_ (List.map2 (fun l r -> dis_lexpr loc l r) ls rs)
-        | None -> 
-            DisEnv.write [Stmt_Assign (x, to_expr r, loc)])
     | _ -> 
         match r with
         | Val rv -> 
@@ -706,10 +720,20 @@ and dis_stmt' (x: AST.stmt): unit rws =
         in
         eval_if (S_Elsif_Cond(c, t)::els) e
     | Stmt_FunReturn(e, loc) ->
-        (* FIXME: replacing return with assignment is unsound if
-           return appears in the middle of a list of statements. *)
+        let@ e' = dis_expr loc e in
         let@ rv = DisEnv.gets (LocalEnv.getReturnSymbol loc) in
-        dis_stmt (Stmt_Assign (rv, e, loc))
+        (match (e', rv) with
+        | (Exp (Expr_Tuple(es)), Expr_Tuple(les)) ->
+            DisEnv.write @@ List.map2 (fun le e -> 
+                Stmt_Assign((
+                    match le with 
+                    | Expr_Var(ident) -> LExpr_Var(ident) 
+                    | _ -> raise (EvalError (loc, "Unexpected expression type in return symbol"))), 
+                    e, loc)
+            ) les es
+        | (_, Expr_Var(i)) -> DisEnv.write [Stmt_Assign(LExpr_Var(i), to_expr e', loc)]
+        | _ -> raise (EvalError (loc, "TODO"))
+        )
     | Stmt_Assert(e, loc) ->
         let@ e' = dis_expr loc e in
         (match e' with 
@@ -814,8 +838,8 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     let (_,lenv',stmts) = dis_stmts exec env lenv in
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts; *)
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
-                    Some stmts
-                    (* Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
+                    (* Some stmts *)
+                    Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts))));
                 end else begin
                     None
                 end
