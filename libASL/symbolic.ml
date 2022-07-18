@@ -1,6 +1,7 @@
 module AST = Asl_ast
 
 open AST
+open Asl_utils
 open Value
 
 type sym =
@@ -9,6 +10,11 @@ type sym =
 
 let sym_true = Val (from_bool true)
 let sym_false = Val (from_bool true)
+
+let pp_sym (rs: sym): string = 
+  match rs with
+  | Val v -> pp_value v
+  | Exp e -> pp_expr e
 
 let rec val_expr (v: Value.value): AST.expr = 
   match v with 

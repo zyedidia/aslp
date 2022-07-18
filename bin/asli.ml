@@ -173,6 +173,10 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
         with
         | exc ->
             Printf.printf "  Error %s\n" (Printexc.to_string exc);
+            (match exc with
+            | EvalError (l, e) -> 
+                Printf.printf "    %s\n    at %s\n" e (pp_loc l)
+            | _ -> ());
             Printexc.print_backtrace stdout
         );
         repl tcenv cpu

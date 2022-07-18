@@ -190,6 +190,8 @@ let stringDrop (n: int) (s: string): string =
 
 let pp_unit () = "()"
 
+let pp_list f xs = String.concat "; " (List.map f xs)
+
 (****************************************************************
  * End
  ****************************************************************)
