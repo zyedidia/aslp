@@ -13,7 +13,7 @@
 
 let to_string (d: PPrint.document): string =
     let buf = Buffer.create 100 in
-    PPrint.ToBuffer.compact buf d;
+    PPrint.ToBuffer.pretty 100.0 80 buf d;
     Buffer.contents buf
 
 

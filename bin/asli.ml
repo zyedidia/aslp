@@ -171,6 +171,8 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
                 )
             )
         with
+        | Value.EvalError (loc, msg) ->
+            Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg;
         | exc ->
             Printf.printf "  Error %s\n" (Printexc.to_string exc);
             Printexc.print_backtrace stdout

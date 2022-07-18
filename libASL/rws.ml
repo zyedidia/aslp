@@ -65,9 +65,9 @@ module Make (T : S) = struct
   module Let = struct
     let (let*) = bind
     let (and*) x y = 
-      let* x in 
-      let* y in 
-      pure (x, y)
+      let* x' = x in 
+      let* y' = y in 
+      pure (x', y')
 
     let (let+) x f = fmap f x
     let (and+) = (and*)
