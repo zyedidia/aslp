@@ -252,11 +252,22 @@ let getGlobalConst(c: ident): sym rws =
   DisEnv.reads (fun env -> Val (Env.getGlobalConst env c))
 
 let declare_var (loc: l) (t: ty) (i: ident): unit rws =
-  let@ () = DisEnv.modify (LocalEnv.addLocalVar loc i VUninitialized) in
+  let@ () = DisEnv.modify 
+    (LocalEnv.addLocalVar loc i VUninitialized) in
   DisEnv.write [Stmt_VarDeclsNoInit(t, [i], loc)]
+
+let declare_assign_var (loc: l) (t: ty) (i: ident) (x: sym): unit rws =
+  let@ () = DisEnv.modify 
+    (LocalEnv.addLocalVar loc i (sym_val_or_uninit x)) in
+  DisEnv.write [Stmt_VarDecl(t, i, sym_expr x, loc)]
 
 let declare_fresh_var (loc: l) (t: ty): ident rws =
   let@ res = DisEnv.nextVarName "RetVar" in
+  let+ () = declare_var loc t res in
+  res
+
+let declare_fresh_named_var (loc: l) (name: string)  (t: ty): ident rws =
+  let@ res = DisEnv.nextVarName name in
   let+ () = declare_var loc t res in
   res
 
@@ -265,12 +276,13 @@ and assign_var (loc: l) (i: ident) (x: sym): unit rws =
   let@ () = DisEnv.modify (LocalEnv.setVar loc i v') in
   DisEnv.write [Stmt_Assign(LExpr_Var(i), sym_expr x, loc)]
 
-(** Monadic Utilities *)
-
 let declare_const (loc: l) (ty: ty) (i: ident) (x: sym): unit rws =
   let v' = sym_val_or_uninit x in
   let@ () = DisEnv.modify (LocalEnv.addLocalConst loc i v') in
   DisEnv.write [Stmt_ConstDecl(ty, (i), sym_expr x, loc)]
+
+
+(** Monadic Utilities *)
 
 (** Symbolic implementation of an if statement that returns an expression 
   TODO: 
@@ -284,7 +296,7 @@ let sym_if (loc: l) (test: sym rws) (tcase: sym rws) (fcase: sym rws): sym rws =
   | Val (VBool (false)) -> fcase 
   | Val _ -> failwith ("Split on non-boolean value")
   | Exp e -> 
-      let@ tmp = declare_fresh_var loc type_unknown in
+      let@ tmp = declare_fresh_named_var loc "If" type_unknown in
       let@ ((),tenv,tstmts) = DisEnv.locally(let@ r = tcase in assign_var loc tmp r) in
       let@ ((),fenv,fstmts) = DisEnv.locally(let@ r = fcase in assign_var loc tmp r) in
       let@ () = DisEnv.put (LocalEnv.merge tenv fenv) in
@@ -521,30 +533,18 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
     let@ fn = DisEnv.getFun loc f in
     (match fn with
     | Some (rty, atys, targs, args, loc, b) ->
-        (* Create return variable (if necessary).
-           These should exist in the outer scope. *)
-        let@ rv = (match rty with
-        | Some (Type_Tuple ts) -> 
-            let@ ts' = DisEnv.traverse (dis_type loc) ts in
-            let+ names = DisEnv.traverse (declare_fresh_var loc) ts' in
-            Expr_Tuple (List.map (fun n -> Expr_Var n) names)
-        | Some t -> 
-            let@ t' = dis_type loc t in
-            let+ name = declare_fresh_var loc t' in 
-            Expr_Var name
-        | None -> 
-            DisEnv.pure (Expr_Unknown type_unknown)) in
-        
-            (* Nest enviroment *)
+        let fname = name_of_FIdent f in
+
+        (* Nest enviroment *)
         let@ () = DisEnv.modify LocalEnv.addLevel in
         
         (* Assign targs := tes *)
         let@ () = DisEnv.sequence_ @@ List.map2 (fun arg e -> 
             let@ arg' = DisEnv.gets (LocalEnv.getLocalName arg) in
-            (* let type_int = Type_Constructor (Ident "integer") in *)
-            declare_const loc type_unknown arg' e
+            let type_int = Type_Constructor (Ident "integer") in
+            declare_const loc type_int arg' e
             ) targs tes in
-            
+
         (* Assign args := es *)
         let@ () = DisEnv.sequence_ (Utils.map3 (fun (ty, _) arg e -> 
             let@ arg' = DisEnv.gets (LocalEnv.getLocalName arg) in
@@ -552,17 +552,35 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
             declare_const loc ty' arg' e
         ) atys args es) in
 
+        (* Helper to make return variables according to return type. *)
+        let make_return_variables = (match rty with
+        | Some (Type_Tuple ts) -> 
+            let@ ts' = DisEnv.traverse (dis_type loc) ts in
+            let+ names = DisEnv.traverse (declare_fresh_named_var loc fname) ts' in
+            Expr_Tuple (List.map (fun n -> Expr_Var n) names)
+        | Some t -> 
+            let@ t' = dis_type loc t in
+            let+ name = declare_fresh_named_var loc fname t' in 
+            Expr_Var name
+        | None -> 
+            DisEnv.pure (Expr_Unknown type_unknown)) in
+
+        (* Create return variable (if necessary).
+            This is in the inner scope to allow for type parameters. *)
+        let@ localreturn = make_return_variables in
+
         let@ env = DisEnv.get in
         let@ () = DisEnv.log (LocalEnv.pp_locals env ^ "\n") in
 
         (* Evaluate body with new return symbol *)
-        let@ _ = DisEnv.modify (LocalEnv.addReturnSymbol rv) in
+        let@ _ = DisEnv.modify (LocalEnv.addReturnSymbol localreturn) in
         let@ () = dis_stmts b in
         let@ () = DisEnv.modify (LocalEnv.removeReturnSymbol) in
 
         (* Pop enviroment *)
+        let@ result = dis_expr loc localreturn in
         let@ () = DisEnv.modify LocalEnv.popLevel in
-        dis_expr loc rv
+        DisEnv.pure result
     | None ->
         let tes_vals = (List.map sym_val_or_uninit tes)
         and es_vals = (List.map sym_val_or_uninit es) in
@@ -636,21 +654,21 @@ and dis_stmt' (x: AST.stmt): unit rws =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
         (* If a local prefix exists, add it *)
-        let@ vs' = DisEnv.traverse DisEnv.getLocalName vs in
         let@ ty' = dis_type loc ty in
+        let@ vs' = DisEnv.traverse DisEnv.getLocalName vs in
         DisEnv.traverse_ (declare_var loc ty') vs'
     | Stmt_VarDecl(ty, v, e, loc) ->
         (* If a local prefix exists, add it *)
         let@ v' = DisEnv.getLocalName v in
         (* Add the variable *)
-        let@ e'' = dis_expr loc e in
-        let@ () = declare_var loc ty v' in
-        assign_var loc v' e''
+        let@ ty' = dis_type loc ty in
+        let@ e' = dis_expr loc e in
+        declare_assign_var loc ty' v' e'
     | Stmt_ConstDecl(ty, v, e, loc) ->
         (* If a local prefix exists, add it *)
         let@ v' = DisEnv.getLocalName v in
-        let@ e' = dis_expr loc e in
         let@ ty' = dis_type loc ty in
+        let@ e' = dis_expr loc e in
         declare_const loc ty' v' e'
     | Stmt_Assign(l, r, loc) ->
         let@ r' = dis_expr loc r in
@@ -774,10 +792,13 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     (* execute disassembly inside newly created local environment. *)
                     let lenv = LocalEnv.empty () in
                     let (_,lenv',stmts) = dis_stmts exec env lenv in
-                    (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts; *)
+                    
+                    Printf.printf "-----------\n";
+                    List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts;
+                    Printf.printf "-----------\n";
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
-                    Some stmts
-                    (* Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
+                    (* Some stmts *)
+                    Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts))));
                 end else begin
                     None
                 end
