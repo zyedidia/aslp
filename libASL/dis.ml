@@ -18,42 +18,13 @@ open Eval
 
 open Symbolic
 
-
-type 'a writer = 'a * stmt list
-
-let return x = (x, [])
-
-let write s = ((),[s])
-
-let write_multi ss = ((), ss)
-
-let ( let* ) (x: 'a writer) (f: 'a -> 'b writer): 'b writer =
-    let (ex, stmts1) = x in
-    let (ex', stmts2) = f ex in
-    (ex', stmts1 @ stmts2)
-
-let (let**) (xs: ('a writer) list) (f: 'a list -> 'b writer): 'b writer =
-    let xsa = List.map (fun (a, _) -> a) xs in
-    let xsbs = List.concat (List.map (fun (_, bs) -> bs) xs) in
-    let (ex', stmts) = f xsa in
-    (ex', xsbs @ stmts)
-
-let read (w: 'a writer): stmt list =
-    match w with (_, stmts) -> stmts
-
-let pp_result_or_simplified (rs: sym): string = 
-    match rs with
-    | Val v -> pp_value v
-    | Exp e -> pp_expr e
-
+let debug_level = ref 1
 
 module LocalEnv = struct
     type t = {
         locals          : value Bindings.t list;
-        returnSymbols   : AST.expr list;
+        returnSymbols   : expr list;
         numSymbols      : int;
-        localPrefixes   : string list;
-        implicitLevels  : (ident * value) list list;
         indent          : int;
     }
 
@@ -62,13 +33,14 @@ module LocalEnv = struct
             locals = [Bindings.empty];
             returnSymbols = [];
             numSymbols = 0;
-            localPrefixes = [];
-            implicitLevels = [];
             indent = 0;
         }
 
-    let fromEvalEnv (env: Env.t): t =
-        { (empty ()) with locals = Bindings.empty :: Env.readLocals env }
+    let pp_bindings_list (bss: value Bindings.t list) = 
+        Utils.pp_list (pp_bindings pp_value) bss
+
+    let pp_locals (env: t): string = 
+        Printf.sprintf "locals = %s" (pp_bindings_list env.locals)
 
     let addLocalVar (loc: l) (k: ident) (v: value) (env: t): t =
         if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident k) (pp_value v);
@@ -78,12 +50,12 @@ module LocalEnv = struct
 
     let addLocalConst = addLocalVar
 
-    let getReturnSymbol (loc: l) (env: t): AST.expr =
+    let getReturnSymbol (loc: l) (env: t): expr =
         match env.returnSymbols with
         | [] -> raise (EvalError (loc, "Return not in function"))
         | (e :: rs) -> e
 
-    let addReturnSymbol (e: AST.expr) (env: t): t =
+    let addReturnSymbol (e: expr) (env: t): t =
         {env with returnSymbols = e :: env.returnSymbols}
 
     let removeReturnSymbol (env: t): t =
@@ -122,14 +94,12 @@ module LocalEnv = struct
 
     let setVar (loc: l) (x: ident) (v: value) (env: t): t =
         if !trace_write then Printf.printf "TRACE: write %s = %s\n" (pprint_ident x) (pp_value v);
-        (match search x env.locals with
-        (* FIXME: this incorrectly adds the variable into the most local scope.
-           it should find the appropriate scope and change it. that said, maybe
-           it is better to rework this to be a single "stack frame" instead of
-           a list of scopes. *)
-        | Some bs -> addLocalVar loc x v env
-        | None    -> raise (EvalError (loc, "LocalEnv::setVar " ^ pprint_ident x))
-        )
+        let locals' = Utils.replace_in_list (fun b -> 
+            match (Bindings.find_opt x b) with
+            | None -> None
+            | Some _ -> Some (Bindings.add x v b))
+            env.locals in
+        { env with locals = locals' }
 end
 
 module DisEnv = struct
@@ -188,20 +158,29 @@ module DisEnv = struct
             s
         else 
             s ^ "\u{2502} "
+    
+    let log (s: string): unit rws =
+        let+ i = indent in
+        let s' = Str.global_replace (Str.regexp "\n") ("\n"^i) s in
+        Printf.printf "%s%s\n" i s';
+        ()
 
     let scope (name: string) (arg: string) (pp: 'a -> string) (x: 'a rws): 'a rws = 
-        let* i = indent in
-        Printf.printf "%s\u{256d}\u{2500} %s --> %s\n" i name arg;
+        let* () = log (Printf.sprintf "\u{256d}\u{2500} %s --> %s" name arg) in
         let* () = modify (fun l -> {l with indent = l.indent + 1}) in
         let* (x,s',w') = locally x in
         (* let* i' = indent in
         List.iter (fun s -> Printf.printf "%s %s\n" i' (pp_stmt s)) w'; *)
         let* () = write w' 
-        and* () = put s' in
-        let+ () = modify (fun l -> {l with indent = l.indent - 1}) in
-        Printf.printf "%s\u{2570}\u{2500} = %s\n" i (pp x);
-        x
-
+        and* () = put s'
+        and* () = modify (fun l -> {l with indent = l.indent - 1}) in
+        let* () = log (Printf.sprintf "\u{2570}\u{2500} = %s" (pp x)) in
+        let* () = if !debug_level >= 2 then
+            log (Printf.sprintf "   %s\n" (LocalEnv.pp_locals s')) else unit in
+        let* () = if !debug_level >= 3 then
+            (let* () = traverse_ (fun stmt -> log ("   "^pp_stmt stmt)) w' in
+            log "") else unit in
+        pure x
 end
 
 type 'a rws = 'a DisEnv.rws
@@ -216,9 +195,7 @@ let mergeEnv (l: LocalEnv.t) (r: LocalEnv.t): LocalEnv.t =
     {
       locals = l.locals;
       returnSymbols = l.returnSymbols;
-      numSymbols = if l.numSymbols > r.numSymbols then l.numSymbols else r.numSymbols;
-      localPrefixes = l.localPrefixes;
-      implicitLevels = l.implicitLevels;
+      numSymbols = max l.numSymbols r.numSymbols;
       indent = l.indent;
     }
 
@@ -266,6 +243,7 @@ let getGlobalConst(c: ident): sym rws =
 
 and fresh_var (loc: l) (t: ty): ident rws =
   let@ res = DisEnv.nextVarName("") in
+  let@ () = DisEnv.modify (LocalEnv.addLocalVar loc res VUninitialized) in
   let+ () = DisEnv.write [Stmt_VarDeclsNoInit(t, [res], loc)] in
   res
 
@@ -385,7 +363,7 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
 and dis_expr loc x = 
-    DisEnv.scope "dis_expr" (pp_expr x) pp_result_or_simplified (dis_expr' loc x)
+    DisEnv.scope "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x)
 
 and dis_expr' (loc: l) (x: AST.expr): sym rws =
     (match x with
@@ -510,13 +488,26 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
 and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
     DisEnv.scope "dis_call"
         (pp_expr (Expr_TApply (f, List.map sym_expr tes, List.map sym_expr es)))
-        pp_result_or_simplified 
+        pp_sym 
         (dis_call' loc f tes es)
 
 and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
     let@ fn = DisEnv.getFun loc f in
     (match fn with
     | Some (rty, atys, targs, args, loc, b) ->
+        (* Create return variable (if necessary).
+           These should exist in the outer scope. *)
+        let@ rv = (match rty with
+        | Some (Type_Tuple ts) -> 
+            let+ names = DisEnv.traverse (fun t -> let@ t' = dis_type loc t in fresh_var loc t) ts in
+            Expr_Tuple (List.map (fun n -> Expr_Var n) names)
+        | Some t -> 
+            let@ t' = dis_type loc t in
+            let+ name = fresh_var loc t' in 
+            Expr_Var name
+        | None -> 
+            DisEnv.pure (Expr_Unknown type_unknown)) in
+
         (* Nest enviroment *)
         let@ () = DisEnv.modify LocalEnv.addLevel in
 
@@ -534,26 +525,23 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
             DisEnv.write [Stmt_VarDecl(ty', arg', sym_expr e, loc)]
         ) atys args es) in
 
-        (* Create return variable (if necessary) *)
-        let@ rv = (match rty with
-            | Some (Type_Tuple ts) -> 
-                let+ names = DisEnv.traverse (fun t -> let@ t' = dis_type loc t in fresh_var loc t) ts in
-                Expr_Tuple (List.map (fun n -> Expr_Var n) names)
-            | Some t -> 
-                let@ t' = dis_type loc t in
-                let+ name = fresh_var loc t' in 
-                Expr_Var name
-            | None -> 
-                DisEnv.pure (Expr_Unknown type_unknown)) in
+        let@ env = DisEnv.get in
+        let@ () = DisEnv.log (LocalEnv.pp_locals env ^ "\n") in
 
         (* Evaluate body with new return symbol *)
         let@ _ = DisEnv.modify (LocalEnv.addReturnSymbol rv) in
         let@ () = dis_stmts b in
         let@ () = DisEnv.modify (LocalEnv.removeReturnSymbol) in
+        (* "Deallocate" local variables by setting them to unknown. *)
+        (* let@ vars = DisEnv.gets (fun e -> List.hd e.locals) in
+        let@ () = DisEnv.traverse_ (fun (i,_) ->
+            DisEnv.write [Stmt_Assign(
+                LExpr_Var i, Expr_Unknown type_unknown, Unknown)])
+            (Bindings.bindings vars) in *)
 
         (* Pop enviroment *)
         let@ () = DisEnv.modify LocalEnv.popLevel in
-        DisEnv.pure (Exp rv)
+        dis_expr loc rv
     | None ->
         let tes_vals = (List.map sym_val_or_uninit tes)
         and es_vals = (List.map sym_val_or_uninit es) in
@@ -578,10 +566,10 @@ and dis_lexpr (loc: l) (x: AST.lexpr) (r: sym): unit rws =
         let@ tvs = DisEnv.traverse (dis_expr loc) tes in
         let@ vs = DisEnv.traverse (dis_expr loc) es in
         (match (sym_collect_list tvs, sym_collect_list vs, r) with
-        | Right tvs', Right vs', Val r' -> 
+        (* | Right tvs', Right vs', Val r' -> 
             (* FIXME: use of eval_proccall in dis_lexpr *)
             DisEnv.reads (fun env -> 
-                eval_proccall loc env setter tvs' (vs' @ [r']))
+                eval_proccall loc env setter tvs' (vs' @ [r'])) *)
         | _, _, _ -> 
             DisEnv.write [Stmt_Assign(LExpr_Write(
                 setter, List.map to_expr tvs, List.map to_expr vs), sym_expr r, loc)])
@@ -716,9 +704,10 @@ and dis_stmt' (x: AST.stmt): unit rws =
         in
         eval_if (S_Elsif_Cond(c, t)::els) e
     | Stmt_FunReturn(e, loc) ->
-        let@ e' = dis_expr loc e in
+        (* let@ e' = dis_expr loc e in *)
         let@ rv = DisEnv.gets (LocalEnv.getReturnSymbol loc) in
-        (match (e', rv) with
+        dis_stmt (Stmt_Assign (expr_to_lexpr rv, e, loc))
+        (* (match (e', rv) with
         | (Exp (Expr_Tuple(es)), Expr_Tuple(les)) ->
             DisEnv.write @@ List.map2 (fun le e -> 
                 Stmt_Assign((
@@ -737,7 +726,7 @@ and dis_stmt' (x: AST.stmt): unit rws =
             ) les es
         | (_, Expr_Var(i)) -> DisEnv.write [Stmt_Assign(LExpr_Var(i), to_expr e', loc)]
         | _ -> raise (EvalError (loc, "TODO"))
-        )
+        ) *)
     | Stmt_ProcReturn(loc) -> DisEnv.unit
     | Stmt_Assert(e, loc) ->
         let@ e' = dis_expr loc e in
@@ -838,13 +827,14 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) exec; *)
                     (* Env.removeGlobals env; *)
 
+                    (Printf.printf "\n\nENV LOCALS: %s\n" (LocalEnv.pp_bindings_list (Env.readLocals env)));
                     (* execute disassembly inside newly created local environment. *)
-                    let lenv = LocalEnv.fromEvalEnv env in
+                    let lenv = LocalEnv.empty () in
                     let (_,lenv',stmts) = dis_stmts exec env lenv in
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts; *)
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
-                    (* Some stmts *)
-                    Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts))));
+                    Some stmts
+                    (* Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
                 end else begin
                     None
                 end

@@ -13,7 +13,8 @@
 
 let to_string (d: PPrint.document): string =
     let buf = Buffer.create 100 in
-    PPrint.ToBuffer.pretty 100.0 80 buf d;
+    (* PPrint.ToBuffer.pretty 100.0 80 buf d; *)
+    PPrint.ToBuffer.compact buf d;
     Buffer.contents buf
 
 
@@ -152,6 +153,16 @@ let rec first_option (f: 'a -> 'b option) (xs: 'a list): 'b option =
             )
     )
 
+(** Replaces the first non-None result from f on the list with
+    the result of the function. *)
+let rec replace_in_list (f: 'a -> 'a option) (xs: 'a list): 'a list =
+    match xs with
+    | [] -> invalid_arg "replace_in_list not found."
+    | x::xs' -> 
+        (match f x with
+        | Some y -> y::xs'
+        | None -> x::replace_in_list f xs')
+
 
 (****************************************************************
  * String related
@@ -189,6 +200,8 @@ let stringDrop (n: int) (s: string): string =
     end
 
 let pp_unit () = "()"
+
+let pp_list f xs = Printf.sprintf "[%s]" (String.concat " ; " (List.map f xs))
 
 (****************************************************************
  * End

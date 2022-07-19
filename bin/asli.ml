@@ -23,6 +23,8 @@ let opt_filenames : string list ref = ref []
 let opt_print_version = ref false
 let opt_verbose = ref false
 
+let opt_debug_level = ref 0
+
 
 let help_msg = [
     {|:? :help                       Show this help message|};
@@ -181,6 +183,7 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
     )
 
 let options = Arg.align ([
+    ( "-x", Arg.Set_int opt_debug_level,      "       Debugging output");
     ( "-v", Arg.Set opt_verbose,              "       Verbose output");
     ( "--version", Arg.Set opt_print_version, "       Print version");
 ] )
@@ -231,6 +234,7 @@ let main () =
             exit 1
         ) in
         if !opt_verbose then Printf.printf "Built evaluation environment\n";
+        Dis.debug_level := !opt_debug_level;
 
         LNoise.history_load ~filename:"asl_history" |> ignore;
         LNoise.history_set ~max_length:100 |> ignore;

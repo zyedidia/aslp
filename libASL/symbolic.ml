@@ -29,6 +29,14 @@ let rec val_expr (v: Value.value): AST.expr =
   | VTuple vs -> Expr_Tuple(List.map val_expr vs)
   | _ -> raise (EvalError (Unknown, "Casting unhandled value type to expression"))
 
+
+let [@warning "-32"] rec expr_to_lexpr (e: expr): lexpr =
+  match e with
+  | Expr_Var v -> LExpr_Var v
+  | Expr_Tuple es -> LExpr_Tuple (List.map expr_to_lexpr es) 
+  | _ -> raise (EvalError (Unknown, "unexpected expression in expr_to_lexpr coercion: " ^ pp_expr e))
+
+
 let val_opt_initialised (v: value option): value option =
   match v with
   | Some VUninitialized -> None
@@ -64,8 +72,8 @@ let rec sym_collect_list (xs: sym list): (expr list, value list) Either.t =
 
 let pp_sym (rs: sym): string = 
     match rs with
-    | Val v -> pp_value v
-    | Exp e -> pp_expr e
+    | Val v -> Printf.sprintf "Val(%s)" (pp_value v)
+    | Exp e -> Printf.sprintf "Val(%s)" (pp_expr e)
 
 let sym_of_tuple (loc: AST.l) (v: sym): sym list  =
   match v with
@@ -93,7 +101,7 @@ let prim_binop (f: string) (loc: AST.l) (x: sym) (y: sym) : sym  =
   | (x,y) -> Exp (Expr_TApply(FIdent(f,0), [], (sym_expr x)::[sym_expr y])))
 
 let sym_true     = Val (from_bool true)
-let sym_false    = Val (from_bool true)
+let sym_false    = Val (from_bool false)
 let sym_eq_int   = prim_binop "eq_int"
 let sym_eq_bits  = prim_binop "eq_bits"
 let sym_leq      = prim_binop "leq"
