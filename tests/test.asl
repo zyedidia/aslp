@@ -15,9 +15,14 @@ __instruction test
 
 
     __execute
-        integer d = 2 + UInt(Rd);
-        d = if (TRUE) then (d + d) else (-d);
+        boolean something;
+        integer d = 1 + UInt(Rd);
+        if (something) then
+            d = d + d;
+        else
+            d = 2;
 
+        bits(64) aaa = ZeroExtend('11');
 
 __decode TEST
     case (28 +: 4) of

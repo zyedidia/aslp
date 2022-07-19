@@ -36,6 +36,26 @@ module LocalEnv = struct
             indent = 0;
         }
 
+    let merge (l: t) (r: t): t =
+        assert (l.returnSymbols = r.returnSymbols);
+        assert (l.indent = r.indent);
+
+        let merge_bindings l r =
+            Bindings.fold (fun k v1 bs ->
+                match Bindings.find_opt k r with
+                | None -> bs
+                | Some v2 -> 
+                    let v = if v1 = v2 then v1 else VUninitialized in
+                    Bindings.add k v bs) 
+            l Bindings.empty in
+        let locals' = List.map2 merge_bindings l.locals r.locals in
+        {
+            locals = locals';
+            returnSymbols = l.returnSymbols;
+            numSymbols = max l.numSymbols r.numSymbols;
+            indent = l.indent;
+        }
+
     let pp_bindings_list (bss: value Bindings.t list) = 
         Utils.pp_list (pp_bindings pp_value) bss
 
@@ -189,15 +209,6 @@ let (and@) = DisEnv.Let.(and*)
 let (let+) = DisEnv.Let.(let+)
 let (and+) = DisEnv.Let.(and+)
 
-(* TODO: This is obviously wrong, reimplement the functionality below *)
-let mergeEnv (l: LocalEnv.t) (r: LocalEnv.t): LocalEnv.t =
-    {
-      locals = l.locals;
-      returnSymbols = l.returnSymbols;
-      numSymbols = max l.numSymbols r.numSymbols;
-      indent = l.indent;
-    }
-
 (*
 let mergeEnv (xLocals: scope list) (yLocals: scope list): scope list =
     if List.length xLocals <> List.length yLocals then raise (EvalError (Unknown, "Scope lengths should be the same"));
@@ -276,7 +287,7 @@ let sym_if (loc: l) (test: sym rws) (tcase: sym rws) (fcase: sym rws): sym rws =
       let@ tmp = declare_fresh_var loc type_unknown in
       let@ ((),tenv,tstmts) = DisEnv.locally(let@ r = tcase in assign_var loc tmp r) in
       let@ ((),fenv,fstmts) = DisEnv.locally(let@ r = fcase in assign_var loc tmp r) in
-      let@ () = DisEnv.put (mergeEnv tenv fenv) in
+      let@ () = DisEnv.put (LocalEnv.merge tenv fenv) in
       let+ () = DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)] in
       Exp (Expr_Var (tmp)))
 
@@ -290,7 +301,7 @@ let unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit r
   | Exp e -> 
       let@ (t,tenv,tstmts) = DisEnv.locally(tcase) in
       let@ (f,fenv,fstmts) = DisEnv.locally(fcase) in
-      let@ () = DisEnv.put (mergeEnv tenv fenv) in
+      let@ () = DisEnv.put (LocalEnv.merge tenv fenv) in
       DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)])
 
 (** Symbolic implementation of List.for_all2 *)
@@ -645,46 +656,13 @@ and dis_stmt' (x: AST.stmt): unit rws =
         let@ r' = dis_expr loc r in
         dis_lexpr loc l r' (* TODO: double check that both statements are added *)
     | Stmt_If(c, t, els, e, loc) ->
-        let rec eval_if (xs: s_elsif list) (e: stmt list): unit rws = 
-            match xs with
-            | [] -> dis_stmts e
-            | AST.S_Elsif_Cond (cond, b)::xs' ->
-                let@ cond' = dis_expr loc cond in
-                (match cond' with
-                | Val v -> 
-                    if to_bool loc v then
-                        (* Just print this branch *)
-                        dis_stmts b
-                    else
-                        (* Print whatever the rest of the branches turn out to be *)
-                        eval_if xs' e
-                (* We have to print out all branches now because we don't know
-                   whether or not this one is true. We can still simplify 
-                   guards and bodies though *)
-                | Exp cond'' ->
-                    let@ (_,benv,bstmts) = DisEnv.locally (dis_stmts b) in
-                    (* let@ () = DisEnv.write bstmts in  *)
-                    let@ (_,xsenv,xsstmts) = DisEnv.locally (eval_if xs' e) in
-                    (* let@ () = DisEnv.write xsstmts in  *)
-
-                    (* FIXME: check Stmt_If in dis_stmt, incorrectly assumes environment after if is not modified. *)
-                    DisEnv.write [Stmt_If(
-                        cond'', 
-                        bstmts,
-                        [],
-                        xsstmts,
-                        loc
-                    )]
-                     
-                    (* let tEnv = Env.copy env in
-                    let elsEnv = List.map (fun _ -> Env.copy env) (Utils.range 0 (List.length els)) in
-                    let eEnv = Env.copy env in
-                    let t' = read (Env.nest (fun env' -> dis_stmts env' t) tEnv) in
-                    let* els' = dis_if_stmt_no_remove loc elsEnv els in
-                    let e' = read (Env.nest (fun env' -> dis_stmts env' e) eEnv) in
-                    Env.setLocals env (List.fold_left mergeEnv (Env.getLocals tEnv) ((Env.getLocals eEnv)::(List.map Env.getLocals elsEnv)));
-                    write (Stmt_If(cond'', t', els', e', loc)) *)
-                )
+        let rec eval_if xs d : unit rws = match xs with
+        | [] -> dis_stmts d
+        | S_Elsif_Cond (c,b)::xs' ->
+            unit_if loc (dis_expr loc c)
+              (dis_stmts b)
+            (* else *)
+              (eval_if xs' d)
         in
         eval_if (S_Elsif_Cond(c, t)::els) e
     | Stmt_FunReturn(e, loc) ->
