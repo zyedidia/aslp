@@ -58,6 +58,11 @@ let sym_pair_has_exp (pair: sym * sym): bool =
   | _, Exp _ -> true
   | _ -> false
 
+let sym_initialised (x: sym): sym option = 
+  match x with
+  | Val VUninitialized -> None
+  | _ -> Some x
+
 (** Deconstructs the given list of symbolics.
     Returns a Right of values if the entire list was concrete values,
     otherwise returns a Left of everything coerced to expressions. *)
@@ -73,7 +78,7 @@ let rec sym_collect_list (xs: sym list): (expr list, value list) Either.t =
 let pp_sym (rs: sym): string = 
     match rs with
     | Val v -> Printf.sprintf "Val(%s)" (pp_value v)
-    | Exp e -> Printf.sprintf "Val(%s)" (pp_expr e)
+    | Exp e -> Printf.sprintf "Exp(%s)" (pp_expr e)
 
 let sym_of_tuple (loc: AST.l) (v: sym): sym list  =
   match v with

@@ -383,6 +383,14 @@ end = struct
         | None     -> raise (EvalError (loc, "getFun " ^ pprint_ident x))
         )
 
+    (*  Here, a function definition is given as a tuple of:
+            ty option           - optional return type
+            (ty * ident) list   - list of formal argument types and names
+            ident list          - list of type argument names
+            ident list          - list of argument names
+            loc                 - declaration location
+            stmt list           - function body
+        *)
     let addFun (loc: l) (env: t) (x: ident) (def: (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list)): unit =
         if false then Printf.printf "Adding function %s\n" (pprint_ident x);
         if Bindings.mem x env.functions then begin
@@ -1226,14 +1234,15 @@ let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
                 Env.addFun loc env f (Some ty, [], tvs, args, loc, body)
         | Decl_ArraySetterDefn(f, atys, ty, v, body, loc) ->
                 let tvs = Asl_utils.to_sorted_list (Asl_utils.IdentSet.union (Asl_utils.fv_sformals atys) (Asl_utils.fv_type ty) |> removeGlobalConsts env) in
-                let name_of (x: AST.sformal): ident =
+                let tuple_of (x: AST.sformal): ty * ident =
                     (match x with
-                    | Formal_In (_, nm) -> nm
-                    | Formal_InOut (_, nm) -> nm
+                    | Formal_In (t, nm) -> t,nm
+                    | Formal_InOut (t, nm) -> t,nm
                     )
                 in
-                let args = List.map name_of atys in
-                Env.addFun loc env f (Some ty, [], tvs, List.append args [v], loc, body)
+                let atys' = List.map tuple_of atys @ [(ty, v)] in
+                let args = List.map (fun x -> snd (tuple_of x)) atys in
+                Env.addFun loc env f (None, atys', tvs, List.append args [v], loc, body)
         | Decl_InstructionDefn(nm, encs, opost, conditional, exec, loc) ->
                 (* Instructions are looked up by their encoding name *)
                 List.iter (fun enc ->

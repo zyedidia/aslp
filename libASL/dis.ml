@@ -22,7 +22,7 @@ let debug_level = ref 1
 
 module LocalEnv = struct
     type t = {
-        locals          : value Bindings.t list;
+        locals          : sym Bindings.t list;
         returnSymbols   : expr list;
         numSymbols      : int;
         indent          : int;
@@ -36,7 +36,12 @@ module LocalEnv = struct
             indent = 0;
         }
 
-    let merge (l: t) (r: t): t =
+    let sequence_merge (first: t) (second: t): t =
+        {
+            first with numSymbols = max first.numSymbols second.numSymbols
+        }
+
+    let join_merge (l: t) (r: t): t =
         assert (l.returnSymbols = r.returnSymbols);
         assert (l.indent = r.indent);
 
@@ -45,7 +50,7 @@ module LocalEnv = struct
                 match Bindings.find_opt k r with
                 | None -> bs
                 | Some v2 -> 
-                    let v = if v1 = v2 then v1 else VUninitialized in
+                    let v = if v1 = v2 then v1 else Val VUninitialized in
                     Bindings.add k v bs) 
             l Bindings.empty in
         let locals' = List.map2 merge_bindings l.locals r.locals in
@@ -56,14 +61,16 @@ module LocalEnv = struct
             indent = l.indent;
         }
 
-    let pp_bindings_list (bss: value Bindings.t list) = 
-        Utils.pp_list (pp_bindings pp_value) bss
+    let pp_value_bindings = Utils.pp_list (pp_bindings pp_value)
+
+    let pp_sym_bindings (bss: sym Bindings.t list) = 
+        Utils.pp_list (pp_bindings pp_sym) bss
 
     let pp_locals (env: t): string = 
-        Printf.sprintf "locals = %s" (pp_bindings_list env.locals)
+        Printf.sprintf "locals = %s" (pp_sym_bindings env.locals)
 
-    let addLocalVar (loc: l) (k: ident) (v: value) (env: t): t =
-        if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident k) (pp_value v);
+    let addLocalVar (loc: l) (k: ident) (v: sym) (env: t): t =
+        if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident k) (pp_sym v);
         match env.locals with
         | (bs :: rest) -> {env with locals = (Bindings.add k v bs :: rest)}
         | []        -> raise (EvalError (loc, "LocalEnv::addLocalVar"))
@@ -105,14 +112,14 @@ module LocalEnv = struct
         | [] -> raise (EvalError (Unknown, "No levels exist"))
         | (_::ls) -> {env with locals = ls}
 
-    let rec search (x: ident) (bss : value Bindings.t list): value Bindings.t option =
+    let rec search (x: ident) (bss : sym Bindings.t list): sym Bindings.t option =
         match bss with
         | (bs :: bss') ->
             if Bindings.mem x bs then Some bs else search x bss'
         | [] -> None
 
-    let setVar (loc: l) (x: ident) (v: value) (env: t): t =
-        if !trace_write then Printf.printf "TRACE: write %s = %s\n" (pprint_ident x) (pp_value v);
+    let setVar (loc: l) (x: ident) (v: sym) (env: t): t =
+        if !trace_write then Printf.printf "TRACE: write %s = %s\n" (pprint_ident x) (pp_sym v);
         let locals' = Utils.replace_in_list (fun b -> 
             match (Bindings.find_opt x b) with
             | None -> None
@@ -136,17 +143,21 @@ module DisEnv = struct
         try Some (f x)
         with EvalError _ -> None
 
-    let getVar (loc: l) (x: ident): value rws = 
+    let catcherror (f: 'b -> 'a) (x: 'b): (exn, 'a) Either.t =
+        try Right (f x)
+        with e -> Left e
+
+    let getVar (loc: l) (x: ident): sym rws = 
         let* v = gets (fun lenv -> LocalEnv.search x lenv.locals) in
         match (v) with
             | Some b -> pure (Bindings.find x b)
-            | None -> reads (fun env -> Env.getVar loc env x)
+            | None -> reads (fun env -> Val (Env.getVar loc env x))
 
-    let getVarOpt (loc: l) (x: ident): value option rws = 
+    let getVarOpt (loc: l) (x: ident): sym option rws = 
         let* v = gets (fun lenv -> LocalEnv.search x lenv.locals) in
         match (v) with
             | Some b -> pure (Some (Bindings.find x b))
-            | None -> reads (catch (fun env -> Env.getVar loc env x))
+            | None -> reads (catch (fun env -> Val (Env.getVar loc env x)))
 
     let getLocalName (x: ident): ident rws = 
         gets (LocalEnv.getLocalName x)
@@ -158,9 +169,10 @@ module DisEnv = struct
         | Some v -> pure (Some localid)
         | None -> 
             let+ v = getVarOpt loc id in 
-            (match val_opt_initialised v with
-            | Some v -> Some id
-            | None -> None)
+            (match v with
+            | None -> None
+            | Some (Val VUninitialized) -> None
+            | _ -> Some id)
 
     let getFun (loc: l) (x: ident): (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) option rws =
         reads (catch (fun env -> Env.getFun loc env x))
@@ -253,12 +265,12 @@ let getGlobalConst(c: ident): sym rws =
 
 let declare_var (loc: l) (t: ty) (i: ident): unit rws =
   let@ () = DisEnv.modify 
-    (LocalEnv.addLocalVar loc i VUninitialized) in
+    (LocalEnv.addLocalVar loc i (Val VUninitialized)) in
   DisEnv.write [Stmt_VarDeclsNoInit(t, [i], loc)]
 
 let declare_assign_var (loc: l) (t: ty) (i: ident) (x: sym): unit rws =
   let@ () = DisEnv.modify 
-    (LocalEnv.addLocalVar loc i (sym_val_or_uninit x)) in
+    (LocalEnv.addLocalVar loc i x) in
   DisEnv.write [Stmt_VarDecl(t, i, sym_expr x, loc)]
 
 let declare_fresh_named_var (loc: l) (name: string)  (t: ty): ident rws =
@@ -267,18 +279,16 @@ let declare_fresh_named_var (loc: l) (name: string)  (t: ty): ident rws =
   res
 
 and assign_var (loc: l) (i: ident) (x: sym): unit rws =
-  let v' = sym_val_or_uninit x in
-  let@ () = DisEnv.modify (LocalEnv.setVar loc i v') in
+  let@ () = DisEnv.modify (LocalEnv.setVar loc i x) in
   DisEnv.write [Stmt_Assign(LExpr_Var(i), sym_expr x, loc)]
 
 let declare_const (loc: l) (ty: ty) (i: ident) (x: sym): unit rws =
-  let v' = sym_val_or_uninit x in
-  let@ () = DisEnv.modify (LocalEnv.addLocalConst loc i v') in
+  let@ () = DisEnv.modify (LocalEnv.addLocalConst loc i x) in
   DisEnv.write [Stmt_ConstDecl(ty, (i), sym_expr x, loc)]
 
-let declare_fresh_const (loc: l) (t: ty) (name: string) (x: sym): ident rws =
+let declare_fresh_const (loc: l) (t: ty) (name: string) (x: expr): ident rws =
   let@ i = DisEnv.nextVarName name in
-  let+ () = declare_const loc t i x in
+  let+ () = declare_const loc t i (Exp x) in
   i
 
 (** Monadic Utilities *)
@@ -296,9 +306,18 @@ let sym_if (loc: l) (test: sym rws) (tcase: sym rws) (fcase: sym rws): sym rws =
   | Val _ -> failwith ("Split on non-boolean value")
   | Exp e -> 
       let@ tmp = declare_fresh_named_var loc "If" type_unknown in
-      let@ ((),tenv,tstmts) = DisEnv.locally(let@ r = tcase in assign_var loc tmp r) in
-      let@ ((),fenv,fstmts) = DisEnv.locally(let@ r = fcase in assign_var loc tmp r) in
-      let@ () = DisEnv.put (LocalEnv.merge tenv fenv) in
+      (* Evaluate true branch statements. *)
+      let@ ((),tenv,tstmts) = DisEnv.locally (
+        let@ r = tcase in 
+        assign_var loc tmp r) in
+      (* Propagate incremented counter to env'. *)
+      let@ env' = DisEnv.gets (fun env -> LocalEnv.sequence_merge env tenv) in
+      (* Execute false branch statements with env'. *)
+      let@ ((),fenv,fstmts) = DisEnv.locally (
+        let@ () = DisEnv.put env' in 
+        let@ r = fcase in 
+        assign_var loc tmp r) in
+      let@ () = DisEnv.put (LocalEnv.join_merge tenv fenv) in
       let+ () = DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)] in
       Exp (Expr_Var (tmp)))
 
@@ -312,7 +331,7 @@ let unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit r
   | Exp e -> 
       let@ (t,tenv,tstmts) = DisEnv.locally(tcase) in
       let@ (f,fenv,fstmts) = DisEnv.locally(fcase) in
-      let@ () = DisEnv.put (LocalEnv.merge tenv fenv) in
+      let@ () = DisEnv.put (LocalEnv.join_merge tenv fenv) in
       DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)])
 
 (** Symbolic implementation of List.for_all2 *)
@@ -390,8 +409,10 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
             (lo', wd')
     )
 
-and capture_expr loc (x: sym): sym rws =
-    let+ v = declare_fresh_const loc type_unknown "Exp" x in
+and capture_expr loc (x: expr): sym rws =
+    let@ v = declare_fresh_const loc type_unknown "Exp" x in
+    let+ () = DisEnv.modify (LocalEnv.setVar loc v 
+        (Val VUninitialized)) in
     Exp (Expr_Var v)
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
@@ -417,13 +438,13 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             let@ e' = dis_expr loc e in 
             (match e' with
             | Val v -> DisEnv.pure @@ Val (get_field loc v f)
-            | Exp e -> capture_expr loc @@ Exp (Expr_Field(e,f)))
+            | Exp e -> capture_expr loc (Expr_Field(e,f)))
     | Expr_Fields(e, fs) ->
             let@ e' = dis_expr loc e in 
             (match e' with
             | Val v -> DisEnv.pure @@ 
                 Val (eval_concat loc (List.map (get_field loc v) fs))
-            | Exp e -> capture_expr loc @@ Exp (Expr_Fields(e, fs)))
+            | Exp e -> capture_expr loc (Expr_Fields(e, fs)))
     | Expr_Slices(e, ss) ->
             let@ e' = dis_expr loc e 
             and@ ss' = DisEnv.traverse (dis_slice loc) ss in
@@ -432,25 +453,26 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
                 let vs = List.map (fun (l,w) -> extract_bits loc v (sym_val_or_uninit l) (sym_val_or_uninit w)) ss' in
                 DisEnv.pure @@ Val (eval_concat loc vs)
             | _ -> 
-                let vs = List.map (fun (l,w) -> Slice_LoWd(to_expr l, to_expr w)) ss' in
-                capture_expr loc @@ Exp (Expr_Slices(sym_expr e', vs)))
+                let vs = List.map (fun (l,w) -> 
+                    Slice_LoWd(sym_expr l, sym_expr w)) ss' in
+                DisEnv.pure @@ Exp (Expr_Slices(sym_expr e', vs)))
     | Expr_In(e, p) ->
             let@ e' = dis_expr loc e in
             let@ p' = dis_pattern loc e' p in
             (match p' with
             | Val v -> DisEnv.pure (Val v)
-            | Exp e -> capture_expr loc p')
+            | Exp e -> capture_expr loc e)
     | Expr_Var id ->
             let@ idopt = DisEnv.findVar loc id in
             (match idopt with
             (* variable not found *)
-            | None -> capture_expr loc (Exp (Expr_Var id))
+            | None -> capture_expr loc (Expr_Var id)
             | Some id' -> 
                 let@ v = DisEnv.getVar loc id' in
-                if contains_uninit v then 
-                    capture_expr loc @@ Exp (Expr_Var id') 
-                else 
-                    DisEnv.pure @@ Val v) (* TODO: Partially defined structures? *)
+                (match sym_initialised v with
+                | Some s -> DisEnv.pure s
+                | None -> capture_expr loc x)) 
+                (* TODO: Partially defined structures? *)
     | Expr_Parens(e) ->
             dis_expr loc e
     | Expr_TApply(f, tes, es) ->
@@ -512,10 +534,10 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             (match (a',i') with
             | Val av, Val iv -> 
                 (match get_array loc av iv with
-                | VUninitialized -> capture_expr loc @@
-                    Exp (Expr_Array(a, val_expr iv))
+                | VUninitialized -> capture_expr loc
+                    (Expr_Array(a, val_expr iv))
                 | v -> DisEnv.pure @@ Val v)
-            | _ -> capture_expr loc @@ Exp (Expr_Array(a, to_expr i')))
+            | _ -> capture_expr loc (Expr_Array(a, to_expr i')))
     | Expr_LitInt(i) ->    DisEnv.pure (Val (from_intLit i))
     | Expr_LitHex(i) ->    DisEnv.pure (Val (from_hexLit i))
     | Expr_LitReal(r) ->   DisEnv.pure (Val (from_realLit r))
@@ -562,8 +584,9 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
             declare_const loc ty' arg' e
         ) atys args es) in
 
-        (* Helper to make return variables according to return type. *)
-        let make_return_variables = (match rty with
+        (* Create return variable (if necessary).
+            This is in the inner scope to allow for type parameters. *)
+        let@ rv = (match rty with
         | Some (Type_Tuple ts) -> 
             let@ ts' = DisEnv.traverse (dis_type loc) ts in
             let+ names = DisEnv.traverse (declare_fresh_named_var loc fname) ts' in
@@ -575,20 +598,18 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
         | None -> 
             DisEnv.pure (Expr_Unknown type_unknown)) in
 
-        (* Create return variable (if necessary).
-            This is in the inner scope to allow for type parameters. *)
-        let@ localreturn = make_return_variables in
-
         let@ env = DisEnv.get in
         let@ () = DisEnv.log (LocalEnv.pp_locals env ^ "\n") in
 
         (* Evaluate body with new return symbol *)
-        let@ _ = DisEnv.modify (LocalEnv.addReturnSymbol localreturn) in
+        let@ _ = DisEnv.modify (LocalEnv.addReturnSymbol rv) in
         let@ () = dis_stmts b in
         let@ () = DisEnv.modify (LocalEnv.removeReturnSymbol) in
 
-        (* Pop enviroment *)
-        let@ result = dis_expr loc localreturn in
+        (* Disassemble return variable expression and propagate its symbolic value
+            into the containing scope. *)
+        let@ result = dis_expr loc rv in
+        (* Pop enviroment. *)
         let@ () = DisEnv.modify LocalEnv.popLevel in
         DisEnv.pure result
     | None ->
@@ -606,14 +627,7 @@ and dis_lexpr (loc: l) (x: AST.lexpr) (r: sym): unit rws =
     | LExpr_Write(setter, tes, es) ->
         let@ tvs = DisEnv.traverse (dis_expr loc) tes in
         let@ vs = DisEnv.traverse (dis_expr loc) es in
-        (match (sym_collect_list tvs, sym_collect_list vs, r) with
-        (* | Right tvs', Right vs', Val r' -> 
-            (* FIXME: use of eval_proccall in dis_lexpr *)
-            DisEnv.reads (fun env -> 
-                eval_proccall loc env setter tvs' (vs' @ [r'])) *)
-        | _, _, _ -> 
-            DisEnv.write [Stmt_Assign(LExpr_Write(
-                setter, List.map to_expr tvs, List.map to_expr vs), sym_expr r, loc)])
+        dis_proccall loc setter tvs (vs @ [r])
     | LExpr_Var(v) ->
         let@ idopt = DisEnv.findVar loc v in
         let v' = (match idopt with 
@@ -630,16 +644,12 @@ and dis_lexpr (loc: l) (x: AST.lexpr) (r: sym): unit rws =
                 List.map2 (fun l e -> dis_lexpr loc l (Exp e)) ls es
         | _ -> DisEnv.write [Stmt_Assign (x, sym_expr r, loc)])
     | LExpr_Wildcard -> DisEnv.unit
+    | LExpr_Array (arr, ind) -> 
+        (* NOTE: Currently, we do not traverse the array part of an array index assignment. *)
+        let@ ind' = dis_expr loc ind in
+        DisEnv.write [Stmt_Assign(LExpr_Array(arr,sym_expr ind'), sym_expr r, loc)]
     | _ -> 
-        match r with
-        | Val rv -> 
-            (* FIXME: dangerous use of eval_lexpr in dis_lexpr fallback case. *)
-            let+ opt = DisEnv.reads (DisEnv.catch 
-                (fun env -> eval_lexpr loc env x rv)) in
-            (match opt with
-            | Some () -> ()
-            | None -> raise (EvalError (loc, "error in eval_lexpr fallback of dis_lexpr")))
-        | Exp re -> DisEnv.write [Stmt_Assign(x, re, loc)]
+        DisEnv.write [Stmt_Assign(x, sym_expr r, loc)]
 
 (** Dissassemble list of statements *)
 and dis_stmts (xs: AST.stmt list): unit rws =
@@ -799,7 +809,8 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) exec; *)
                     (* Env.removeGlobals env; *)
 
-                    (Printf.printf "\n\nENV LOCALS: %s\n" (LocalEnv.pp_bindings_list (Env.readLocals env)));
+                    (* (Printf.printf "\n\nENV GLOBALS: %s\n" (pp_bindings pp_value (Env.readGlobals env))); *)
+                    (Printf.printf "\n\nENV LOCALS: %s\n" (LocalEnv.pp_value_bindings (Env.readLocals env)));
                     (* execute disassembly inside newly created local environment. *)
                     let lenv = LocalEnv.empty () in
                     let (_,lenv',stmts) = dis_stmts exec env lenv in
@@ -809,7 +820,8 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     Printf.printf "-----------\n";
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
                     (* Some stmts *)
-                    Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts))));
+                    (* Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
+                    Some (remove_unused (stmts))
                 end else begin
                     None
                 end
@@ -823,20 +835,35 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
     else
       None
 
-and remove_unused (xs: stmt list): stmt list =
-     fst @@ List.fold_right (fun stmt (acc, idents) ->
-        let newIdents = IdentSet.union idents (fv_stmt stmt) in
+and remove_unused xs = fst (remove_unused' IdentSet.empty xs)
+
+and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list * IdentSet.t) =
+     List.fold_right (fun stmt (acc, used) ->
+        let used' = IdentSet.union used (fv_stmt stmt) in
         match stmt with
         | Stmt_VarDeclsNoInit(ty, vs, loc) -> 
-            (match List.filter (fun ident -> IdentSet.mem ident idents) vs with
-            | [] -> (acc, idents)
-            | xs -> (stmt :: acc, idents)
-            )
-        | Stmt_VarDecl(ty, v, i, loc) -> if IdentSet.mem v idents then (stmt :: acc, newIdents) else (acc, idents)
-        | Stmt_ConstDecl(ty, v, i, loc) -> if IdentSet.mem v idents then (stmt :: acc, newIdents) else (acc, idents)
-        | Stmt_Assign(LExpr_Var(v), r, loc) -> if IdentSet.mem v idents then (stmt :: acc, newIdents) else (acc, idents)
-        | x -> (x :: acc, newIdents)
-    ) xs ([], IdentSet.empty)
+            let vs' = List.filter (fun i -> IdentSet.mem i used) vs in
+            (match vs' with
+            | [] -> (acc, used)
+            | _ -> (Stmt_VarDeclsNoInit(ty, vs', loc)::acc, used))
+        | Stmt_VarDecl(ty, v, i, loc) -> 
+            if IdentSet.mem v used then (stmt :: acc, used') else (acc, used)
+        | Stmt_ConstDecl(ty, v, i, loc) -> 
+            if IdentSet.mem v used then (stmt :: acc, used') else (acc, used)
+        | Stmt_Assign(LExpr_Var(v), r, loc) -> 
+            if IdentSet.mem v used then (stmt :: acc, used') else (acc, used)
+        | Stmt_If(c, tstmts, elsif, fstmts, loc) -> 
+            let (tstmts', t_used) = remove_unused' used tstmts in
+            let (fstmts', f_used) = remove_unused' used tstmts in
+            let elsif_used = List.map (fun (S_Elsif_Cond (_,ss)) -> 
+                snd @@ remove_unused' used ss) elsif in
+            let used'' = List.fold_left (IdentSet.union) (IdentSet.union t_used f_used) elsif_used in
+            let used_if = IdentSet.union used' used'' in
+            (match (tstmts',fstmts',elsif_used) with
+            | [], [], [] -> (acc, used)
+            | _, _, _ -> (Stmt_If(c, tstmts', elsif, fstmts', loc)::acc, used_if))
+        | x -> (x :: acc, used')
+    ) xs ([], used)
 
 and constant_propagation (xs: stmt list): stmt list =
     match List.fold_left (fun (acc, bs) stmt -> 
