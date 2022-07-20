@@ -261,11 +261,6 @@ let declare_assign_var (loc: l) (t: ty) (i: ident) (x: sym): unit rws =
     (LocalEnv.addLocalVar loc i (sym_val_or_uninit x)) in
   DisEnv.write [Stmt_VarDecl(t, i, sym_expr x, loc)]
 
-let declare_fresh_var (loc: l) (t: ty): ident rws =
-  let@ res = DisEnv.nextVarName "RetVar" in
-  let+ () = declare_var loc t res in
-  res
-
 let declare_fresh_named_var (loc: l) (name: string)  (t: ty): ident rws =
   let@ res = DisEnv.nextVarName name in
   let+ () = declare_var loc t res in
@@ -281,6 +276,10 @@ let declare_const (loc: l) (ty: ty) (i: ident) (x: sym): unit rws =
   let@ () = DisEnv.modify (LocalEnv.addLocalConst loc i v') in
   DisEnv.write [Stmt_ConstDecl(ty, (i), sym_expr x, loc)]
 
+let declare_fresh_const (loc: l) (t: ty) (name: string) (x: sym): ident rws =
+  let@ i = DisEnv.nextVarName name in
+  let+ () = declare_const loc t i x in
+  i
 
 (** Monadic Utilities *)
 
@@ -391,6 +390,10 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
             (lo', wd')
     )
 
+and capture_expr loc (x: sym): sym rws =
+    let+ v = declare_fresh_const loc type_unknown "Exp" x in
+    Exp (Expr_Var v)
+
 (** Dissassemble expression. This should never return Result VUninitialized *)
 and dis_expr loc x = 
     DisEnv.scope "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x)
@@ -411,39 +414,45 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             raise (EvalError (loc, "binary operation should have been removed in expression "
                    ^ Utils.to_string (PP.pp_expr x)))
     | Expr_Field(e, f) ->
-            let+ e' = dis_expr loc e in 
+            let@ e' = dis_expr loc e in 
             (match e' with
-            | Val v -> Val (get_field loc v f)
-            | Exp e -> Exp (Expr_Field(e,f)))
+            | Val v -> DisEnv.pure @@ Val (get_field loc v f)
+            | Exp e -> capture_expr loc @@ Exp (Expr_Field(e,f)))
     | Expr_Fields(e, fs) ->
-            let+ e' = dis_expr loc e in 
+            let@ e' = dis_expr loc e in 
             (match e' with
-            | Val v -> Val (eval_concat loc (List.map (get_field loc v) fs))
-            | Exp e -> Exp (Expr_Fields(e, fs)))
+            | Val v -> DisEnv.pure @@ 
+                Val (eval_concat loc (List.map (get_field loc v) fs))
+            | Exp e -> capture_expr loc @@ Exp (Expr_Fields(e, fs)))
     | Expr_Slices(e, ss) ->
-            let+ e' = dis_expr loc e 
-            and+ ss' = DisEnv.traverse (dis_slice loc) ss in
+            let@ e' = dis_expr loc e 
+            and@ ss' = DisEnv.traverse (dis_slice loc) ss in
             (match (e',List.exists sym_pair_has_exp ss') with
             | (Val v, false) -> 
                 let vs = List.map (fun (l,w) -> extract_bits loc v (sym_val_or_uninit l) (sym_val_or_uninit w)) ss' in
-                Val (eval_concat loc vs)
+                DisEnv.pure @@ Val (eval_concat loc vs)
             | _ -> 
                 let vs = List.map (fun (l,w) -> Slice_LoWd(to_expr l, to_expr w)) ss' in
-                Exp (Expr_Slices(sym_expr e', vs)))
+                capture_expr loc @@ Exp (Expr_Slices(sym_expr e', vs)))
     | Expr_In(e, p) ->
             let@ e' = dis_expr loc e in
-            dis_pattern loc e' p
+            let@ p' = dis_pattern loc e' p in
+            (match p' with
+            | Val v -> DisEnv.pure (Val v)
+            | Exp e -> capture_expr loc p')
     | Expr_Var id ->
             let@ idopt = DisEnv.findVar loc id in
             (match idopt with
             (* variable not found *)
-            | None -> DisEnv.pure (Exp (Expr_Var id))
+            | None -> capture_expr loc (Exp (Expr_Var id))
             | Some id' -> 
-                let+ v = DisEnv.getVar loc id' in
-                if contains_uninit v then Exp (Expr_Var id') else Val v) (* TODO: Partially defined structures? *)
+                let@ v = DisEnv.getVar loc id' in
+                if contains_uninit v then 
+                    capture_expr loc @@ Exp (Expr_Var id') 
+                else 
+                    DisEnv.pure @@ Val v) (* TODO: Partially defined structures? *)
     | Expr_Parens(e) ->
-            let v = dis_expr loc e in
-            v
+            dis_expr loc e
     | Expr_TApply(f, tes, es) ->
             if name_of_FIdent f = "and_bool" then begin
                 (match (tes, es) with
@@ -499,13 +508,14 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             raise (EvalError (loc, "unnamed IMPLEMENTATION_DEFINED behavior"))
     | Expr_Array(a, i) ->
             let@ a' = dis_expr loc a in
-            let+ i' = dis_expr loc i in
+            let@ i' = dis_expr loc i in
             (match (a',i') with
             | Val av, Val iv -> 
                 (match get_array loc av iv with
-                | VUninitialized -> Exp (Expr_Array(a, val_expr iv))
-                | v -> Val v)
-            | _ -> Exp (Expr_Array(a, to_expr i')))
+                | VUninitialized -> capture_expr loc @@
+                    Exp (Expr_Array(a, val_expr iv))
+                | v -> DisEnv.pure @@ Val v)
+            | _ -> capture_expr loc @@ Exp (Expr_Array(a, to_expr i')))
     | Expr_LitInt(i) ->    DisEnv.pure (Val (from_intLit i))
     | Expr_LitHex(i) ->    DisEnv.pure (Val (from_hexLit i))
     | Expr_LitReal(r) ->   DisEnv.pure (Val (from_realLit r))
@@ -693,10 +703,11 @@ and dis_stmt' (x: AST.stmt): unit rws =
         let@ e' = dis_expr loc e in
         (match e' with 
         | Val v -> 
-            if not (to_bool loc v) then
+            DisEnv.write [Stmt_Assert(val_expr v, loc)]
+            (* if not (to_bool loc v) then
                 raise (EvalError (loc, "assertion failure during symbolic phase"))
             else 
-                DisEnv.unit
+                DisEnv.unit *)
         | Exp e'' ->
             DisEnv.write [Stmt_Assert(e'', loc)]
         )
