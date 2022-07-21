@@ -829,7 +829,7 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
                     (* Some stmts *)
                     (* Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
-                    Some (Transforms.RemoveUnused.go (stmts))
+                    Some (remove_unused (stmts))
                 end else begin
                     None
                 end
@@ -843,34 +843,37 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
     else
       None
 
-and remove_unused xs = fst (remove_unused' IdentSet.empty xs)
+and remove_unused xs = (remove_unused' IdentSet.empty xs)
 
-and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list * IdentSet.t) =
-     List.fold_right (fun stmt (acc, used) ->
-        let used' = IdentSet.union used (fv_stmt stmt) in
+and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
+    fst @@ List.fold_right (fun stmt (acc, used) ->
+        let pass = (acc, used)
+        and emit (s: stmt) =
+            (s::acc, IdentSet.union used (fv_stmt s))
+        in
         match stmt with
         | Stmt_VarDeclsNoInit(ty, vs, loc) ->
             let vs' = List.filter (fun i -> IdentSet.mem i used) vs in
             (match vs' with
-            | [] -> (acc, used)
-            | _ -> (Stmt_VarDeclsNoInit(ty, vs', loc)::acc, used))
+            | [] -> pass
+            | _ -> emit (Stmt_VarDeclsNoInit(ty, vs', loc)))
         | Stmt_VarDecl(ty, v, i, loc) ->
-            if IdentSet.mem v used then (stmt :: acc, used') else (acc, used)
+            if IdentSet.mem v used then emit stmt else pass
         | Stmt_ConstDecl(ty, v, i, loc) ->
-            if IdentSet.mem v used then (stmt :: acc, used') else (acc, used)
+            if IdentSet.mem v used then emit stmt else pass
         | Stmt_Assign(LExpr_Var(v), r, loc) ->
-            if IdentSet.mem v used then (stmt :: acc, used') else (acc, used)
+            if IdentSet.mem v used then emit stmt else pass
         | Stmt_If(c, tstmts, elsif, fstmts, loc) ->
-            let (tstmts', t_used) = remove_unused' used tstmts in
-            let (fstmts', f_used) = remove_unused' used tstmts in
-            let elsif_used = List.map (fun (S_Elsif_Cond (_,ss)) ->
-                snd @@ remove_unused' used ss) elsif in
-            let used'' = List.fold_left (IdentSet.union) (IdentSet.union t_used f_used) elsif_used in
-            let used_if = IdentSet.union used' used'' in
-            (match (tstmts',fstmts',elsif_used) with
-            | [], [], [] -> (acc, used)
-            | _, _, _ -> (Stmt_If(c, tstmts', elsif, fstmts', loc)::acc, used_if))
-        | x -> (x :: acc, used')
+            let tstmts' = remove_unused' used tstmts in
+            let fstmts' = remove_unused' used fstmts in
+            let elsif' = List.map
+                (fun (S_Elsif_Cond (c,ss)) ->
+                    S_Elsif_Cond (c, remove_unused' used ss)
+                ) elsif in
+            (match (tstmts',fstmts',elsif') with
+            | [], [], [] -> pass
+            | _, _, _ -> emit (Stmt_If(c, tstmts', elsif', fstmts', loc)))
+        | x -> emit x
     ) xs ([], used)
 
 and constant_propagation (xs: stmt list): stmt list =
