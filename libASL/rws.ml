@@ -29,7 +29,7 @@ end
     In the Let module, bindings are given for let*, and*, let+, and and+ for
     composing monadic computations using let syntax.
     *)
-module Make (T : S) = struct
+module RWSBase (T : S) = struct
   include T
 
   (** A reader-writer-state monad.
@@ -57,56 +57,6 @@ module Make (T : S) = struct
       let (a, s', w) = x r s in
       let (b, s'', w') = f a r s' in
       (b, s'', T.mappend w w')
-
-  let (>>=) = bind
-
-  (* monad and applicative syntax for rws *)
-
-  module Let = struct
-    let (let*) = bind
-    let (and*) x y =
-      let* x' = x in
-      let* y' = y in
-      pure (x', y')
-
-    let (let+) x f = fmap f x
-    let (and+) = (and*)
-  end
-
-  open Let
-
-  (* higher-order functions and transformations *)
-
-  (** Performs a list of computations in sequence, resulting in a list
-      of their results.  *)
-  let rec sequence (xs: 'a rws list): 'a list rws =
-    match xs with
-    | (x::xs) ->
-      let+ x = x
-      and+ xs = sequence xs in
-        (x :: xs)
-    | [] -> pure []
-
-  (** Performs a list of computations in sequence and discard their results
-      (but retains their state and writer effects).  *)
-  let sequence_ (xs : 'a rws list): unit rws =
-    let+ _ = sequence xs in ()
-
-  (** Uses the given function to create a list of computations which are
-      then run sequentially. Results in a list of their results.  *)
-  let traverse (f: 'a -> 'b rws) (x: 'a list): 'b list rws =
-    sequence (List.map f x)
-
-  (** Uses the given function to create a list of computations which are
-      then run sequentually. Discards their results. *)
-  let traverse_ (f: 'a -> 'b rws) (x: 'a list): unit rws =
-    let+ _ = sequence (List.map f x) in ()
-
-  (** A nil computation. Does nothing and returns nothing of interest. *)
-  let unit: unit rws = pure ()
-
-  let if_ (b: bool) (x: unit rws): unit rws =
-    if b then x else unit
 
   (* rws-specific utility functions *)
 
@@ -162,6 +112,18 @@ module Make (T : S) = struct
   let defer (f: unit -> 'a): 'a rws =
     fun r s ->
       (f (), s, T.mempty)
+
+end
+
+(** Constructs a RWS monad using the given signature.  *)
+module Make(T : S) = struct
+
+  include RWSBase(T)
+
+  include Monad.Make(struct
+    type 'a m = 'a rws
+    include RWSBase(T)
+  end)
 
 end
 
