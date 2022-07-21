@@ -603,15 +603,25 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
         (* Pop enviroment. *)
         let@ () = DisEnv.modify LocalEnv.popLevel in
         DisEnv.pure result
-    | None ->
-        let tes_vals = (List.map sym_val_or_uninit tes)
-        and es_vals = (List.map sym_val_or_uninit es) in
-
-        (* unwrap evaluated value only if it is not uninitialised *)
-        match val_opt_initialised (eval_prim (name_of_FIdent f) tes_vals es_vals) with
-        | Some v -> DisEnv.pure (Val v)
-        | None -> DisEnv.pure (Exp (Expr_TApply(f, List.map to_expr tes, List.map to_expr es)))
+    | None -> dis_prim f tes es
     )
+
+and dis_prim (f: ident) (tes: sym list) (es: sym list): sym rws =
+    let name = name_of_FIdent f in
+
+    match sym_prim_simplify name tes es with
+    | Some s -> DisEnv.pure s
+    | None ->
+        let tes_vals = List.map sym_val_or_uninit tes
+        and es_vals = List.map sym_val_or_uninit es in
+
+        match filter_uninit (eval_prim name tes_vals es_vals) with
+        | Some v -> DisEnv.pure (Val v)
+        | None -> let f' = Expr_TApply(f, List.map sym_expr tes, List.map sym_expr es) in
+            if List.mem name Value.prims_pure
+                then DisEnv.pure (Exp f')
+                else capture_expr Unknown f'
+
 and dis_lexpr loc x r: unit rws =
     DisEnv.scope
         "dis_lexpr" (pp_stmt (Stmt_Assign (x, sym_expr r, Unknown)))
@@ -743,6 +753,7 @@ and dis_stmt' (x: AST.stmt): unit rws =
             | Alt_Alt(ps, oc, s) :: alts' ->
                 let@ (_,caseenv,casestmts) = DisEnv.locally (dis_stmts s) in
                 let@ (restalts,restenv,reststmts) = DisEnv.locally (dis_alts_exp alts' e) in
+                let@ () = DisEnv.put (LocalEnv.join_merge caseenv restenv) in
                 (* FIXME: needs to merge resulting localenv states. *)
                 (* NOTE: guard condition "oc" is not visited by disassembly. *)
                 DisEnv.pure (Alt_Alt(ps, oc, casestmts) :: restalts)

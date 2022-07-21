@@ -344,6 +344,19 @@ let eval_prim (f: string) (tvs: value list) (vs: value list): value option =
     | _ -> None
     )
 
+let prims_pure = [
+    "eq_enum"; "eq_enum"; "ne_enum"; "ne_enum"; "eq_bool"; "ne_bool"; "equiv_bool"; "not_bool"; "eq_int"; "ne_int"; "le_int";
+    "lt_int"; "ge_int"; "gt_int"; "is_pow2_int"; "neg_int"; "add_int"; "sub_int"; "shl_int"; "shr_int"; "mul_int"; "zdiv_int";
+    "zrem_int"; "fdiv_int"; "frem_int"; "mod_pow2_int"; "align_int"; "pow2_int"; "pow_int_int"; "cvt_int_real"; "eq_real";
+    "ne_real"; "le_real"; "lt_real"; "ge_real"; "gt_real"; "add_real"; "neg_real"; "sub_real"; "mul_real"; "divide_real";
+    "pow2_real"; "round_tozero_real"; "round_down_real"; "round_up_real"; "sqrt_real"; "cvt_int_bits"; "cvt_bits_sint";
+    "cvt_bits_uint"; "in_mask"; "notin_mask"; "eq_bits"; "ne_bits"; "add_bits"; "sub_bits"; "mul_bits"; "and_bits"; "or_bits";
+    "eor_bits"; "not_bits"; "zeros_bits"; "ones_bits"; "replicate_bits"; "append_bits"; "eq_str"; "ne_str"; "append_str_str";
+    "cvt_int_hexstr"; "cvt_int_decstr"; "cvt_bool_str"; "cvt_bits_str"; "cvt_real_str"; "is_cunpred_exc"; "is_exctaken_exc";
+    "is_impdef_exc"; "is_see_exc"; "is_undefined_exc"; "is_unpred_exc"]
+and prims_impure = ["ram_init"; "ram_read"; "ram_write"; "trace_memory_read"; "trace_memory_write"; "trace_event";
+    "asl_file_open"; "asl_file_write"; "asl_file_getc"; "print_str"; "print_char"; "program_end"]
+
 
 (****************************************************************)
 (** {2 Utility functions on Values}                             *)

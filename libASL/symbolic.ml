@@ -9,7 +9,7 @@ type sym =
   | Exp of expr
 
 let is_val (x: AST.expr): bool =
-    (match x with 
+    (match x with
     | Expr_LitInt _ -> true
     | Expr_LitBits _ -> true
     | Expr_LitReal _ -> true
@@ -18,8 +18,8 @@ let is_val (x: AST.expr): bool =
     | x -> false
     )
 
-let rec val_expr (v: Value.value): AST.expr = 
-  match v with 
+let rec val_expr (v: Value.value): AST.expr =
+  match v with
   | VBool b -> Expr_Var(if b then Ident "TRUE" else Ident "FALSE")
   | VEnum (id, n) -> Expr_LitInt(string_of_int n)
   | VInt n -> Expr_LitInt(Z.to_string n)
@@ -33,32 +33,32 @@ let rec val_expr (v: Value.value): AST.expr =
 let [@warning "-32"] rec expr_to_lexpr (e: expr): lexpr =
   match e with
   | Expr_Var v -> LExpr_Var v
-  | Expr_Tuple es -> LExpr_Tuple (List.map expr_to_lexpr es) 
+  | Expr_Tuple es -> LExpr_Tuple (List.map expr_to_lexpr es)
   | _ -> raise (EvalError (Unknown, "unexpected expression in expr_to_lexpr coercion: " ^ pp_expr e))
 
 
-let val_opt_initialised (v: value option): value option =
+let filter_uninit (v: value option): value option =
   match v with
   | Some VUninitialized -> None
   | _ -> v
 
-let sym_val_or_uninit (x: sym): value = 
+let sym_val_or_uninit (x: sym): value =
   match x with
   | Val v -> v
   | Exp _ -> VUninitialized
 
-let sym_expr (x: sym): expr = 
+let sym_expr (x: sym): expr =
   match x with
     | Val v -> val_expr v
     | Exp e -> e
 
-let sym_pair_has_exp (pair: sym * sym): bool = 
+let sym_pair_has_exp (pair: sym * sym): bool =
   match pair with
   | Exp _, _ -> true
   | _, Exp _ -> true
   | _ -> false
 
-let sym_initialised (x: sym): sym option = 
+let sym_initialised (x: sym): sym option =
   match x with
   | Val VUninitialized -> None
   | _ -> Some x
@@ -69,13 +69,13 @@ let sym_initialised (x: sym): sym option =
 let rec sym_collect_list (xs: sym list): (expr list, value list) Either.t =
   match xs with
   | [] -> Right []
-  | Val v::xs -> 
+  | Val v::xs ->
     (match sym_collect_list xs with
     | Right rs -> Right (v::rs)
     | Left ls -> Left ((val_expr v)::ls))
   | Exp e::xs -> Left (e :: List.map sym_expr xs)
 
-let pp_sym (rs: sym): string = 
+let pp_sym (rs: sym): string =
     match rs with
     | Val v -> Printf.sprintf "Val(%s)" (pp_value v)
     | Exp e -> Printf.sprintf "Exp(%s)" (pp_expr e)
@@ -99,9 +99,9 @@ let type_unknown = Type_Constructor(Ident "unknown")
   *)
 let prim_binop (f: string) (loc: AST.l) (x: sym) (y: sym) : sym  =
   (match (x,y) with
-  | (Val x,Val y) -> 
-      (match eval_prim f [] (x::[y]) with 
-      | Some v -> Val v 
+  | (Val x,Val y) ->
+      (match eval_prim f [] (x::[y]) with
+      | Some v -> Val v
       | None -> raise (EvalError (loc, "Unknown primitive operation: "^ f)))
   | (x,y) -> Exp (Expr_TApply(FIdent(f,0), [], (sym_expr x)::[sym_expr y])))
 
@@ -122,8 +122,31 @@ let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
   | (_,_) -> prim_binop "eval_eq" loc x y)
 
 let rec contains_uninit (v: value): bool =
-  match v with 
+  match v with
   | VUninitialized -> true
   | VTuple vs -> List.exists contains_uninit vs
   | VRecord r -> Bindings.exists (fun _ -> contains_uninit) r
   | _ -> false
+
+let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option =
+
+  let vint_eq cmp = function
+    | Val (VInt x) when Z.equal cmp x -> true
+    | _ -> false in
+
+  let [@warning "-26"] is_zero_int = vint_eq Z.zero
+  and [@warning "-26"] is_one_int = vint_eq Z.one in
+
+  let is_zero_bits = function
+    | Val (VBits {n = _; v = v}) -> Z.equal Z.zero v
+    | _ -> false in
+
+  (match (name, tes, es) with
+  | ("add_int",     _,        [x1; x2]) when is_zero_int x1 -> Some x2
+  | ("add_int",     _,        [x1; x2]) when is_zero_int x2 -> Some x1
+
+  | ("append_bits", [t1; _],  [_; x2]) when is_zero_int t1 -> Some x2
+  | ("append_bits", [_; t2],  [x1; _]) when is_zero_int t2 -> Some x1
+  | ("or_bits",     _,        [x1; x2]) when is_zero_bits x1 -> Some x2
+  | ("or_bits",     _,        [x1; x2]) when is_zero_bits x2 -> Some x1
+  | _ -> None)
