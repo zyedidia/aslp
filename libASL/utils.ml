@@ -40,24 +40,22 @@ let zipWithIndex (f: 'a -> int -> 'b) (xs: 'a list): 'b list =
     aux 0 xs
 
 (** Generate range of numbers from i to j *)
-let range (i: int) (j: int): 'a list = 
+let range (i: int) (j: int): 'a list =
     let rec aux n acc =
       if n < i then acc else aux (n-1) (n :: acc)
     in aux (j - 1) [] ;;
 
 let rec iter3 (f: 'a -> 'b -> 'c -> unit) (xs: 'a list) (ys: 'b list) (zs: 'c list): unit =
     match (xs, ys, zs) with
-    | ([], _, _) -> ()
-    | (_, [], _) -> ()
-    | (_, _, []) -> ()
+    | ([], [], []) -> ()
     | ((x::xs), (y::ys), (z::zs)) -> f x y z; iter3 f xs ys zs
+    | _, _, _ -> invalid_arg "Utils.iter3: list lengths differ."
 
 let rec map3 (f: 'a -> 'b -> 'c -> 'd) (xs: 'a list) (ys: 'b list) (zs: 'c list): 'd list =
     match (xs, ys, zs) with
-    | ([], _, _) -> []
-    | (_, [], _) -> []
-    | (_, _, []) -> []
+    | ([], [], []) -> []
     | ((x::xs), (y::ys), (z::zs)) -> (f x y z) :: (map3 f xs ys zs)
+    | _, _, _ -> invalid_arg "Utils.map3: list lengths differ."
 
 (****************************************************************
  * Option related
@@ -158,7 +156,7 @@ let rec first_option (f: 'a -> 'b option) (xs: 'a list): 'b option =
 let rec replace_in_list (f: 'a -> 'a option) (xs: 'a list): 'a list =
     match xs with
     | [] -> invalid_arg "replace_in_list not found."
-    | x::xs' -> 
+    | x::xs' ->
         (match f x with
         | Some y -> y::xs'
         | None -> x::replace_in_list f xs')

@@ -221,24 +221,6 @@ let (and@) = DisEnv.Let.(and*)
 let (let+) = DisEnv.Let.(let+)
 let (and+) = DisEnv.Let.(and+)
 
-(*
-let mergeEnv (xLocals: scope list) (yLocals: scope list): scope list =
-    if List.length xLocals <> List.length yLocals then raise (EvalError (Unknown, "Scope lengths should be the same"));
-    if List.length xLocals = 0 then [] else
-    (* New list of scopes with merged locals *)
-    (List.map2 (fun xScope yScope ->
-        let bs =
-        (let xbs = Bindings.bindings xScope.bs in
-        List.fold_left (fun bs (xKey, xV) ->
-            let ybs = yScope.bs in
-            if Bindings.find xKey ybs <> xV then
-                Bindings.update xKey (fun xo -> match xo with Some x -> Some VUninitialized | None -> raise (EvalError (Unknown, "Unreachable"))) bs
-            else
-                Bindings.add xKey xV bs
-        ) Bindings.empty xbs) in
-        { bs }
-    ) xLocals yLocals)
-*)
 
 (** Convert value to a simple expression containing that value, so we can
     print it or use it symbolically *)
@@ -471,7 +453,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
                 let@ v = DisEnv.getVar loc id' in
                 (match sym_initialised v with
                 | Some s -> DisEnv.pure s
-                | None -> capture_expr loc x))
+                | None -> capture_expr loc (Expr_Var id')))
                 (* TODO: Partially defined structures? *)
     | Expr_Parens(e) ->
             dis_expr loc e
@@ -570,12 +552,17 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
         (* Nest enviroment *)
         let@ () = DisEnv.modify LocalEnv.addLevel in
 
+        assert (List.length targs == List.length tes);
+
         (* Assign targs := tes *)
         let@ () = DisEnv.sequence_ @@ List.map2 (fun arg e ->
             let@ arg' = DisEnv.gets (LocalEnv.getLocalName arg) in
             let type_int = Type_Constructor (Ident "integer") in
             declare_const loc type_int arg' e
             ) targs tes in
+
+        assert (List.length atys == List.length args);
+        assert (List.length atys == List.length es);
 
         (* Assign args := es *)
         let@ () = DisEnv.sequence_ (Utils.map3 (fun (ty, _) arg e ->
@@ -599,9 +586,8 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
             DisEnv.pure (Expr_Unknown type_unknown)) in
 
         let@ env = DisEnv.get in
-        let@ () = if !debug_level >= 2
-            then DisEnv.log (LocalEnv.pp_locals env ^ "\n")
-            else DisEnv.unit in
+        let@ () = DisEnv.if_ (!debug_level >= 2)
+            (DisEnv.log (LocalEnv.pp_locals env ^ "\n")) in
 
         (* Evaluate body with new return symbol *)
         let@ _ = DisEnv.modify (LocalEnv.addReturnSymbol rv) in
@@ -635,6 +621,7 @@ and dis_lexpr' (loc: l) (x: AST.lexpr) (r: sym): unit rws =
         let@ tvs = DisEnv.traverse (dis_expr loc) tes in
         let@ vs = DisEnv.traverse (dis_expr loc) es in
         dis_proccall loc setter tvs (vs @ [r])
+        (* DisEnv.write [Stmt_Assign(LExpr_Write(setter, List.map sym_expr tvs, List.map sym_expr vs), sym_expr r, loc)] *)
     | LExpr_Var(v) ->
         let@ idopt = DisEnv.findVar loc v in
         let v' = (match idopt with
@@ -866,10 +853,8 @@ and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
         | Stmt_If(c, tstmts, elsif, fstmts, loc) ->
             let tstmts' = remove_unused' used tstmts in
             let fstmts' = remove_unused' used fstmts in
-            let elsif' = List.map
-                (fun (S_Elsif_Cond (c,ss)) ->
-                    S_Elsif_Cond (c, remove_unused' used ss)
-                ) elsif in
+            let elsif' = List.map (fun (S_Elsif_Cond (c,ss)) ->
+                S_Elsif_Cond (c, remove_unused' used ss)) elsif in
             (match (tstmts',fstmts',elsif') with
             | [], [], [] -> pass
             | _, _, _ -> emit (Stmt_If(c, tstmts', elsif', fstmts', loc)))
