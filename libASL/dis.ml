@@ -652,7 +652,8 @@ and dis_lexpr' (loc: l) (x: AST.lexpr) (r: sym): unit rws =
         | _ -> DisEnv.write [Stmt_Assign (x, sym_expr r, loc)])
     | LExpr_Wildcard -> DisEnv.unit
     | LExpr_Array (arr, ind) ->
-        (* NOTE: Currently, we do not traverse the array part of an array index assignment. *)
+        (* NOTE: Currently, we do not traverse the array part of an array index assignment.
+           Doing so would require a read-modify-write similar to eval_lexpr_modify. *)
         let@ ind' = dis_expr loc ind in
         DisEnv.write [Stmt_Assign(LExpr_Array(arr,sym_expr ind'), sym_expr r, loc)]
     | _ ->
@@ -828,7 +829,7 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
                     (* Some stmts *)
                     (* Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
-                    Some (remove_unused (stmts))
+                    Some (Transforms.RemoveUnused.go (stmts))
                 end else begin
                     None
                 end

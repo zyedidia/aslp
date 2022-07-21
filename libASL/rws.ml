@@ -1,11 +1,11 @@
 
 (** Types and supporting functions required for reader-writer-state monad.
-    
+
     r is an immutable local environment passed to computations,
     w is a type of values produced alongside main computation results, and
     s is a local state which is passed to computations and can be modified.
 
-    Note: Here, "modified" means immutable updates and replacing the current 
+    Note: Here, "modified" means immutable updates and replacing the current
     value with a new augmented version.
     *)
 module type S = sig
@@ -17,14 +17,14 @@ module type S = sig
   val mappend : w -> w -> w
 end
 
-(** Constructs a reader-writer-state monad using the given type specifications. 
-    
-    This provides a "rws" type which is parametrised by a result type. 
-    For example, "int rws" is a computation using the reader-writer-state 
+(** Constructs a reader-writer-state monad using the given type specifications.
+
+    This provides a "rws" type which is parametrised by a result type.
+    For example, "int rws" is a computation using the reader-writer-state
     types as described above and eventually returning an int result.
 
     Also provides usual functional programming constructs for working
-    with the monadic type. 
+    with the monadic type.
 
     In the Let module, bindings are given for let*, and*, let+, and and+ for
     composing monadic computations using let syntax.
@@ -32,9 +32,9 @@ end
 module Make (T : S) = struct
   include T
 
-  (** A reader-writer-state monad. 
+  (** A reader-writer-state monad.
       This is a function which takes an immutable "environment",
-      a local mutable "state", and produces a value of some type 'a, 
+      a local mutable "state", and produces a value of some type 'a,
       along with a new local state and side-effects of writes. *)
   type 'a rws = r -> s -> 'a * s * w
 
@@ -42,8 +42,8 @@ module Make (T : S) = struct
 
   (** Applies the given function to the result of the computation. *)
   let fmap (f: 'a -> 'b) (x: 'a rws): 'b rws =
-    fun r s -> 
-      let (a,s',w) = x r s in 
+    fun r s ->
+      let (a,s',w) = x r s in
       (f a, s', w)
 
   (** A computation returning a constant value and making no state changes. *)
@@ -53,7 +53,7 @@ module Make (T : S) = struct
   (** Compose computations in sequence,
       passing the result of the first into the second. *)
   let bind (x: 'a rws) (f: 'a -> 'b rws): 'b rws =
-    fun r s -> 
+    fun r s ->
       let (a, s', w) = x r s in
       let (b, s'', w') = f a r s' in
       (b, s'', T.mappend w w')
@@ -64,9 +64,9 @@ module Make (T : S) = struct
 
   module Let = struct
     let (let*) = bind
-    let (and*) x y = 
-      let* x' = x in 
-      let* y' = y in 
+    let (and*) x y =
+      let* x' = x in
+      let* y' = y in
       pure (x', y')
 
     let (let+) x f = fmap f x
@@ -76,12 +76,12 @@ module Make (T : S) = struct
   open Let
 
   (* higher-order functions and transformations *)
-  
+
   (** Performs a list of computations in sequence, resulting in a list
       of their results.  *)
   let rec sequence (xs: 'a rws list): 'a list rws =
     match xs with
-    | (x::xs) -> 
+    | (x::xs) ->
       let+ x = x
       and+ xs = sequence xs in
         (x :: xs)
@@ -102,10 +102,13 @@ module Make (T : S) = struct
   let traverse_ (f: 'a -> 'b rws) (x: 'a list): unit rws =
     let+ _ = sequence (List.map f x) in ()
 
-  (* rws-specific utility functions *)
-
   (** A nil computation. Does nothing and returns nothing of interest. *)
   let unit: unit rws = pure ()
+
+  let if_ (b: bool) (x: unit rws): unit rws =
+    if b then x else unit
+
+  (* rws-specific utility functions *)
 
   (* READER *)
 
@@ -143,11 +146,20 @@ module Make (T : S) = struct
   (** Runs a computation transiently without modifying the state or writer.
       Instead, returns the final state and writer values alongside the result. *)
   let locally (x: 'a rws): ('a * s * w) rws =
-    fun r s -> 
-      let (a,s',w) = x r s in 
+    fun r s ->
+      let (a,s',w) = x r s in
       ((a,s',w), s, T.mempty)
 
-  let defer (f: unit -> 'a): 'a rws = 
+  (** Runs a computation transiently without modifying the state or writer.
+      Instead, returns only the final state and writer values.
+
+      This is just `locally` but discarding the result value of the computation. *)
+  let locally_ (x: 'a rws): (s * w) rws =
+    fun r s ->
+      let (a,s',w) = x r s in
+      ((s',w), s, T.mempty)
+
+  let defer (f: unit -> 'a): 'a rws =
     fun r s ->
       (f (), s, T.mempty)
 
@@ -170,10 +182,10 @@ module Test = struct
 
   let a = let* x = test and* y = pure "a" in pure x;;
 
-  let main () = 
+  let main () =
     let* xx =
       try reads (fun e -> (* raise (Invalid_argument "a"); *) 99999)
-      with Invalid_argument _ -> pure 55 in 
+      with Invalid_argument _ -> pure 55 in
     let* a = Hi.pure "asdf"
     and+ b = test
     and+ c = test in
