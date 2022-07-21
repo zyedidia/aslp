@@ -221,6 +221,9 @@ let (and@) = DisEnv.Let.(and*)
 let (let+) = DisEnv.Let.(let+)
 let (and+) = DisEnv.Let.(and+)
 
+let (>>) = DisEnv.(>>)
+let (>>=) = DisEnv.(>>=)
+
 
 (** Convert value to a simple expression containing that value, so we can
     print it or use it symbolically *)
@@ -289,16 +292,13 @@ let sym_if (loc: l) (test: sym rws) (tcase: sym rws) (fcase: sym rws): sym rws =
   | Exp e ->
       let@ tmp = declare_fresh_named_var loc "If" type_unknown in
       (* Evaluate true branch statements. *)
-      let@ ((),tenv,tstmts) = DisEnv.locally (
-        let@ r = tcase in
-        assign_var loc tmp r) in
+      let@ (tenv,tstmts) = DisEnv.locally_
+          (tcase >>= assign_var loc tmp) in
       (* Propagate incremented counter to env'. *)
       let@ env' = DisEnv.gets (fun env -> LocalEnv.sequence_merge env tenv) in
       (* Execute false branch statements with env'. *)
-      let@ ((),fenv,fstmts) = DisEnv.locally (
-        let@ () = DisEnv.put env' in
-        let@ r = fcase in
-        assign_var loc tmp r) in
+      let@ (fenv,fstmts) = DisEnv.locally_
+          (DisEnv.put env' >> fcase >>= assign_var loc tmp) in
       let@ () = DisEnv.put (LocalEnv.join_merge tenv fenv) in
       let+ () = DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)] in
       Exp (Expr_Var (tmp)))
@@ -311,8 +311,11 @@ let unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit r
   | Val (VBool (false)) -> fcase
   | Val _ -> failwith ("Split on non-boolean value")
   | Exp e ->
-      let@ (t,tenv,tstmts) = DisEnv.locally(tcase) in
-      let@ (f,fenv,fstmts) = DisEnv.locally(fcase) in
+      let@ (tenv,tstmts) = DisEnv.locally_ tcase in
+
+      let@ env' = DisEnv.gets (fun env -> LocalEnv.sequence_merge env tenv) in
+      let@ (fenv,fstmts) = DisEnv.locally_ (DisEnv.put env' >> fcase) in
+
       let@ () = DisEnv.put (LocalEnv.join_merge tenv fenv) in
       DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)])
 
@@ -845,11 +848,17 @@ and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
             | [] -> pass
             | _ -> emit (Stmt_VarDeclsNoInit(ty, vs', loc)))
         | Stmt_VarDecl(ty, v, i, loc) ->
-            if IdentSet.mem v used then emit stmt else pass
+            if IdentSet.mem v used
+                then emit stmt
+                else pass
         | Stmt_ConstDecl(ty, v, i, loc) ->
-            if IdentSet.mem v used then emit stmt else pass
+            if IdentSet.mem v used
+                then emit stmt
+                else pass
         | Stmt_Assign(LExpr_Var(v), r, loc) ->
-            if IdentSet.mem v used then emit stmt else pass
+            if IdentSet.mem v used
+                then emit stmt
+                else pass
         | Stmt_If(c, tstmts, elsif, fstmts, loc) ->
             let tstmts' = remove_unused' used tstmts in
             let fstmts' = remove_unused' used fstmts in

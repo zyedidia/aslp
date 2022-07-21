@@ -19,7 +19,10 @@ module Make (M : S) = struct
 
   open M
 
+  (** Operator for sequencing two actions with bind. *)
   let (>>=) = bind
+  (** Operator for sequencing two actions and discarding the first's result. *)
+  let (>>) x y = bind x (fun _ -> y)
 
   (** Let syntactic sugar for monadic bind and map operations. *)
   module Let = struct
