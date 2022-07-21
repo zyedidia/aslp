@@ -21,6 +21,7 @@ module Make (M : S) = struct
 
   (** Operator for sequencing two actions with bind. *)
   let (>>=) = bind
+
   (** Operator for sequencing two actions and discarding the first's result. *)
   let (>>) x y = bind x (fun _ -> y)
 
