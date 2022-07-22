@@ -69,14 +69,6 @@ module LocalEnv = struct
     let pp_locals (env: t): string =
         Printf.sprintf "locals = %s" (pp_sym_bindings env.locals)
 
-    let addLocalVar (loc: l) (k: ident) (v: sym) (env: t): t =
-        if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident k) (pp_sym v);
-        match env.locals with
-        | (bs :: rest) -> {env with locals = (Bindings.add k v bs :: rest)}
-        | []        -> raise (EvalError (loc, "LocalEnv::addLocalVar"))
-
-    let addLocalConst = addLocalVar
-
     let getReturnSymbol (loc: l) (env: t): expr =
         match env.returnSymbols with
         | [] -> raise (EvalError (loc, "Return not in function"))
@@ -118,12 +110,26 @@ module LocalEnv = struct
             if Bindings.mem x bs then Some bs else search x bss'
         | [] -> None
 
-    let setVar (loc: l) (x: ident) (v: sym) (env: t): t =
+    let addLocalVar (loc: l) (k: ident) (v: sym) (env: t): t =
+        if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident k) (pp_sym v);
+        match env.locals with
+        | (bs :: rest) -> {env with locals = (Bindings.add k v bs :: rest)}
+        | []        -> raise (EvalError (loc, "LocalEnv::addLocalVar bindings empty"))
+
+    let addLocalConst = addLocalVar
+
+    let getLocalVar (loc: l) (x: ident) (env: t): sym option =
+        (match (search x env.locals) with
+        | Some bs -> Some (Bindings.find x bs)
+        | None -> None)
+
+    let setLocalVar (loc: l) (x: ident) (v: sym) (env: t): t =
         if !trace_write then Printf.printf "TRACE: write %s = %s\n" (pprint_ident x) (pp_sym v);
         let locals' = Utils.replace_in_list (fun b ->
-            match (Bindings.find_opt x b) with
-            | None -> None
-            | Some _ -> Some (Bindings.add x v b))
+            if (Bindings.mem x b)
+                then Some (Bindings.add x v b)
+                else None
+            )
             env.locals in
         { env with locals = locals' }
 end
@@ -148,15 +154,15 @@ module DisEnv = struct
         with e -> Left e
 
     let getVar (loc: l) (x: ident): sym rws =
-        let* v = gets (fun lenv -> LocalEnv.search x lenv.locals) in
+        let* v = gets (LocalEnv.getLocalVar loc x) in
         match (v) with
-            | Some b -> pure (Bindings.find x b)
+            | Some v -> pure (v)
             | None -> reads (fun env -> Val (Env.getVar loc env x))
 
     let getVarOpt (loc: l) (x: ident): sym option rws =
-        let* v = gets (fun lenv -> LocalEnv.search x lenv.locals) in
+        let* v = gets (LocalEnv.getLocalVar loc x) in
         match (v) with
-            | Some b -> pure (Some (Bindings.find x b))
+            | Some v -> pure (Some v)
             | None -> reads (catch (fun env -> Val (Env.getVar loc env x)))
 
     let getLocalName (x: ident): ident rws =
@@ -179,14 +185,14 @@ module DisEnv = struct
 
     let nextVarName (prefix: string): ident rws =
         let* num = stateful LocalEnv.incNumSymbols in
-        getLocalName (Ident (prefix ^ string_of_int num))
+        gets (LocalEnv.getLocalName (Ident (prefix ^ string_of_int num)))
 
     let indent: string rws =
         let+ i = gets (fun l -> l.indent) in
         let h = i / 2 in
         let s = String.concat "" (List.init h (fun _ -> "\u{2502} \u{250a} ")) in
         if i mod 2 == 0 then
-            s
+            s ^ ""
         else
             s ^ "\u{2502} "
 
@@ -195,6 +201,8 @@ module DisEnv = struct
         let s' = Str.global_replace (Str.regexp "\n") ("\n"^i) s in
         Printf.printf "%s%s\n" i s';
         ()
+
+    let warn s = log ("WARNING: " ^ s)
 
     let scope (name: string) (arg: string) (pp: 'a -> string) (x: 'a rws): 'a rws =
         let* () = log (Printf.sprintf "\u{256d}\u{2500} %s --> %s" name arg) in
@@ -224,6 +232,7 @@ let (and+) = DisEnv.Let.(and+)
 let (>>) = DisEnv.(>>)
 let (>>=) = DisEnv.(>>=)
 
+let type_integer = (Type_Constructor (Ident "integer"))
 
 (** Convert value to a simple expression containing that value, so we can
     print it or use it symbolically *)
@@ -248,14 +257,22 @@ let contains_expr (xs: sym list): bool =
 let getGlobalConst(c: ident): sym rws =
   DisEnv.reads (fun env -> Val (Env.getGlobalConst env c))
 
+let check_var_shadowing (loc: l) (i: ident): unit rws =
+    let@ old = DisEnv.gets (LocalEnv.getLocalVar loc i) in
+    (match old with
+    | Some _ -> DisEnv.warn ("shadowing local variable: " ^ pprint_ident i)
+    | None -> DisEnv.unit)
+
 let declare_var (loc: l) (t: ty) (i: ident): unit rws =
-  let@ () = DisEnv.modify
-    (LocalEnv.addLocalVar loc i (Val VUninitialized)) in
+  check_var_shadowing loc i >>
+  DisEnv.modify
+    (LocalEnv.addLocalVar loc i (Val VUninitialized)) >>
   DisEnv.write [Stmt_VarDeclsNoInit(t, [i], loc)]
 
 let declare_assign_var (loc: l) (t: ty) (i: ident) (x: sym): unit rws =
-  let@ () = DisEnv.modify
-    (LocalEnv.addLocalVar loc i x) in
+  check_var_shadowing loc i >>
+  DisEnv.modify
+    (LocalEnv.addLocalVar loc i x) >>
   DisEnv.write [Stmt_VarDecl(t, i, sym_expr x, loc)]
 
 let declare_fresh_named_var (loc: l) (name: string)  (t: ty): ident rws =
@@ -264,11 +281,12 @@ let declare_fresh_named_var (loc: l) (name: string)  (t: ty): ident rws =
   res
 
 and assign_var (loc: l) (i: ident) (x: sym): unit rws =
-  let@ () = DisEnv.modify (LocalEnv.setVar loc i x) in
+  DisEnv.modify (LocalEnv.setLocalVar loc i x) >>
   DisEnv.write [Stmt_Assign(LExpr_Var(i), sym_expr x, loc)]
 
 let declare_const (loc: l) (ty: ty) (i: ident) (x: sym): unit rws =
-  let@ () = DisEnv.modify (LocalEnv.addLocalConst loc i x) in
+  check_var_shadowing loc i >>
+  DisEnv.modify (LocalEnv.addLocalConst loc i x) >>
   DisEnv.write [Stmt_ConstDecl(ty, (i), sym_expr x, loc)]
 
 let declare_fresh_const (loc: l) (t: ty) (name: string) (x: expr): ident rws =
@@ -396,7 +414,7 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
 
 and capture_expr loc (x: expr): sym rws =
     let@ v = declare_fresh_const loc type_unknown "Exp" x in
-    let+ () = DisEnv.modify (LocalEnv.setVar loc v
+    let+ () = DisEnv.modify (LocalEnv.setLocalVar loc v
         (Val VUninitialized)) in
     Exp (Expr_Var v)
 
@@ -560,8 +578,7 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
         (* Assign targs := tes *)
         let@ () = DisEnv.sequence_ @@ List.map2 (fun arg e ->
             let@ arg' = DisEnv.gets (LocalEnv.getLocalName arg) in
-            let type_int = Type_Constructor (Ident "integer") in
-            declare_const loc type_int arg' e
+            declare_const loc type_integer arg' e
             ) targs tes in
 
         assert (List.length atys == List.length args);
@@ -757,6 +774,37 @@ and dis_stmt' (x: AST.stmt): unit rws =
                 Stmt_Case(e'', alts', odefault, loc)
             ]
         )
+    | Stmt_For(v, start, dir, stop, body, loc) ->
+        let@ start' = dis_expr loc start in
+        let@ stop' = dis_expr loc stop in
+        let@ v' = DisEnv.getLocalName v in
+
+        (match (start', stop') with
+        | Val startval, Val stopval ->
+            let rec dis_for (i: value): unit rws =
+                let c = (match dir with
+                | Direction_Up -> eval_leq loc i stopval
+                | Direction_Down -> eval_leq loc stopval i
+                ) in
+                if c then
+                    assign_var loc v' (Val i) >>
+                    dis_stmts body >>
+                    let i' = (match dir with
+                    | Direction_Up   -> eval_add_int loc i (VInt Z.one)
+                    | Direction_Down -> eval_sub_int loc i (VInt Z.one)
+                    ) in
+                    dis_for i'
+                else
+                    DisEnv.unit
+            in
+            declare_var loc type_integer v' >>
+            dis_for startval
+        | _, _ ->
+            let@ (env',body') = DisEnv.locally_ (dis_stmts body) in
+            (* Note: Check propagation of env' from loop body to outer state. *)
+            DisEnv.put env' >>
+            DisEnv.write
+                [Stmt_For(v', sym_expr start', dir, sym_expr stop', body', loc)])
     | x -> DisEnv.write [x]
     )
 

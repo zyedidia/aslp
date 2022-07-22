@@ -17,6 +17,9 @@ integer test_fun(integer x)
         integer z = x;
     return x + x;
 
+bits(N) type_shadow(integer N)
+    return zeros_bits();
+
 __instruction test1
     __encoding test
         __instruction_set TEST
@@ -72,11 +75,11 @@ __instruction test2
         integer N2;
         boolean a;
         bits(2) x;
-        if (a) then 
+        if (a) then
             integer N = 102;
-        else 
+        else
             integer N = 102;
-        
+
         integer NN = test_fun(N2);
 
 
@@ -100,10 +103,14 @@ __instruction test3
 
         //integer NN = test_if_scope(N);
 
-        //bits(64) xx = X[1];
-        X[N] = '11110000111100001111000011110001';
+        integer x;
 
-        //_R[0] = '000001111';
+        for y = 1 to 3
+            x = y;
+
+        bits(60) zz = type_shadow(60);
+
+
 
 __decode TEST
     case (28 +: 4) of
