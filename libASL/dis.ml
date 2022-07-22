@@ -662,18 +662,7 @@ and dis_lexpr' (loc: l) (x: AST.lexpr) (r: sym): unit rws =
 (** Dissassemble list of statements *)
 and dis_stmts (xs: AST.stmt list): unit rws =
     DisEnv.traverse_ dis_stmt xs
-    (* write_multi (List.concat (List.map read (List.map (dis_stmt env) xs))) *)
 
-(** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
-(* and dis_if_stmt_no_remove (loc: l) (envs: Env.t list) (xs: s_elsif list): s_elsif list writer =
-    match (xs, envs) with
-    | ([], []) -> return []
-    | ((AST.S_Elsif_Cond (cond, b)::xs'), (env::envs')) ->
-        let* cond' = dis_expr loc env cond in
-        let* els' = dis_if_stmt_no_remove loc envs' xs' in
-        let b' = Env.nest (fun env' -> dis_stmts env' b) env in
-        return (AST.S_Elsif_Cond(to_expr cond', read (b'))::(els'))
-    | _ -> raise (EvalError (loc, "Env list and s_elsif list must be the same length")) *)
 
 (** Disassemble statement *)
 and dis_stmt x = DisEnv.scope "dis_stmt" (pp_stmt x) Utils.pp_unit (dis_stmt' x)
@@ -767,16 +756,6 @@ and dis_stmt' (x: AST.stmt): unit rws =
             DisEnv.write [
                 Stmt_Case(e'', alts', odefault, loc)
             ]
-            (* let altEnvs = List.map (fun _ -> Env.copy env) (Utils.range 0 (List.length alts)) in
-            let defEnv = Env.copy env in
-            let result = write (Stmt_Case(
-                e'',
-                List.map2 (fun (Alt_Alt(ps, oc, s)) altEnv -> Alt_Alt(ps, oc, read (Env.nest (fun env' -> (dis_stmts env' s)) altEnv))) alts altEnvs,
-                (match odefault with None -> None | Some s -> Some (read (Env.nest (fun env' -> (dis_stmts env s)) defEnv))),
-                loc
-            )) in
-            Env.setLocals env (List.fold_left mergeEnv (Env.getLocals defEnv) (List.map Env.getLocals altEnvs));
-            result *)
         )
     | x -> DisEnv.write [x]
     )
@@ -880,53 +859,3 @@ and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
             | _, _, _ -> emit (Stmt_If(c, tstmts', elsif', fstmts', loc)))
         | x -> emit x
     ) xs ([], used)
-
-and constant_propagation (xs: stmt list): stmt list =
-    match List.fold_left (fun (acc, bs) stmt ->
-        match stmt with
-        | Stmt_VarDecl(ty, v, i, loc) -> if is_val i then (acc, Bindings.add v i bs) else (acc @ [subst_stmt bs stmt], bs)
-        | Stmt_ConstDecl(ty, v, i, loc) -> if is_val i then (acc, Bindings.add v i bs) else (acc @ [subst_stmt bs stmt], bs)
-        | Stmt_Assign(LExpr_Var(v), r, loc) -> if is_val r then (acc, Bindings.add v r bs) else (acc @ [subst_stmt bs stmt], bs)
-        | x -> (acc @ [subst_stmt bs stmt], bs)
-    ) ([], Bindings.empty) xs with (acc, bs) -> acc
-
-and copy_propagation (xs: stmt list): stmt list =
-    match List.fold_left (fun (acc, bs) stmt ->
-        match stmt with
-        | Stmt_VarDecl(ty, v, i, loc) ->
-            (* If we remove the statement, leave the declaration to be removed or joined later *)
-            (match copy_propagation_helper v i bs acc stmt with (stmts, bs) -> if stmts = acc then (stmts @ [Stmt_VarDeclsNoInit(ty, [v], loc)], bs) else (stmts, bs))
-        | Stmt_ConstDecl(ty, v, i, loc) ->
-            copy_propagation_helper v i bs acc stmt
-        | Stmt_Assign(LExpr_Var(v), r, loc) ->
-            copy_propagation_helper v r bs acc stmt
-        | x -> (acc @ [subst_stmt bs stmt], bs)
-    ) ([], Bindings.empty) xs with (acc, bs) -> acc
-
-and copy_propagation_helper (l: ident) (r: AST.expr) (bs: expr Bindings.t) (acc: stmt list) (stmt: stmt): stmt list * expr Bindings.t =
-    let newBs = if Bindings.mem l bs then Bindings.remove l bs else bs in
-    (match r with
-    | Expr_Var(i) ->
-        if Bindings.mem i newBs then
-            (acc, remove_reassigned l (Bindings.add l (Bindings.find i newBs) newBs))
-        else
-            (acc, remove_reassigned l (Bindings.add l r newBs))
-    | _ -> (acc @ [subst_stmt bs stmt], newBs))
-
-and remove_reassigned (l: ident) (bs: expr Bindings.t): expr Bindings.t =
-    List.fold_left (fun bs' (ident, expr) -> if expr = Expr_Var(l) then Bindings.remove ident bs' else bs') bs (Bindings.bindings bs);
-
-(* Don't print no init decls until they are assigned *)
-and join_decls (xs: stmt list): stmt list =
-    match List.fold_left (fun (acc, bs) stmt ->
-        (match stmt with
-        | Stmt_VarDeclsNoInit(ty, vs, loc) ->
-            (acc, List.fold_left (fun bs v -> Bindings.add v ty bs) bs vs)
-        | Stmt_Assign(LExpr_Var(ident), r, loc) ->
-            if Bindings.mem ident bs then
-                (acc @ [Stmt_VarDecl(Bindings.find ident bs, ident, r, loc)], Bindings.remove ident bs)
-            else
-                (acc @ [stmt], bs)
-        | _ -> (acc @ [stmt], bs)
-        )
-    ) ([], Bindings.empty) xs with (acc, bs) -> acc
