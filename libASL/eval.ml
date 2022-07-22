@@ -118,7 +118,7 @@ module type ImmEnv_type = sig
     val getLocalPrefix      : AST.l -> t -> string
 
     val getImplicitLevel    : t -> (ident * value) list
-    
+
     val readLocals          : t -> value Bindings.t list
     val readGlobals         : t -> value Bindings.t
 end
@@ -154,13 +154,13 @@ module Env : sig
 
     val addReturnSymbol     : t -> AST.expr -> unit
     val removeReturnSymbol  : t -> unit
-    
+
     val addLocalPrefix      : t -> string -> unit
     val removeLocalPrefix   : t -> unit
 
     val addImplicitValue    : t -> ident -> value -> unit
     val addImplicitLevel    : t -> unit
-    
+
     (* these are considered mutating operations because "scope" is mutable. *)
     val getLocals           : t -> scope list
     val setLocals           : t -> scope list -> unit
@@ -260,19 +260,19 @@ end = struct
             enumNeqs     = env.enumNeqs;
             records      = env.records;
             typedefs     = env.typedefs;
-            globals      = { bs = 
-                List.fold_left (fun bs' (key, value) -> 
+            globals      = { bs =
+                List.fold_left (fun bs' (key, value) ->
                     Bindings.add key value bs'
-                ) Bindings.empty (Bindings.bindings env.globals.bs) 
+                ) Bindings.empty (Bindings.bindings env.globals.bs)
             };
             constants    = env.constants;
             impdefs      = env.impdefs;
-            locals       = 
-            List.map (fun x -> { bs = 
-                List.fold_left (fun bs' (key, value) -> 
+            locals       =
+            List.map (fun x -> { bs =
+                List.fold_left (fun bs' (key, value) ->
                     Bindings.add key value bs'
-                ) Bindings.empty (Bindings.bindings x.bs) 
-            }) env.locals; 
+                ) Bindings.empty (Bindings.bindings x.bs)
+            }) env.locals;
             returnSymbols= env.returnSymbols;
             numSymbols   = env.numSymbols;
             localPrefixes= env.localPrefixes;
@@ -280,12 +280,12 @@ end = struct
         }
 
     let compareLocals (env1: t) (env2: t): bool =
-        List.for_all2 (fun scope1 scope2 -> 
+        List.for_all2 (fun scope1 scope2 ->
             List.for_all (fun (key, value) ->
                 if not (Bindings.mem key scope2.bs) then begin Printf.printf "%s not in second environment\n" (pprint_ident key); false
                 end else if Bindings.find key scope2.bs <> value then begin Printf.printf "%s has mismatched value: %s | %s\n" (pprint_ident key) (pp_value value) (pp_value (Bindings.find key scope2.bs)); false
                 end else true
-            ) (Bindings.bindings scope1.bs) 
+            ) (Bindings.bindings scope1.bs)
             ||
             List.for_all (fun (key, value) ->
                 if not (Bindings.mem key scope1.bs) then begin Printf.printf "%s not in first environment\n" (pprint_ident key); false
@@ -299,7 +299,7 @@ end = struct
                 if not (Bindings.mem key env2.globals.bs) then begin Printf.printf "%s not in second environment\n" (pprint_ident key); false
                 end else if Bindings.find key env2.globals.bs <> value then begin Printf.printf "%s has mismatched value: %s | %s\n" (pprint_ident key) (pp_value value) (pp_value (Bindings.find key env2.globals.bs)); false
                 end else true
-            ) (Bindings.bindings env1.globals.bs) 
+            ) (Bindings.bindings env1.globals.bs)
             ||
             List.for_all (fun (key, value) ->
                 if not (Bindings.mem key env1.globals.bs) then begin Printf.printf "%s not in first environment\n" (pprint_ident key); false
@@ -494,22 +494,22 @@ end = struct
         env.globals.bs
 
     let initialize (env: t) (xs: bigint list): unit =
-        let setPVar = (fun f -> 
-            setVar 
-                Unknown 
-                env 
-                (Ident "PSTATE") 
-                (VRecord (Bindings.update (Ident f) (fun _ -> 
+        let setPVar = (fun f ->
+            setVar
+                Unknown
+                env
+                (Ident "PSTATE")
+                (VRecord (Bindings.update (Ident f) (fun _ ->
                     Some (VBits { n = 1; v = (Z.of_int 0)})
                 ) (match getVar Unknown env (Ident "PSTATE") with VRecord bs -> bs | _ -> raise (EvalError (Unknown, "PSTATE should be a record")))))) in
         setPVar "N";
         setPVar "Z";
         setPVar "C";
         setPVar "V";
-        addGlobalVar 
-            env 
-            (Ident "_R") 
-            (VArray (List.fold_left2 (fun arr n v -> 
+        addGlobalVar
+            env
+            (Ident "_R")
+            (VArray (List.fold_left2 (fun arr n v ->
                 ImmutableArray.add n (VBits { n = 64; v}) arr
             ) ImmutableArray.empty (Utils.range 0 (List.length xs)) xs, VUninitialized))
 
@@ -854,7 +854,6 @@ and eval_stmts (env: Env.t) (xs: AST.stmt list): unit =
 and eval_stmt (env: Env.t) (x: AST.stmt): unit =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
-            
             List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs
     | Stmt_VarDecl(ty, v, i, loc) ->
             let i' = eval_expr loc env i in
@@ -1240,9 +1239,10 @@ let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
                     | Formal_InOut (t, nm) -> t,nm
                     )
                 in
+                (* Add value parameter for setter to end of arguments. *)
                 let atys' = List.map tuple_of atys @ [(ty, v)] in
-                let args = List.map (fun x -> snd (tuple_of x)) atys in
-                Env.addFun loc env f (None, atys', tvs, List.append args [v], loc, body)
+                let args = List.map snd atys' in
+                Env.addFun loc env f (None, atys', tvs, args, loc, body)
         | Decl_InstructionDefn(nm, encs, opost, conditional, exec, loc) ->
                 (* Instructions are looked up by their encoding name *)
                 List.iter (fun enc ->
