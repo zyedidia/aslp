@@ -131,22 +131,21 @@ let rec contains_uninit (v: value): bool =
 let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option =
 
   let vint_eq cmp = function
-    | Val (VInt x) when Z.equal cmp x -> true
+    | VInt x when Z.equal cmp x -> true
     | _ -> false in
 
-  let [@warning "-26"] is_zero_int = vint_eq Z.zero
-  and [@warning "-26"] is_one_int = vint_eq Z.one in
+  let [@warning "-26"] is_zero = vint_eq Z.zero
+  and [@warning "-26"] is_one = vint_eq Z.one in
 
   let is_zero_bits = function
-    | Val (VBits {n = _; v = v}) -> Z.equal Z.zero v
+    | (VBits {n = _; v = v}) -> Z.equal Z.zero v
     | _ -> false in
 
   (match (name, tes, es) with
-  | ("add_int",     _,        [x1; x2]) when is_zero_int x1 -> Some x2
-  | ("add_int",     _,        [x1; x2]) when is_zero_int x2 -> Some x1
-
-  | ("append_bits", [t1; _],  [_; x2]) when is_zero_int t1 -> Some x2
-  | ("append_bits", [_; t2],  [x1; _]) when is_zero_int t2 -> Some x1
-  | ("or_bits",     _,        [x1; x2]) when is_zero_bits x1 -> Some x2
-  | ("or_bits",     _,        [x1; x2]) when is_zero_bits x2 -> Some x1
+  | ("add_int",     _,                [Val x1; x2])       when is_zero x1 -> Some x2
+  | ("add_int",     _,                [x1; Val x2])       when is_zero x2 -> Some x1
+  | ("append_bits", [Val t1; _],      [_; x2])            when is_zero t1 -> Some x2
+  | ("append_bits", [_; Val t2],      [x1; _])            when is_zero t2 -> Some x1
+  | ("or_bits",     _,                [Val x1; x2])       when is_zero_bits x1 -> Some x2
+  | ("or_bits",     _,                [x1; Val x2])       when is_zero_bits x2 -> Some x1
   | _ -> None)
