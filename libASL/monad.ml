@@ -25,6 +25,10 @@ module Make (M : S) = struct
   (** Operator for sequencing two actions and discarding the first's result. *)
   let (>>) x y = bind x (fun _ -> y)
 
+  let (<$>) = fmap
+
+  let (<*>) f x = bind f (fun f' -> bind x (fun x' -> pure (f' x')))
+
   (** Let syntactic sugar for monadic bind and map operations. *)
   module Let = struct
     let (let+) x f = fmap f x

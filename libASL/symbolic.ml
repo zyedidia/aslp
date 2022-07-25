@@ -8,6 +8,45 @@ type sym =
   | Val of value
   | Exp of expr
 
+type 'a sym_pattern =
+  | Pat_LitInt of bitsLit
+  | Pat_LitHex of bitsLit
+  | Pat_LitBits of bitsLit
+  | Pat_LitMask of bitsLit
+  | Pat_Const of ident
+  | Pat_Wildcard
+  | Pat_Tuple of pattern list
+  | Pat_Set of pattern list
+  | Pat_Range of 'a * 'a
+  | Pat_Single of 'a
+
+type 'a sym_expr =
+  | SymExpr_If of 'a * 'a * ('a * 'a) list * 'a
+  | SymExpr_Binop of 'a * binop * 'a
+  | SymExpr_Unop of unop * 'a
+  | SymExpr_Field of 'a * ident
+  | SymExpr_Fields of 'a * ident list
+  | SymExpr_Slices of 'a * ('a * 'a) list
+  | SymExpr_In of 'a * 'a sym_pattern
+  | SymExpr_Var of ident
+  | SymExpr_Parens of 'a
+  | SymExpr_Tuple of 'a list
+  | SymExpr_Unknown of ty
+  | SymExpr_ImpDef of ty * string option
+  | SymExpr_TApply of ident * 'a list * 'a list
+  | SymExpr_Array of 'a * 'a
+  | SymExpr_LitInt of string
+  | SymExpr_LitHex of string
+  | SymExpr_LitReal of string
+  | SymExpr_LitBits of string
+  | SymExpr_LitMask of string
+  | SymExpr_LitString of string
+
+
+type sym' =
+  | Val' of value
+  | Exp' of ty * (sym' sym_expr)
+
 let is_val (x: AST.expr): bool =
     (match x with
     | Expr_LitInt _ -> true
