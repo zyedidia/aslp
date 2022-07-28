@@ -102,14 +102,19 @@ module Bits = struct
   *)
   exception Non_bits_atomic of expr
 
-  let bits_final = object
+  let bits_final width = object
     inherit Asl_visitor.nopAslVisitor
 
     method! vexpr e = match e with
     | Expr_LitBits (typeid) -> SkipChildren
+    | Expr_TApply (FIdent ("cvt_bits_uint", 0), [Expr_LitInt width], [e]) ->
+      Printf.printf "base expr: %s\n" (pp_expr e);
+      ChangeTo e
+
     | Expr_TApply (ident, tes, es) -> ChangeDoChildrenPost (e,
       function
-      | Expr_TApply (ident, tes, es) -> List.hd es
+      | Expr_TApply (ident, tes, es) -> Printf.printf "f: %s\n" (pprint_ident ident);
+          Expr_TApply (Ident (pprint_ident ident ^ "but bits"), tes, es)
       | x -> x
       )
     | Expr_If (c, te, elsif, fe) -> raise (Non_bits_atomic e)
@@ -139,9 +144,9 @@ module Bits = struct
 
     method! vexpr e = match e with
     | Expr_Slices (expr, [Slice_LoWd(Expr_LitInt "0", Expr_LitInt "64")]) ->
-      ChangeDoChildrenPost (e, fun e' ->
-        try Asl_visitor.visit_expr bits_final e'
-        with Non_bits_atomic _ -> e')
+       ChangeTo (let expr' = try Asl_visitor.visit_expr (bits_final "64") expr
+        with Non_bits_atomic x -> Printf.printf "non-bits-atomic: %s\n" (pp_expr x); expr
+        in Expr_Slices (expr', [Slice_LoWd(Expr_LitInt "0", Expr_LitInt "64")]))
     | _ -> DoChildren
   end
 
