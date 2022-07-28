@@ -856,8 +856,8 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     Printf.printf "-----------\n";
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
                     (* Some stmts *)
-                    (* Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
-                    Some (simplify_bitvectors @@ remove_unused (stmts))
+                    Some (Transforms.Bits.bitvec_conversion @@ remove_unused @@ stmts)
+                    (* Some (remove_unused @@ stmts) *)
                 end else begin
                     None
                 end
@@ -907,6 +907,3 @@ and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
             | _, _, _ -> emit (Stmt_If(c, tstmts', elsif', fstmts', loc)))
         | x -> emit x
     ) xs ([], used)
-
-and simplify_bitvectors (xs: stmt list): stmt list =
-    Asl_visitor.visit_stmts (Transforms.Bits.bits_initial) xs

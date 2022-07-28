@@ -2,6 +2,7 @@ open Asl_utils
 
 open AST
 
+(* module unused. *)
 module RemoveUnused = struct
 
   module M = Rws.Make(struct
@@ -60,128 +61,103 @@ module RemoveUnused = struct
 
 end
 
-(*
-type expr =
-    Expr_If of expr * expr * e_elsif list * expr
-  | Expr_Binop of expr * binop * expr
-  | Expr_Unop of unop * expr
-  | Expr_Field of expr * ident
-  | Expr_Fields of expr * ident list
-  | Expr_Slices of expr * slice list
-  | Expr_In of expr * pattern
-  | Expr_Var of ident
-  | Expr_Parens of expr
-  | Expr_Tuple of expr list
-  | Expr_Unknown of ty
-  | Expr_ImpDef of ty * typeid option
-  | Expr_TApply of ident * expr list * expr list
-  | Expr_Array of expr * expr
-  | Expr_LitInt of typeid
-  | Expr_LitHex of typeid
-  | Expr_LitReal of typeid
-  | Expr_LitBits of typeid
-  | Expr_LitMask of typeid
-  | Expr_LitString of typeid
-*)
 
-(*
+(**
 
 We would like to implement a method for recursing and looking for structures
 of the form:
 
-Expr_Slices(Expr_TApply("add_int", ...(Expr_TApply("cvt_bits_unit", x)), [0:64])
+add_int.0 {{  }} (
+  cvt_bits_uint.0 {{ 64 }} ( Exp2__2 [ 0 +: 64 ] ),
+  cvt_bits_uint.0 {{ 64 }} ( Exp5__3 [ 0 +: 64 ] )
+) [ 0 +: 64 ]
+
+and replacing it with an equivalent "pure bitvector expression" like:
+
+add_bits.0 {{ 64 }} (
+  Exp2__2 [ 0 +: 64 ],
+  Exp5__3 [ 0 +: 64 ]
+)
+
+
+This is done using two visitors over the expression tree.
+- First, we search for a bitvector coercion to bits of the form "x[0:+64]"
+  using the bits_traverse_entry visitor.
+- Then, we visit the subexpression "x" and attempt to convert it into a pure
+  bitvector expression using the bits_traverse_to_cvt visitor. If this is
+  possible, we replace "x[0:+64]" with this pure bits expression "x'".
 
 *)
-
 module Bits = struct
 
   (** Exception raised by the bitvector conversion visitor when an irreducible
       expression is reached which is not a bitvector type.data
 
-      Examples of cases like this are: an arbitrary variable name, or non-bits literal.
+      Examples of these cases are: an arbitrary variable name, or non-bits literal.
   *)
   exception Non_bits_atomic of expr
 
-  let bits_final width = object
+  (** Visit the subtree until we reach a pure bitvector expression or a coercion from
+      pure bitvector to integer.
+
+      The vexpr method returns the expression as a pure bitvector expression of the
+      correct width if that is possible. Otherwise, it throws an exception.
+  *)
+  class bits_traverse_coerce width = object (self)
     inherit Asl_visitor.nopAslVisitor
 
+    (** Substitutes integer function names and type arguments with their bitvector versions.
+
+        No conversion of argument expressions is done in this function. We assume that
+        is done by the vexpr method.
+    *)
+    method to_bits_fun f tes =
+      match (f, tes) with
+      | (FIdent ("add_int", 0), []) -> (FIdent ("add_bits", 0), [Expr_LitInt width])
+      | _ -> (f, tes)
+
     method! vexpr e = match e with
-    | Expr_LitBits (typeid) -> SkipChildren
-    | Expr_TApply (FIdent ("cvt_bits_uint", 0), [Expr_LitInt width], [e]) ->
-      Printf.printf "base expr: %s\n" (pp_expr e);
+    | Expr_LitBits (s) when String.length s = int_of_string width -> SkipChildren
+
+    | Expr_TApply (FIdent ("cvt_bits_uint", 0), [Expr_LitInt w], [e]) when w = width ->
+      (* Printf.printf "base expr: %s\n" (pp_expr e); *)
       ChangeTo e
 
     | Expr_TApply (ident, tes, es) -> ChangeDoChildrenPost (e,
       function
-      | Expr_TApply (ident, tes, es) -> Printf.printf "f: %s\n" (pprint_ident ident);
-          Expr_TApply (Ident (pprint_ident ident ^ "but bits"), tes, es)
+      | Expr_TApply (ident, tes, es) ->
+          let (f', tes') = self#to_bits_fun ident tes in
+          (* Printf.printf "f: %s\n" (pprint_ident ident); *)
+          Expr_TApply (f', tes', es)
       | x -> x
       )
-    | Expr_If (c, te, elsif, fe) -> raise (Non_bits_atomic e)
-    | Expr_Binop (x, binop, r) -> raise (Non_bits_atomic e)
-    | Expr_Unop (unop, expr) -> raise (Non_bits_atomic e)
-    | Expr_Field (expr, ident) -> raise (Non_bits_atomic e)
-    | Expr_Fields (expr, idents) -> raise (Non_bits_atomic e)
-    | Expr_Slices (expr, slices) -> raise (Non_bits_atomic e)
-    | Expr_In (expr, pattern) -> raise (Non_bits_atomic e)
-    | Expr_Parens (expr) -> raise (Non_bits_atomic e)
-    | Expr_Tuple (es) -> raise (Non_bits_atomic e)
-    | Expr_Unknown (ty) -> raise (Non_bits_atomic e)
-    | Expr_ImpDef (ty, opt) -> raise (Non_bits_atomic e)
-    | Expr_Array (expr, i) -> raise (Non_bits_atomic e)
 
-    | Expr_Var (ident) -> raise (Non_bits_atomic e)
-
-    | Expr_LitInt (typeid) -> raise (Non_bits_atomic e)
-    | Expr_LitHex (typeid) -> raise (Non_bits_atomic e)
-    | Expr_LitReal (typeid) -> raise (Non_bits_atomic e)
-    | Expr_LitMask (typeid) -> raise (Non_bits_atomic e)
-    | Expr_LitString (typeid) -> raise (Non_bits_atomic e)
+    | _ -> raise (Non_bits_atomic e)
   end
 
-  let bits_initial = object
+  (** Starts the bitvector conversion by looking for coercions _to_ a bitvector.
+
+      Then calls the bits_traverse_coerce visitor to coerce subexpressions of
+      this into pure bitvector expressions if possible.
+  *)
+  let bits_traverse_begin width = object
     inherit Asl_visitor.nopAslVisitor
 
+    val coerce_visitor = (new bits_traverse_coerce width :> Asl_visitor.aslVisitor)
+
     method! vexpr e = match e with
-    | Expr_Slices (expr, [Slice_LoWd(Expr_LitInt "0", Expr_LitInt "64")]) ->
-       ChangeTo (let expr' = try Asl_visitor.visit_expr (bits_final "64") expr
-        with Non_bits_atomic x -> Printf.printf "non-bits-atomic: %s\n" (pp_expr x); expr
-        in Expr_Slices (expr', [Slice_LoWd(Expr_LitInt "0", Expr_LitInt "64")]))
+    | Expr_Slices (expr, [Slice_LoWd(Expr_LitInt "0", Expr_LitInt w)]) when w = width ->
+      ChangeDoChildrenPost (e,
+        fun expr ->
+          let expr' = try Asl_visitor.visit_expr coerce_visitor expr
+          with Non_bits_atomic x -> Printf.printf "non-bits-atomic: %s\n" (pp_expr x); expr
+          in expr')
     | _ -> DoChildren
   end
 
-
+  (** Performs the bitvector expression coercion on the given statement list.  *)
+  let bitvec_conversion (xs: stmt list): stmt list =
+    Asl_visitor.visit_stmts (bits_traverse_begin "64") xs
 end
 
 
-let rec rec_expr (step: expr -> expr) (e: expr): expr =
-  let go = rec_expr step in
-  match e with
-  | Expr_If (c, te, elsif, fe) ->
-    step (Expr_If (go c, go te, List.map (rec_elsif step) elsif, go fe))
-  | Expr_Binop (x, binop, r) ->
-    step (Expr_Binop (go x, binop, go r))
-  | Expr_Unop (unop, expr) ->
-    step (Expr_Unop (unop, go expr))
-  | Expr_Field (expr, ident) -> assert false
-  | Expr_Fields (expr, idents) -> assert false
-  | Expr_Slices (expr, slices) -> assert false
-  | Expr_In (expr, pattern) -> assert false
-  | Expr_Parens (expr) -> assert false
-  | Expr_Tuple (es) -> assert false
-  | Expr_Unknown (ty) -> assert false
-  | Expr_ImpDef (ty, opt) -> assert false
-  | Expr_TApply (ident, tes, es) -> assert false
-  | Expr_Array (expr, i) -> assert false
-
-  | Expr_Var (ident) -> e
-  | Expr_LitInt (typeid) -> e
-  | Expr_LitHex (typeid) -> e
-  | Expr_LitReal (typeid) -> e
-  | Expr_LitBits (typeid) -> e
-  | Expr_LitMask (typeid) -> e
-  | Expr_LitString (typeid) -> e
-
-and rec_elsif (f: expr -> expr): e_elsif -> e_elsif =
-  function
-  | E_Elsif_Cond (c, e) -> E_Elsif_Cond (rec_expr f c, rec_expr f e)
