@@ -159,6 +159,26 @@ let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
   | (Val x,Val y) -> Val (from_bool (eval_eq loc x y))
   | (_,_) -> prim_binop "eval_eq" loc x y)
 
+let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
+  let int_expr i = Expr_LitInt (string_of_int i) in
+  match x with
+  | Val v -> Val (extract_bits' loc v lo wd)
+  | Exp e ->
+    let slice_expr =
+      (Expr_Slices (e, [Slice_LoWd (int_expr lo, int_expr wd)])) in
+    (match e with
+    | (Expr_TApply (FIdent ("append_bits", 0), [Expr_LitInt t1; Expr_LitInt t2], [x1; x2])) ->
+      let t2 = int_of_string t2 in
+      if (lo >= t2) then
+        (* slice is entirely within upper part (i.e. significant bits). *)
+        sym_slice loc (Exp x1) (lo - t2) wd
+      else if (lo + wd <= t2) then
+        (* entirely within lower part. *)
+        sym_slice loc (Exp x2) lo wd
+      else
+        Exp slice_expr
+    | _ -> Exp slice_expr)
+
 let rec contains_uninit (v: value): bool =
   match v with
   | VUninitialized _ -> true

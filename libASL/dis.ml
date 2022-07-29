@@ -354,8 +354,6 @@ let rec sym_exists p = function
   | [] -> DisEnv.pure sym_false
   | a::l -> sym_if Unknown (p a) (DisEnv.pure sym_true) (sym_exists p l)
 
-
-
 (** Disassembly Functions *)
 
 (** Disassemble type *)
@@ -678,6 +676,26 @@ and dis_lexpr' (loc: l) (x: AST.lexpr) (r: sym): unit rws =
            Doing so would require a read-modify-write similar to eval_lexpr_modify. *)
         let@ ind' = dis_expr loc ind in
         DisEnv.write [Stmt_Assign(LExpr_Array(arr,sym_expr ind'), sym_expr r, loc)]
+    | LExpr_Fields (LExpr_Var lv, fields) ->
+        let@ lv' = DisEnv.getVar loc lv in
+        (match lv' with
+        | Val (VRecord bs) ->
+            let field_width f =
+                (match val_type (Bindings.find f bs) with
+                | Type_Bits (Expr_LitInt n) -> int_of_string n
+                | _ -> failwith "expected Type_Bits in record field assignment")
+            in let rec dis_fields fs lo: unit rws =
+                (match fs with
+                | [] -> DisEnv.unit
+                | (f::fs') ->
+                    let wd = field_width f in
+                    dis_lexpr loc (LExpr_Field (LExpr_Var lv, f)) (sym_slice loc r lo wd) >>
+                    dis_fields fs' (lo + wd)
+                )
+            in
+            dis_fields (List.rev fields) 0
+        | Val _ -> failwith "expected VRecord in field modification"
+        | _ -> DisEnv.write [Stmt_Assign(x, sym_expr r, loc)])
     | _ ->
         DisEnv.write [Stmt_Assign(x, sym_expr r, loc)]
 
