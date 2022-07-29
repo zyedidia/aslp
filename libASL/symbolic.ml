@@ -9,16 +9,16 @@ type sym =
   | Exp of expr
 
 type 'a sym_pattern =
-  | Pat_LitInt of bitsLit
-  | Pat_LitHex of bitsLit
-  | Pat_LitBits of bitsLit
-  | Pat_LitMask of bitsLit
-  | Pat_Const of ident
-  | Pat_Wildcard
-  | Pat_Tuple of pattern list
-  | Pat_Set of pattern list
-  | Pat_Range of 'a * 'a
-  | Pat_Single of 'a
+  | SymPat_LitInt of bitsLit
+  | SymPat_LitHex of bitsLit
+  | SymPat_LitBits of bitsLit
+  | SymPat_LitMask of bitsLit
+  | SymPat_Const of ident
+  | SymPat_Wildcard
+  | SymPat_Tuple of pattern list
+  | SymPat_Set of pattern list
+  | SymPat_Range of 'a * 'a
+  | SymPat_Single of 'a
 
 type 'a sym_expr =
   | SymExpr_If of 'a * 'a * ('a * 'a) list * 'a
@@ -68,7 +68,6 @@ let rec val_expr (v: Value.value): AST.expr =
   | VTuple vs -> Expr_Tuple(List.map val_expr vs)
   | _ -> raise (EvalError (Unknown, "Casting unhandled value type to expression"))
 
-
 let [@warning "-32"] rec expr_to_lexpr (e: expr): lexpr =
   match e with
   | Expr_Var v -> LExpr_Var v
@@ -78,13 +77,13 @@ let [@warning "-32"] rec expr_to_lexpr (e: expr): lexpr =
 
 let filter_uninit (v: value option): value option =
   match v with
-  | Some VUninitialized -> None
+  | Some (VUninitialized _) -> None
   | _ -> v
 
 let sym_val_or_uninit (x: sym): value =
   match x with
   | Val v -> v
-  | Exp _ -> VUninitialized
+  | Exp e -> VUninitialized (Type_OfExpr e)
 
 let sym_expr (x: sym): expr =
   match x with
@@ -99,7 +98,7 @@ let sym_pair_has_exp (pair: sym * sym): bool =
 
 let sym_initialised (x: sym): sym option =
   match x with
-  | Val VUninitialized -> None
+  | Val (VUninitialized _) -> None
   | _ -> Some x
 
 (** Deconstructs the given list of symbolics.
@@ -162,7 +161,7 @@ let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
 
 let rec contains_uninit (v: value): bool =
   match v with
-  | VUninitialized -> true
+  | VUninitialized _ -> true
   | VTuple vs -> List.exists contains_uninit vs
   | VRecord r -> Bindings.exists (fun _ -> contains_uninit) r
   | _ -> false
@@ -188,3 +187,25 @@ let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option 
   | ("or_bits",     _,                [Val x1; x2])       when is_zero_bits x1 -> Some x2
   | ("or_bits",     _,                [x1; Val x2])       when is_zero_bits x2 -> Some x1
   | _ -> None)
+
+let rec val_type (v: value): ty =
+  let unsupported () = failwith @@ "val_type unsupported: " ^ pp_value v in
+  match v with
+  | VBool _ -> type_builtin "boolean"
+  | VEnum (ident, _) -> Type_Constructor ident
+  | VInt _ -> type_builtin "integer"
+  | VReal _ -> type_builtin "real"
+  | VBits {n=n; _} -> type_bits (string_of_int n)
+  | VMask mask -> unsupported ()
+  | VString _ -> type_builtin "string"
+  | VExc _ -> type_builtin "__Exception"
+  | VTuple vs -> Type_Tuple (List.map val_type vs)
+  | VRecord (_) -> unsupported ()
+  | VArray (arr, def) -> unsupported ()
+  | VRAM _ -> type_builtin "__RAM"
+  | VUninitialized ty -> ty
+
+let sym_type =
+  function
+  | Val v -> val_type v
+  | Exp e -> Type_OfExpr e (* FIXME: add type annotation to sym Exp constructor. *)

@@ -50,7 +50,8 @@ module LocalEnv = struct
                 match Bindings.find_opt k r with
                 | None -> bs
                 | Some v2 ->
-                    let v = if v1 = v2 then v1 else Val VUninitialized in
+                    let v = if v1 = v2
+                        then v1 else Val (VUninitialized (sym_type v1)) in
                     Bindings.add k v bs)
             l Bindings.empty in
         let locals' = List.map2 merge_bindings l.locals r.locals in
@@ -132,6 +133,10 @@ module LocalEnv = struct
             )
             env.locals in
         { env with locals = locals' }
+
+    let trySetLocalVar (loc: l) (x: ident) (v: sym) (env: t): t =
+        try setLocalVar loc x v env
+        with Not_found -> env
 end
 
 module DisEnv = struct
@@ -177,7 +182,7 @@ module DisEnv = struct
             let+ v = getVarOpt loc id in
             (match v with
             | None -> None
-            | Some (Val VUninitialized) -> None
+            | Some (Val VUninitialized _) -> None
             | _ -> Some id)
 
     let getFun (loc: l) (x: ident): (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) option rws =
@@ -232,8 +237,6 @@ let (and+) = DisEnv.Let.(and+)
 let (>>) = DisEnv.(>>)
 let (>>=) = DisEnv.(>>=)
 
-let type_integer = (Type_Constructor (Ident "integer"))
-
 (** Convert value to a simple expression containing that value, so we can
     print it or use it symbolically *)
 let to_expr = sym_expr
@@ -266,7 +269,7 @@ let check_var_shadowing (loc: l) (i: ident): unit rws =
 let declare_var (loc: l) (t: ty) (i: ident): unit rws =
   check_var_shadowing loc i >>
   DisEnv.modify
-    (LocalEnv.addLocalVar loc i (Val VUninitialized)) >>
+    (LocalEnv.addLocalVar loc i (Val (VUninitialized t))) >>
   DisEnv.write [Stmt_VarDeclsNoInit(t, [i], loc)]
 
 let declare_assign_var (loc: l) (t: ty) (i: ident) (x: sym): unit rws =
@@ -280,8 +283,10 @@ let declare_fresh_named_var (loc: l) (name: string)  (t: ty): ident rws =
   let+ () = declare_var loc t res in
   res
 
-and assign_var (loc: l) (i: ident) (x: sym): unit rws =
-  DisEnv.modify (LocalEnv.setLocalVar loc i x) >>
+let assign_var (loc: l) (i: ident) (x: sym): unit rws =
+  (* Attempt to set local variable. If it fails, we assume
+     the variable is in an outer scope.  *)
+  DisEnv.modify (LocalEnv.trySetLocalVar loc i x) >>
   DisEnv.write [Stmt_Assign(LExpr_Var(i), sym_expr x, loc)]
 
 let declare_const (loc: l) (ty: ty) (i: ident) (x: sym): unit rws =
@@ -415,7 +420,7 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
 and capture_expr loc (x: expr): sym rws =
     let@ v = declare_fresh_const loc type_unknown "Exp" x in
     let+ () = DisEnv.modify (LocalEnv.setLocalVar loc v
-        (Val VUninitialized)) in
+        (Val (VUninitialized (Type_OfExpr x)))) in
     Exp (Expr_Var v)
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
@@ -537,7 +542,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             (match (a',i') with
             | Val av, Val iv ->
                 (match get_array loc av iv with
-                | VUninitialized -> capture_expr loc
+                | VUninitialized _ -> capture_expr loc
                     (Expr_Array(a, val_expr iv))
                 | v -> DisEnv.pure @@ Val v)
             | _ -> capture_expr loc (Expr_Array(a, to_expr i')))

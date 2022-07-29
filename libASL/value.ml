@@ -31,7 +31,12 @@ type value =
     | VRecord of (value Bindings.t)
     | VArray  of (value ImmutableArray.t * value)
     | VRAM    of ram
-    | VUninitialized (* initial value of scalars with no explicit initialization *)
+    | VUninitialized of AST.ty (* initial value of scalars with no explicit initialization *)
+
+let type_builtin s: AST.ty = Type_Constructor (Ident s)
+let type_constructor = type_builtin
+let type_bits wd: AST.ty = Type_Bits (Expr_LitInt wd)
+let type_integer = type_builtin "integer"
 
 
 (****************************************************************)
@@ -75,7 +80,7 @@ let rec pp_value (x: value): string =
         let vs = List.map (fun (i, v) -> string_of_int i ^":"^ pp_value v) (ImmutableArray.bindings a) in
         "[" ^ String.concat ", " vs ^ "]"
     | VRAM _ -> "RAM"
-    | VUninitialized -> "UNINITIALIZED"
+    | VUninitialized t -> "UNINITIALIZED(" ^ pp_type t ^ ")"
     )
 
 
@@ -432,16 +437,16 @@ let eval_concat (loc: AST.l) (xs: value list): value =
  *)
 
 let eval_unknown_bits (wd: Primops.bigint): value =
-  VUninitialized
+  VUninitialized (Type_Bits (Expr_LitInt (Z.to_string wd)))
     (*VBits (Primops.mkBits (Z.to_int wd) Z.zero)*)
 
 let eval_unknown_ram (a: Primops.bigint): value =
-  VUninitialized
+  VUninitialized (type_builtin "__RAM")
     (*VRAM (Primops.init_ram (char_of_int 0))*)
 
-let eval_unknown_integer (_: unit): value = VUninitialized (*VInt Z.zero*)
-let eval_unknown_real    (_: unit): value = VUninitialized (*VReal Q.zero*)
-let eval_unknown_string  (_: unit): value = VUninitialized (*VString "<UNKNOWN string>"*)
+let eval_unknown_integer (_: unit): value = VUninitialized (type_builtin "integer") (*VInt Z.zero*)
+let eval_unknown_real    (_: unit): value = VUninitialized (type_builtin "real") (*VReal Q.zero*)
+let eval_unknown_string  (_: unit): value = VUninitialized (type_builtin "string") (*VString "<UNKNOWN string>"*)
 
 (****************************************************************
  * End

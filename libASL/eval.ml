@@ -511,7 +511,7 @@ end = struct
             (Ident "_R")
             (VArray (List.fold_left2 (fun arr n v ->
                 ImmutableArray.add n (VBits { n = 64; v}) arr
-            ) ImmutableArray.empty (Utils.range 0 (List.length xs)) xs, VUninitialized))
+            ) ImmutableArray.empty (Utils.range 0 (List.length xs)) xs, VBits {n=64; v=Z.zero}))
 
 end
 
@@ -567,7 +567,7 @@ and mk_uninitialized (loc: l) (env: Env.t) (x: AST.ty): value =
         | None ->
             (match Env.getTypedef env tc with
             | Some ty' -> mk_uninitialized loc env ty'
-            | None     -> VUninitialized
+            | None     -> VUninitialized x
             )
         )
     | Type_Array(Index_Enum(tc),ety) ->
@@ -580,7 +580,7 @@ and mk_uninitialized (loc: l) (env: Env.t) (x: AST.ty): value =
     | Type_Bits(n) -> eval_unknown_bits (to_integer loc (eval_expr loc env n))
     | Type_Register(wd, _) -> eval_unknown_bits (Z.of_string wd)
     | _ ->
-            VUninitialized (* should only be used for scalar types *)
+            VUninitialized x (* should only be used for scalar types *)
     )
 
 (** Evaluate UNKNOWN at given type *)

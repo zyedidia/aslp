@@ -155,7 +155,7 @@ let rec first_option (f: 'a -> 'b option) (xs: 'a list): 'b option =
     the result of the function. *)
 let rec replace_in_list (f: 'a -> 'a option) (xs: 'a list): 'a list =
     match xs with
-    | [] -> invalid_arg "replace_in_list not found."
+    | [] -> raise Not_found
     | x::xs' ->
         (match f x with
         | Some y -> y::xs'
