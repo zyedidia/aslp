@@ -145,14 +145,18 @@ module Bits = struct
 
     val coerce_visitor = (new bits_traverse_coerce width :> Asl_visitor.aslVisitor)
 
-    method! vexpr e = match e with
-    | Expr_Slices (expr, [Slice_LoWd(Expr_LitInt "0", Expr_LitInt w)]) when w = width ->
+    method! vexpr e =
+      (* post-order visit of x[0:+64] expressions. *)
       ChangeDoChildrenPost (e,
-        fun expr ->
-          let expr' = try Asl_visitor.visit_expr coerce_visitor expr
-          with Non_bits_atomic x -> Printf.printf "non-bits-atomic: %s\n" (pp_expr x); expr
-          in expr')
-    | _ -> DoChildren
+        function
+        | Expr_Slices (expr, [Slice_LoWd(Expr_LitInt "0", Expr_LitInt w)]) when w = width ->
+          let expr' =
+            try Asl_visitor.visit_expr coerce_visitor expr
+            with Non_bits_atomic x ->
+              (* Printf.printf "non-bits-atomic: %s\n" (pp_expr x); *)
+              expr
+          in expr'
+        | e -> e)
   end
 
   (** Performs the bitvector expression coercion on the given statement list.  *)
