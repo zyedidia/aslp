@@ -1,14 +1,12 @@
 module AST = Asl_ast
 
-module TC = Tcheck
-
 open AST
 open Value
 open Asl_utils
 
 type sym =
-  | Val of ty * value
-  | Exp of ty * expr
+  | Val of value
+  | Exp of expr
 
 type 'a sym_pattern =
   | SymPat_LitInt of bitsLit
@@ -49,31 +47,6 @@ type sym' =
   | Val' of value
   | Exp' of ty * (sym' sym_expr)
 
-
-let rec val_type (v: value): ty =
-  let unsupported () = failwith @@ "val_type unsupported: " ^ pp_value v in
-  match v with
-  | VBool _ -> TC.type_bool
-  | VEnum (ident, _) -> Type_Constructor ident
-  | VInt _ -> TC.type_integer
-  | VReal _ -> TC.type_real
-  | VBits {n=n; _} -> TC.type_bitsN n
-  | VMask mask -> unsupported ()
-  | VString _ -> TC.type_string
-  | VExc _ -> TC.type_exn
-  | VTuple vs -> Type_Tuple (List.map val_type vs)
-  | VRecord (_) -> unsupported ()
-  | VArray (arr, def) -> unsupported ()
-  | VRAM _ -> Type_Constructor (Ident "__RAM")
-  | VUninitialized ty -> ty
-
-let sym_uninit (t: ty) = Val (t, VUninitialized t)
-
-let sym_type = function
-  | Val (t,_) -> t
-  | Exp (t,_) -> t
-
-
 let is_val (x: AST.expr): bool =
     (match x with
     | Expr_LitInt _ -> true
@@ -109,13 +82,13 @@ let filter_uninit (v: value option): value option =
 
 let sym_val_or_uninit (x: sym): value =
   match x with
-  | Val (_, v) -> v
-  | Exp (t, e) -> VUninitialized t
+  | Val v -> v
+  | Exp e -> VUninitialized (Type_OfExpr e)
 
 let sym_expr (x: sym): expr =
   match x with
-    | Val (_,v) -> val_expr v
-    | Exp (_,e) -> e
+    | Val v -> val_expr v
+    | Exp e -> e
 
 let sym_pair_has_exp (pair: sym * sym): bool =
   match pair with
@@ -125,7 +98,7 @@ let sym_pair_has_exp (pair: sym * sym): bool =
 
 let sym_initialised (x: sym): sym option =
   match x with
-  | Val (_, VUninitialized _) -> None
+  | Val (VUninitialized _) -> None
   | _ -> Some x
 
 (** Deconstructs the given list of symbolics.
@@ -134,24 +107,29 @@ let sym_initialised (x: sym): sym option =
 let rec sym_collect_list (xs: sym list): (expr list, value list) Either.t =
   match xs with
   | [] -> Right []
-  | Val (_,v)::xs ->
+  | Val v::xs ->
     (match sym_collect_list xs with
     | Right rs -> Right (v::rs)
     | Left ls -> Left ((val_expr v)::ls))
-  | Exp (_,e)::xs -> Left (e :: List.map sym_expr xs)
+  | Exp e::xs -> Left (e :: List.map sym_expr xs)
 
 let pp_sym (rs: sym): string =
     match rs with
-    | Val (t,v) -> Printf.sprintf "Val[%s](%s)" (pp_type t) (pp_value v)
-    | Exp (t,e) -> Printf.sprintf "Exp[%s](%s)" (pp_type t) (pp_expr e)
+    | Val v -> Printf.sprintf "Val(%s)" (pp_value v)
+    | Exp e -> Printf.sprintf "Exp(%s)" (pp_expr e)
 
 let sym_of_tuple (loc: AST.l) (v: sym): sym list  =
   match v with
-  | Val (Type_Tuple ts,(VTuple vs)) -> (List.map2 (fun t v -> Val (t,v)) ts vs)
-  | Exp (Type_Tuple ts,(Expr_Tuple vs)) -> (List.map2 (fun t v -> Exp (t,v)) ts vs)
+  | Val (VTuple vs) -> (List.map (fun v -> Val v) vs)
+  | Exp (Expr_Tuple vs) -> (List.map (fun v -> Exp v) vs)
   | _ -> raise (EvalError (loc, "tuple expected. Got "^ pp_sym v))
 
-(* Primitives *)
+(* Types *)
+
+let type_bool = Type_Constructor(Ident "boolean")
+let type_unknown = Type_Constructor(Ident "unknown")
+
+(* Primatives *)
 
 (** Apply a primitive operation to two arguments
     TODO: This will fail to evaluate if the primitive requires a type argument.
@@ -159,14 +137,14 @@ let sym_of_tuple (loc: AST.l) (v: sym): sym list  =
   *)
 let prim_binop (f: string) (loc: AST.l) (x: sym) (y: sym) : sym  =
   (match (x,y) with
-  | (Val (tx,x),Val (ty,y)) ->
+  | (Val x,Val y) ->
       (match eval_prim f [] (x::[y]) with
-      | Some v -> Val (val_type v, v)
+      | Some v -> Val v
       | None -> raise (EvalError (loc, "Unknown primitive operation: "^ f)))
-  | (x,y) -> Exp (Type_Tuple [], Expr_TApply(FIdent(f,0), [], (sym_expr x)::[sym_expr y])))
+  | (x,y) -> Exp (Expr_TApply(FIdent(f,0), [], (sym_expr x)::[sym_expr y])))
 
-let sym_true     = Val (TC.type_bool, from_bool true)
-let sym_false    = Val (TC.type_bool, from_bool false)
+let sym_true     = Val (from_bool true)
+let sym_false    = Val (from_bool false)
 let sym_eq_int   = prim_binop "eq_int"
 let sym_eq_bits  = prim_binop "eq_bits"
 let sym_leq      = prim_binop "leq"
@@ -178,15 +156,14 @@ let sym_sub_int  = prim_binop "sub_int"
 (* TODO: There is no eval_eq, we need to find the types of x & y *)
 let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
   (match (x,y) with
-  | (Val (_,x),Val (_,y)) -> Val (TC.type_bool, from_bool (eval_eq loc x y))
+  | (Val x,Val y) -> Val (from_bool (eval_eq loc x y))
   | (_,_) -> prim_binop "eval_eq" loc x y)
 
 let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
-  let t = TC.type_bitsN wd in
   let int_expr i = Expr_LitInt (string_of_int i) in
   match x with
-  | Val (_,v) -> Val (t, extract_bits' loc v lo wd)
-  | Exp (_,e) ->
+  | Val v -> Val (extract_bits' loc v lo wd)
+  | Exp e ->
     let slice_expr =
       (Expr_Slices (e, [Slice_LoWd (int_expr lo, int_expr wd)])) in
     (match e with
@@ -194,13 +171,13 @@ let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
       let t2 = int_of_string t2 in
       if (lo >= t2) then
         (* slice is entirely within upper part (i.e. significant bits). *)
-        sym_slice loc (Exp (t,x1)) (lo - t2) wd
+        sym_slice loc (Exp x1) (lo - t2) wd
       else if (lo + wd <= t2) then
         (* entirely within lower part. *)
-        sym_slice loc (Exp (t,x2)) lo wd
+        sym_slice loc (Exp x2) lo wd
       else
-        Exp (t,slice_expr)
-    | _ -> Exp (t,slice_expr))
+        Exp slice_expr
+    | _ -> Exp slice_expr)
 
 let rec contains_uninit (v: value): bool =
   match v with
@@ -223,10 +200,32 @@ let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option 
     | _ -> false in
 
   (match (name, tes, es) with
-  | ("add_int",     _,                [Val (_,x1); x2])       when is_zero x1 -> Some x2
-  | ("add_int",     _,                [x1; Val (_,x2)])       when is_zero x2 -> Some x1
-  | ("append_bits", [Val (_,t1); _],  [_; x2])                when is_zero t1 -> Some x2
-  | ("append_bits", [_; Val (_,t2)],  [x1; _])                when is_zero t2 -> Some x1
-  | ("or_bits",     _,                [Val (_,x1); x2])       when is_zero_bits x1 -> Some x2
-  | ("or_bits",     _,                [x1; Val (_,x2)])       when is_zero_bits x2 -> Some x1
+  | ("add_int",     _,                [Val x1; x2])       when is_zero x1 -> Some x2
+  | ("add_int",     _,                [x1; Val x2])       when is_zero x2 -> Some x1
+  | ("append_bits", [Val t1; _],      [_; x2])            when is_zero t1 -> Some x2
+  | ("append_bits", [_; Val t2],      [x1; _])            when is_zero t2 -> Some x1
+  | ("or_bits",     _,                [Val x1; x2])       when is_zero_bits x1 -> Some x2
+  | ("or_bits",     _,                [x1; Val x2])       when is_zero_bits x2 -> Some x1
   | _ -> None)
+
+let rec val_type (v: value): ty =
+  let unsupported () = failwith @@ "val_type unsupported: " ^ pp_value v in
+  match v with
+  | VBool _ -> type_builtin "boolean"
+  | VEnum (ident, _) -> Type_Constructor ident
+  | VInt _ -> type_builtin "integer"
+  | VReal _ -> type_builtin "real"
+  | VBits {n=n; _} -> type_bits (string_of_int n)
+  | VMask mask -> unsupported ()
+  | VString _ -> type_builtin "string"
+  | VExc _ -> type_builtin "__Exception"
+  | VTuple vs -> Type_Tuple (List.map val_type vs)
+  | VRecord (_) -> unsupported ()
+  | VArray (arr, def) -> unsupported ()
+  | VRAM _ -> type_builtin "__RAM"
+  | VUninitialized ty -> ty
+
+let sym_type =
+  function
+  | Val v -> val_type v
+  | Exp e -> Type_OfExpr e (* FIXME: add type annotation to sym Exp constructor. *)

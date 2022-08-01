@@ -33,6 +33,11 @@ type value =
     | VRAM    of ram
     | VUninitialized of AST.ty (* initial value of scalars with no explicit initialization *)
 
+let type_builtin s: AST.ty = Type_Constructor (Ident s)
+let type_constructor = type_builtin
+let type_bits wd: AST.ty = Type_Bits (Expr_LitInt wd)
+let type_integer = type_builtin "integer"
+
 
 (****************************************************************)
 (** {2 Exceptions thrown by interpreter}                        *)
@@ -436,12 +441,12 @@ let eval_unknown_bits (wd: Primops.bigint): value =
     (*VBits (Primops.mkBits (Z.to_int wd) Z.zero)*)
 
 let eval_unknown_ram (a: Primops.bigint): value =
-  VUninitialized (Type_Constructor (Ident "__RAM"))
+  VUninitialized (type_builtin "__RAM")
     (*VRAM (Primops.init_ram (char_of_int 0))*)
 
-let eval_unknown_integer (_: unit): value = VUninitialized (Tcheck.type_integer) (*VInt Z.zero*)
-let eval_unknown_real    (_: unit): value = VUninitialized (Tcheck.type_real) (*VReal Q.zero*)
-let eval_unknown_string  (_: unit): value = VUninitialized (Tcheck.type_string) (*VString "<UNKNOWN string>"*)
+let eval_unknown_integer (_: unit): value = VUninitialized (type_builtin "integer") (*VInt Z.zero*)
+let eval_unknown_real    (_: unit): value = VUninitialized (type_builtin "real") (*VReal Q.zero*)
+let eval_unknown_string  (_: unit): value = VUninitialized (type_builtin "string") (*VString "<UNKNOWN string>"*)
 
 (****************************************************************
  * End

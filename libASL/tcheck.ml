@@ -50,7 +50,6 @@ let type_bits (n: expr) = Type_Bits(n)
 let type_exn     = Type_Constructor(Ident "__Exception")
 
 let type_bitsK (k: intLit): AST.ty = type_bits(Expr_LitInt(k))
-let type_bitsN (n: int): AST.ty = type_bitsK (string_of_int n)
 
 (** Construct expression "eq_int(x, y)" *)
 let mk_eq_int (x: AST.expr) (y: AST.expr): AST.expr =

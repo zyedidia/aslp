@@ -51,7 +51,7 @@ module LocalEnv = struct
                 | None -> bs
                 | Some v2 ->
                     let v = if v1 = v2
-                        then v1 else sym_uninit (sym_type v1) in
+                        then v1 else Val (VUninitialized (sym_type v1)) in
                     Bindings.add k v bs)
             l Bindings.empty in
         let locals' = List.map2 merge_bindings l.locals r.locals in
@@ -235,6 +235,18 @@ let (and+) = DisEnv.Let.(and+)
 
 let (>>) = DisEnv.(>>)
 let (>>=) = DisEnv.(>>=)
+
+(** Convert value to a simple expression containing that value, so we can
+    print it or use it symbolically *)
+let to_expr = sym_expr
+
+(** Converts a result_or_simplified to a value.
+    Raises an exception if an expression is given, as an expression cannot be casted to a value.
+    Requires checking beforehand *)
+let to_value (v: sym): value =
+    match v with
+    | Val v' -> v'
+    | Exp _ -> raise (EvalError (Unknown, "Unreachable"))
 
 let is_expr (v: sym): bool =
     match v with
@@ -508,29 +520,28 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             end
     | Expr_Tuple(es) ->
             let+ es' = DisEnv.traverse (dis_expr loc) es in
-            let ts = Type_Tuple (List.map sym_type es') in
             (match sym_collect_list es' with
-            | Right vals -> Val (ts, VTuple vals)
-            | Left exps -> Exp (ts, Expr_Tuple exps))
+            | Right vals -> Val (VTuple vals)
+            | Left exps -> Exp (Expr_Tuple exps))
     | Expr_Unop(op, e) ->
             raise (EvalError (loc, "unary operation should have been removed"))
     | Expr_Unknown(t) -> (* TODO: Is this enough? *)
             let+ t' = dis_type loc t in
-            Exp (t', Expr_Unknown(t'))
+            Exp (Expr_Unknown(t'))
     | Expr_ImpDef(t, Some(s)) ->
-            DisEnv.reads (fun env -> Val (t, Env.getImpdef loc env s))
+            DisEnv.reads (fun env -> Val (Env.getImpdef loc env s))
     | Expr_ImpDef(t, None) ->
             raise (EvalError (loc, "unnamed IMPLEMENTATION_DEFINED behavior"))
     | Expr_Array(a, i) ->
             let@ a' = dis_expr loc a in
             let@ i' = dis_expr loc i in
             (match (a',i') with
-            | Val (t,av), Val (_,iv) ->
+            | Val av, Val iv ->
                 (match get_array loc av iv with
                 | VUninitialized _ -> capture_expr loc
                     (Expr_Array(a, val_expr iv))
                 | v -> DisEnv.pure @@ Val v)
-            | _ -> capture_expr loc (Expr_Array(a, sym_expr i')))
+            | _ -> capture_expr loc (Expr_Array(a, to_expr i')))
     | Expr_LitInt(i) ->    DisEnv.pure (Val (from_intLit i))
     | Expr_LitHex(i) ->    DisEnv.pure (Val (from_hexLit i))
     | Expr_LitReal(r) ->   DisEnv.pure (Val (from_realLit r))
@@ -568,7 +579,7 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
         (* Assign targs := tes *)
         let@ () = DisEnv.sequence_ @@ List.map2 (fun arg e ->
             let@ arg' = DisEnv.gets (LocalEnv.getLocalName arg) in
-            declare_const loc TC.type_integer arg' e
+            declare_const loc type_integer arg' e
             ) targs tes in
 
         assert (List.length atys == List.length args);
@@ -593,7 +604,7 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
             let+ name = declare_fresh_named_var loc fname t' in
             Expr_Var name
         | None ->
-            DisEnv.pure (Expr_Tuple [])) in
+            DisEnv.pure (Expr_Unknown type_unknown)) in
 
         let@ env = DisEnv.get in
         let@ () = DisEnv.if_ (!debug_level >= 2)
