@@ -177,13 +177,12 @@ module DisEnv = struct
         let* localid = gets (LocalEnv.getLocalName id) in
         let* v = getVarOpt loc localid in
         match v with
-        | Some v -> pure (Some localid)
+        | Some _ -> pure (Some localid)
         | None ->
             let+ v = getVarOpt loc id in
             (match v with
             | None -> None
-            | Some (Val VUninitialized _) -> None
-            | _ -> Some id)
+            | Some _ -> Some id)
 
     let getFun (loc: l) (x: ident): (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) option rws =
         reads (catch (fun env -> Env.getFun loc env x))
@@ -298,6 +297,12 @@ let declare_fresh_const (loc: l) (t: ty) (name: string) (x: expr): ident rws =
   let@ i = DisEnv.nextVarName name in
   let+ () = declare_const loc t i (Exp x) in
   i
+
+let capture_expr loc (x: expr): sym rws =
+  let@ v = declare_fresh_const loc type_unknown "Exp" x in
+  let+ () = DisEnv.modify (LocalEnv.setLocalVar loc v
+    (Val (VUninitialized (Type_OfExpr x)))) in
+  Exp (Expr_Var v)
 
 (** Monadic Utilities *)
 
@@ -415,12 +420,6 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
             (lo', wd')
     )
 
-and capture_expr loc (x: expr): sym rws =
-    let@ v = declare_fresh_const loc type_unknown "Exp" x in
-    let+ () = DisEnv.modify (LocalEnv.setLocalVar loc v
-        (Val (VUninitialized (Type_OfExpr x)))) in
-    Exp (Expr_Var v)
-
 (** Dissassemble expression. This should never return Result VUninitialized *)
 and dis_expr loc x =
     DisEnv.scope "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x)
@@ -471,8 +470,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     | Expr_Var id ->
             let@ idopt = DisEnv.findVar loc id in
             (match idopt with
-            (* variable not found *)
-            | None -> capture_expr loc (Expr_Var id)
+            | None -> failwith @@ "dis_expr: attempt to access undeclared variable: " ^ pp_expr x
             | Some id' ->
                 let@ v = DisEnv.getVar loc id' in
                 (match sym_initialised v with
@@ -659,7 +657,7 @@ and dis_lexpr' (loc: l) (x: AST.lexpr) (r: sym): unit rws =
         let@ idopt = DisEnv.findVar loc v in
         let v' = (match idopt with
         | Some v' -> v'
-        | None -> v) in
+        | None -> failwith "dis_lexpr: attempt to assign to undeclared variable") in
         assign_var loc v' r
     | LExpr_Tuple ls ->
         (match r with
