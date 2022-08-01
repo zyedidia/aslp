@@ -25,6 +25,11 @@ let opt_verbose = ref false
 
 let opt_debug_level = ref 0
 
+let () = Printexc.register_printer
+    (function
+    | Value.EvalError (loc, msg) ->
+        Some (Printf.sprintf "EvalError at %s: %s" (pp_loc loc) msg)
+    | _ -> None)
 
 let help_msg = [
     {|:? :help                       Show this help message|};
@@ -175,8 +180,6 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
                 )
             )
         with
-        | Value.EvalError (loc, msg) ->
-            Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg;
         | exc ->
             Printf.printf "  Error %s\n" (Printexc.to_string exc);
             Printexc.print_backtrace stdout

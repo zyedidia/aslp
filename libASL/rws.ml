@@ -113,6 +113,13 @@ module RWSBase (T : S) = struct
     fun r s ->
       (f (), s, T.mempty)
 
+  (** Runs a computation catching an exception if one is thrown.
+      Returns either the result or the thrown exception. *)
+  let catcherror (x: 'a rws): (exn, 'a) Either.t rws =
+    fun r s ->
+      try let (x,s',w') = x r s in (Right x, s', w')
+      with e -> (Left e, s, mempty)
+
 end
 
 (** Constructs a RWS monad using the given signature.  *)

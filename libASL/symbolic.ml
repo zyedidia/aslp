@@ -66,7 +66,15 @@ let rec val_expr (v: Value.value): AST.expr =
   | VBits {n; v} -> Expr_LitBits(Z.to_string v)
   | VString s -> Expr_LitString(s)
   | VTuple vs -> Expr_Tuple(List.map val_expr vs)
-  | _ -> raise (EvalError (Unknown, "Casting unhandled value type to expression"))
+  | _ -> failwith @@ "Casting unhandled value type to expression: " ^ pp_value v
+
+let rec val_initialised (v: value): bool =
+  match v with
+  | VUninitialized _ -> false
+  | VRecord bs -> Bindings.for_all (fun _ -> val_initialised) bs
+  | VTuple vs -> List.for_all val_initialised vs
+  | VArray (vs, _) -> Primops.ImmutableArray.for_all (fun _ -> val_initialised) vs
+  | _ -> true
 
 let [@warning "-32"] rec expr_to_lexpr (e: expr): lexpr =
   match e with
@@ -98,8 +106,8 @@ let sym_pair_has_exp (pair: sym * sym): bool =
 
 let sym_initialised (x: sym): sym option =
   match x with
-  | Val (VUninitialized _) -> None
-  | _ -> Some x
+  | Val v -> if val_initialised v then Some x else None
+  | Exp _ -> Some x
 
 (** Deconstructs the given list of symbolics.
     Returns a Right of values if the entire list was concrete values,
@@ -229,3 +237,32 @@ let sym_type =
   function
   | Val v -> val_type v
   | Exp e -> Type_OfExpr e (* FIXME: add type annotation to sym Exp constructor. *)
+
+
+let stmt_loc (s: stmt): l =
+  match s with
+  | Stmt_VarDeclsNoInit (_, _, l) -> l
+  | Stmt_VarDecl (_, _, _, l) -> l
+  | Stmt_ConstDecl (_, _, _, l) -> l
+  | Stmt_Assign (_, _, l) -> l
+  | Stmt_FunReturn (_, l) -> l
+  | Stmt_ProcReturn (l) -> l
+  | Stmt_Assert (_, l) -> l
+  | Stmt_Unpred (l) -> l
+  | Stmt_ConstrainedUnpred (l) -> l
+  | Stmt_ImpDef (_, l) -> l
+  | Stmt_Undefined (l) -> l
+  | Stmt_ExceptionTaken (l) -> l
+  | Stmt_Dep_Unpred (l) -> l
+  | Stmt_Dep_ImpDef (_, l) -> l
+  | Stmt_Dep_Undefined (l) -> l
+  | Stmt_See (_, l) -> l
+  | Stmt_Throw (_, l) -> l
+  | Stmt_DecodeExecute (_, _, l) -> l
+  | Stmt_TCall (_, _, _, l) -> l
+  | Stmt_If (_, _, _, _, l) -> l
+  | Stmt_Case (_, _, _, l) -> l
+  | Stmt_For (_, _, _, _, _, l) -> l
+  | Stmt_While (_, _, l) -> l
+  | Stmt_Repeat (_, _, l) -> l
+  | Stmt_Try (_, _, _, _, l) -> l

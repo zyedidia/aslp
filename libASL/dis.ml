@@ -20,12 +20,33 @@ open Symbolic
 
 let debug_level = ref 1
 
+(** (name, arg, location) tuple for tracing disassembly calls.
+    For example: ("dis_expr", "1+1", loc).
+*)
+type dis_trace = (string * string * l) list
+
+exception DisError of dis_trace * exn
+
+let print_dis_trace (trace: dis_trace) =
+    String.concat "\n" @@ List.map (fun (f, e, l) ->
+        Printf.sprintf "... at %s: %s --> %s" (pp_loc l) f e)
+        (trace)
+
+let () = Printexc.register_printer
+    (function
+    | DisError (trace, exn) ->
+        Some ("DisError: " ^ Printexc.to_string exn ^ "\n"
+            ^ print_dis_trace trace)
+    | _ -> None)
+
+
 module LocalEnv = struct
     type t = {
         locals          : sym Bindings.t list;
         returnSymbols   : expr list;
         numSymbols      : int;
         indent          : int;
+        trace           : dis_trace;
     }
 
     let empty () =
@@ -34,6 +55,7 @@ module LocalEnv = struct
             returnSymbols = [];
             numSymbols = 0;
             indent = 0;
+            trace = [];
         }
 
     let sequence_merge (first: t) (second: t): t =
@@ -44,6 +66,7 @@ module LocalEnv = struct
     let join_merge (l: t) (r: t): t =
         assert (l.returnSymbols = r.returnSymbols);
         assert (l.indent = r.indent);
+        assert (l.trace = r.trace);
 
         let merge_bindings l r =
             Bindings.fold (fun k v1 bs ->
@@ -60,6 +83,7 @@ module LocalEnv = struct
             returnSymbols = l.returnSymbols;
             numSymbols = max l.numSymbols r.numSymbols;
             indent = l.indent;
+            trace = l.trace;
         }
 
     let pp_value_bindings = Utils.pp_list (pp_bindings pp_value)
@@ -154,10 +178,6 @@ module DisEnv = struct
         try Some (f x)
         with EvalError _ -> None
 
-    let catcherror (f: 'b -> 'a) (x: 'b): (exn, 'a) Either.t =
-        try Right (f x)
-        with e -> Left e
-
     let getVar (loc: l) (x: ident): sym rws =
         let* v = gets (LocalEnv.getLocalVar loc x) in
         match (v) with
@@ -208,22 +228,38 @@ module DisEnv = struct
 
     let warn s = log ("WARNING: " ^ s)
 
-    let scope (name: string) (arg: string) (pp: 'a -> string) (x: 'a rws): 'a rws =
-        let* () = log (Printf.sprintf "\u{256d}\u{2500} %s --> %s" name arg) in
-        let* () = modify (fun l -> {l with indent = l.indent + 1}) in
-        let* (x,s',w') = locally x in
-        (* let* i' = indent in
-        List.iter (fun s -> Printf.printf "%s %s\n" i' (pp_stmt s)) w'; *)
-        let* () = write w'
-        and* () = put s'
-        and* () = modify (fun l -> {l with indent = l.indent - 1}) in
-        let* () = log (Printf.sprintf "\u{2570}\u{2500} = %s" (pp x)) in
-        let* () = if !debug_level >= 2 then
-            log (Printf.sprintf "   %s\n" (LocalEnv.pp_locals s')) else unit in
-        let* () = if !debug_level >= 3 then
-            (let* () = traverse_ (fun stmt -> log ("   "^pp_stmt stmt)) w' in
-            log "") else unit in
-        pure x
+    let scope (loc: l) (name: string) (arg: string) (pp: 'a -> string) (x: 'a rws): 'a rws =
+        (* logging header. looks like: +- dis_expr --> 1 + 1. *)
+        log (Printf.sprintf "\u{256d}\u{2500} %s --> %s" name arg) >>
+
+        (* add indentation level for logging. *)
+        modify (fun l -> {l with indent = l.indent + 1}) >>
+        modify (fun l -> {l with trace = (name,arg,loc)::l.trace}) >>
+        let* trace = gets (fun l -> l.trace) in
+
+        (* run computation but obtain state and writer to output in debugging. *)
+        let* (result,s',w') = locally (catcherror x) in
+        let x' = (match result with
+        | Left ((DisError _) as e) -> raise e
+        | Left exn -> raise (DisError (trace, exn))
+        | Right x' -> x') in
+        (* restore state and writer. *)
+        write w' >>
+        put s' >>
+        (* remove indentation level. *)
+        modify (fun l -> {l with indent = l.indent - 1}) >>
+        modify (fun l -> {l with trace = List.tl l.trace}) >>
+
+        (* logging footer. *)
+        log (Printf.sprintf "\u{2570}\u{2500} = %s" (pp x')) >>
+        let* () = if !debug_level >= 2
+            then log (Printf.sprintf "   %s\n" (LocalEnv.pp_locals s'))
+            else unit
+        and* () = if !debug_level >= 3
+            then traverse_ (fun s -> log ("   " ^ pp_stmt s)) w' >> log ""
+            else unit
+        in
+        pure x'
 end
 
 type 'a rws = 'a DisEnv.rws
@@ -422,7 +458,7 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
 and dis_expr loc x =
-    DisEnv.scope "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x)
+    DisEnv.scope loc "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x)
 
 and dis_expr' (loc: l) (x: AST.expr): sym rws =
     (match x with
@@ -470,7 +506,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     | Expr_Var id ->
             let@ idopt = DisEnv.findVar loc id in
             (match idopt with
-            | None -> failwith @@ "dis_expr: attempt to access undeclared variable: " ^ pp_expr x
+            | None -> raise (EvalError (loc, "attempt to access undeclared variable: " ^ pp_expr x))
             | Some id' ->
                 let@ v = DisEnv.getVar loc id' in
                 (match sym_initialised v with
@@ -560,7 +596,7 @@ and dis_proccall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): unit rws =
 
 (** Disassemble a function call *)
 and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
-    DisEnv.scope "dis_call"
+    DisEnv.scope loc "dis_call"
         (pp_expr (Expr_TApply (f, List.map sym_expr tes, List.map sym_expr es)))
         pp_sym
         (dis_call' loc f tes es)
@@ -641,7 +677,7 @@ and dis_prim (f: ident) (tes: sym list) (es: sym list): sym rws =
                 else capture_expr Unknown f'
 
 and dis_lexpr loc x r: unit rws =
-    DisEnv.scope
+    DisEnv.scope loc
         "dis_lexpr" (pp_stmt (Stmt_Assign (x, sym_expr r, Unknown)))
         Utils.pp_unit
         (dis_lexpr' loc x r)
@@ -657,7 +693,7 @@ and dis_lexpr' (loc: l) (x: AST.lexpr) (r: sym): unit rws =
         let@ idopt = DisEnv.findVar loc v in
         let v' = (match idopt with
         | Some v' -> v'
-        | None -> failwith "dis_lexpr: attempt to assign to undeclared variable") in
+        | None -> raise (EvalError (loc, "dis_lexpr: attempt to assign to undeclared variable"))) in
         assign_var loc v' r
     | LExpr_Tuple ls ->
         (match r with
@@ -703,7 +739,7 @@ and dis_stmts (xs: AST.stmt list): unit rws =
 
 
 (** Disassemble statement *)
-and dis_stmt x = DisEnv.scope "dis_stmt" (pp_stmt x) Utils.pp_unit (dis_stmt' x)
+and dis_stmt x = DisEnv.scope (stmt_loc x) "dis_stmt" (pp_stmt x) Utils.pp_unit (dis_stmt' x)
 and dis_stmt' (x: AST.stmt): unit rws =
     (* Printf.printf "dis_stmt --s-> %s\n" (pp_stmt x); *)
     (match x with
@@ -738,6 +774,10 @@ and dis_stmt' (x: AST.stmt): unit rws =
               (eval_if xs' d)
         in
         eval_if (S_Elsif_Cond(c, t)::els) e
+    | Stmt_TCall (f, tes, es, loc) ->
+        let@ tes' = dis_exprs loc tes in
+        let@ es' = dis_exprs loc es in
+        dis_proccall loc f tes' es'
     | Stmt_FunReturn(e, loc) ->
         (* let@ e' = dis_expr loc e in *)
         let@ rv = DisEnv.gets (LocalEnv.getReturnSymbol loc) in
@@ -855,11 +895,6 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
         | DecoderBody_Encoding (inst, l) ->
                 let (enc, opost, cond, exec) = Env.getInstruction loc env inst in
                 if eval_encoding env enc op then begin
-                    (match opost with
-                    | Some post -> List.iter (function s -> Printf.printf "%s\n" (pp_stmt s)) post;
-                        (*List.iter (eval_stmt env) post*)
-                    | None -> ()
-                    );
                     (* todo: should evaluate ConditionHolds to decide whether to execute body *)
                     Printf.printf "Dissasm: %s\n" (pprint_ident inst);
                     (* Uncomment this if you want to see output with no evaluation *)
@@ -870,7 +905,14 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     (Printf.printf "\n\nENV LOCALS: %s\n" (LocalEnv.pp_value_bindings (Env.readLocals env)));
                     (* execute disassembly inside newly created local environment. *)
                     let lenv = LocalEnv.empty () in
-                    let (_,lenv',stmts) = dis_stmts exec env lenv in
+
+                    let opost' = (match opost with
+                    | Some post ->
+                        Printf.printf "also disassembling __postdecode...\n";
+                        post
+                    | None -> []
+                    ) in
+                    let ((),lenv',stmts) = dis_stmts (opost' @ exec) env lenv in
 
                     Printf.printf "-----------\n";
                     List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts;
