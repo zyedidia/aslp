@@ -115,10 +115,12 @@ module RWSBase (T : S) = struct
 
   (** Runs a computation catching an exception if one is thrown.
       Returns either the result or the thrown exception. *)
-  let catcherror (x: 'a rws): (exn, 'a) Either.t rws =
+  let catcherror (x: 'a rws): (exn * Printexc.raw_backtrace, 'a) Either.t rws =
     fun r s ->
       try let (x,s',w') = x r s in (Right x, s', w')
-      with e -> (Left e, s, mempty)
+      with e ->
+        let bt = Printexc.get_raw_backtrace () in
+        (Left (e, bt), s, mempty)
 
 end
 

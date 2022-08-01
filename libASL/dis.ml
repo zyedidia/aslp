@@ -240,8 +240,8 @@ module DisEnv = struct
         (* run computation but obtain state and writer to output in debugging. *)
         let* (result,s',w') = locally (catcherror x) in
         let x' = (match result with
-        | Left ((DisError _) as e) -> raise e
-        | Left exn -> raise (DisError (trace, exn))
+        | Left ((DisError _) as e, bt) -> Printexc.raise_with_backtrace e bt
+        | Left (exn, bt) -> Printexc.raise_with_backtrace (DisError (trace, exn)) bt
         | Right x' -> x') in
         (* restore state and writer. *)
         write w' >>
