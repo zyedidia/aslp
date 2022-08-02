@@ -18,7 +18,7 @@ open Eval
 
 open Symbolic
 
-let debug_level = ref 1
+let debug_level = ref 0
 
 (** (name, arg, location) tuple for tracing disassembly calls.
     For example: ("dis_expr", "1+1", loc).
@@ -220,13 +220,19 @@ module DisEnv = struct
         else
             s ^ "\u{2502} "
 
-    let log (s: string): unit rws =
-        let+ i = indent in
-        let s' = Str.global_replace (Str.regexp "\n") ("\n"^i) s in
-        Printf.printf "%s%s\n" i s';
-        ()
+    let debug (minLevel: int) (s: string): unit rws =
+        if !debug_level >= minLevel then
+            let+ i = indent in
+            let s' = Str.global_replace (Str.regexp "\n") ("\n"^i) s in
+            Printf.printf "%s%s\n" i s';
+            ()
+        else
+            unit
 
-    let warn s = log ("WARNING: " ^ s)
+    let log (s: string): unit rws =
+        debug 1 s
+
+    let warn s = debug 0 ("WARNING: " ^ s)
 
     let scope (loc: l) (name: string) (arg: string) (pp: 'a -> string) (x: 'a rws): 'a rws =
         (* logging header. looks like: +- dis_expr --> 1 + 1. *)
@@ -924,9 +930,11 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     ) in
                     let ((),lenv',stmts) = dis_stmts (opost' @ exec) env lenv in
 
-                    Printf.printf "-----------\n";
-                    List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts;
-                    Printf.printf "-----------\n";
+                    if !debug_level >= 2 then begin
+                        Printf.printf "-----------\n";
+                        List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts;
+                        Printf.printf "-----------\n";
+                    end;
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
                     (* Some stmts *)
                     Some (Transforms.Bits.bitvec_conversion @@ remove_unused @@ stmts)
