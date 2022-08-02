@@ -209,7 +209,7 @@ module DisEnv = struct
 
     let nextVarName (prefix: string): ident rws =
         let* num = stateful LocalEnv.incNumSymbols in
-        gets (LocalEnv.getLocalName (Ident (prefix ^ string_of_int num)))
+        gets (LocalEnv.getLocalName (Ident (prefix ^ "_" ^ string_of_int num)))
 
     let indent: string rws =
         let+ i = gets (fun l -> l.indent) in
@@ -506,7 +506,11 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     | Expr_Var id ->
             let@ idopt = DisEnv.findVar loc id in
             (match idopt with
-            | None -> raise (EvalError (loc, "attempt to access undeclared variable: " ^ pp_expr x))
+            | None ->
+                let@ id' = (DisEnv.getLocalName id) in
+                raise (EvalError (loc,
+                "attempt to access undeclared variable: " ^ pp_expr x
+                ^ " or local name " ^ pprint_ident id'))
             | Some id' ->
                 let@ v = DisEnv.getVar loc id' in
                 (match sym_initialised v with
@@ -861,8 +865,14 @@ and dis_stmt' (x: AST.stmt): unit rws =
             declare_var loc type_integer v' >>
             dis_for startval
         | _, _ ->
-            let@ (env',body') = DisEnv.locally_ (dis_stmts body) in
-            (* Note: Check propagation of env' from loop body to outer state. *)
+            DisEnv.warn ("for loop bounds not statically known: " ^ pp_loc loc) >>
+            (* Add local variable to internal state. emitting declaration statements are not needed because
+               that will be done by the interpreter.  *)
+            let@ (env',body') = DisEnv.locally_
+                (DisEnv.modify
+                    (LocalEnv.addLocalVar loc v' (Val (VUninitialized TC.type_integer))) >>
+                dis_stmts body) in
+            (* Note: Check propagation of env' from loop body to outer state. assumes one iteration. *)
             DisEnv.put env' >>
             DisEnv.write
                 [Stmt_For(v', sym_expr start', dir, sym_expr stop', body', loc)])

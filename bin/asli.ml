@@ -182,7 +182,10 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
         with
         | exc ->
             Printf.printf "  Error %s\n" (Printexc.to_string exc);
-            Printexc.print_backtrace stdout
+            (* truncate backtrace to 1000 characters. *)
+            let bt = Printexc.get_backtrace () in
+            let k = String.index_from bt 1000 '\n' in
+            Printf.printf "%s\n[...]\n" (String.sub bt 0 k)
         );
         repl tcenv cpu
     )
