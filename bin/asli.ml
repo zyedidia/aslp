@@ -65,36 +65,47 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
     | [""] ->
         ()
     | [":compare"; iset; file] ->
-        let initializedEnv = Eval.Env.copy cpu.env in
-        Random.self_init ();
-        Eval.Env.initialize initializedEnv (List.map (fun _ -> Z.of_int64 (Random.int64 Int64.max_int)) (Utils.range 0 64));
-        let decoder = Eval.Env.getDecoder initializedEnv (Ident iset) in
-
-        (* Set up our environments *)
-        let evalEnv = Eval.Env.copy initializedEnv in
-        let disEnv = Eval.Env.copy cpu.env in
-        let disEvalEnv = Eval.Env.copy initializedEnv in
-
+        let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
         let inchan = open_in file in
         (try
             while true do
+                (* Set up our environments *)
+                let initializedEnv = Eval.Env.copy cpu.env in
+                Random.self_init ();
+                Eval.Env.initialize initializedEnv (List.map (fun _ -> Z.of_int64 (Random.int64 Int64.max_int)) (Utils.range 0 64));
+                let uninitializedEnv = Eval.Env.copy cpu.env in
+                (* List.iter (fun (ident, _) -> Eval.Env.setVar Unknown uninitializedEnv ident VUninitialized) (Bindings.bindings (Eval.Env.getGlobals uninitializedEnv).bs); *)
+                let evalEnv = Eval.Env.copy initializedEnv in
+                let disEnv = Eval.Env.copy uninitializedEnv in
+                let disEvalEnv = Eval.Env.copy initializedEnv in
+
                 let opcode = input_line inchan in
                 let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))) in
 
-                (* Evaluate original instruction *)
-                Eval.eval_decode_case AST.Unknown evalEnv decoder op;
+                (try
+                    (* Evaluate original instruction *)
+                    Eval.eval_decode_case AST.Unknown evalEnv decoder op;
 
-                (* Generate and evaluate partially evaluated instruction *)
-                let disStmts = Dis.dis_decode_case AST.Unknown disEnv decoder op in
-                Eval.eval_stmt_case Unknown disEvalEnv decoder op disStmts;
+                    (try
+                        (* Generate and evaluate partially evaluated instruction *)
+                        let disStmts = Dis.dis_decode_case AST.Unknown disEnv decoder op in
+                        Eval.eval_stmt_case Unknown disEvalEnv decoder op disStmts;
+
+                        if Eval.Env.compare evalEnv disEvalEnv then
+                            Printf.printf "No errors detected\n"
+                        else
+                            Printf.printf "Environments not equal\n";
+                    with
+                        EvalError (loc, message) -> Printf.printf "Dis error: %s\n" message
+                    )
+                with
+                    EvalError (loc, message) -> Printf.printf "Eval error: %s\n" message;
+                )
             done
         with
         | End_of_file ->
             close_in inchan
-        );
-
-        if Eval.Env.compare evalEnv disEvalEnv then Printf.printf "No errors detected\n" else Printf.printf "Environments not equal\n";
-        ()
+        )
     | [":elf"; file] ->
         Printf.printf "Loading ELF file %s.\n" file;
         let entry = Elf.load_file file cpu.elfwrite in
@@ -110,12 +121,10 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         cpu.opcode iset op
     | [":sem"; iset; opcode] ->
         let cpuCopy = Cpu.mkCPU (Eval.Env.copy cpu.env) in
-        List.iter (fun (ident, v) ->
-            Eval.Env.setVar Unknown cpuCopy.env ident (VUninitialized (Type_Constructor (Ident "unknown"))))
-            (Bindings.bindings (Eval.Env.getGlobals cpuCopy.env).bs);
+        (* List.iter (fun (ident, _) -> Eval.Env.setVar Unknown cpuCopy.env ident VUninitialized) (Bindings.bindings (Eval.Env.getGlobals cpuCopy.env).bs); *)
         let op = Z.of_int (int_of_string opcode) in
         Printf.printf "Decoding instruction %s %s\n" iset (Z.format "%x" op);
-        cpu.sem iset op
+        cpuCopy.sem iset op
     | (":set" :: "impdef" :: rest) ->
         let cmd = String.concat " " rest in
         let loc = mkLoc fname cmd in

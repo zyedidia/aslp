@@ -1,0 +1,30 @@
+name: Test partial eval
+
+on:
+  push:
+    branches:
+      - partial_eval 
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Use OCaml
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: 4.09.0
+          dune-cache: true
+
+      - name: Opam install
+        run: opam install . --deps-only --with-test
+
+      - name: Build and test
+        run: |
+          eval `opam config env`
+          export LD_LIBRARY_PATH=`opam config var z3:lib`
+          dune build
+          dune runtest

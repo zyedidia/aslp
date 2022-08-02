@@ -494,19 +494,8 @@ end = struct
         env.globals.bs
 
     let initialize (env: t) (xs: bigint list): unit =
-        let setPVar = (fun f ->
-            setVar
-                Unknown
-                env
-                (Ident "PSTATE")
-                (VRecord (Bindings.update (Ident f) (fun _ ->
-                    Some (VBits { n = 1; v = (Z.of_int 0)})
-                ) (match getVar Unknown env (Ident "PSTATE") with VRecord bs -> bs | _ -> raise (EvalError (Unknown, "PSTATE should be a record")))))) in
-        setPVar "N";
-        setPVar "Z";
-        setPVar "C";
-        setPVar "V";
-        addGlobalVar
+        setVar
+            Unknown
             env
             (Ident "_R")
             (VArray (List.fold_left2 (fun arr n v ->

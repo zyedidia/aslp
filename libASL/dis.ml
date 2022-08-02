@@ -980,3 +980,8 @@ and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
             | _, _, _ -> emit (Stmt_If(c, tstmts', elsif', fstmts', loc)))
         | x -> emit x
     ) xs ([], used)
+
+let retrieveDisassembly (env: Env.t) (opcode: string): stmt list =
+    let decoder = Eval.Env.getDecoder env (Ident "A64") in
+    (* List.iter (fun (ident, _) -> Eval.Env.setVar Unknown env ident VUninitialized) (Bindings.bindings (Eval.Env.getGlobals env).bs); *)
+    dis_decode_case AST.Unknown env decoder (Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))))
