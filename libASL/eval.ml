@@ -127,6 +127,9 @@ end
 module Env : sig
     include ImmEnv_type
 
+    val initializeGlobals   : t -> unit
+    val initializeRegisters : t -> bigint list -> unit
+
     val addLocalVar         : AST.l -> t -> ident -> value -> unit
     val addLocalConst       : AST.l -> t -> ident -> value -> unit
 
@@ -168,7 +171,6 @@ module Env : sig
     val getGlobals          : t -> scope
     val removeGlobals       : t -> unit
 
-    val initialize          : t -> bigint list -> unit
 end = struct
     type t = {
         mutable instructions : (encoding * (stmt list) option * bool * stmt list) Bindings.t;
@@ -260,19 +262,10 @@ end = struct
             enumNeqs     = env.enumNeqs;
             records      = env.records;
             typedefs     = env.typedefs;
-            globals      = { bs =
-                List.fold_left (fun bs' (key, value) ->
-                    Bindings.add key value bs'
-                ) Bindings.empty (Bindings.bindings env.globals.bs)
-            };
+            globals      = { bs = env.globals.bs };
             constants    = env.constants;
             impdefs      = env.impdefs;
-            locals       =
-            List.map (fun x -> { bs =
-                List.fold_left (fun bs' (key, value) ->
-                    Bindings.add key value bs'
-                ) Bindings.empty (Bindings.bindings x.bs)
-            }) env.locals;
+            locals       = List.map (fun x -> { bs = x.bs }) env.locals;
             returnSymbols= env.returnSymbols;
             numSymbols   = env.numSymbols;
             localPrefixes= env.localPrefixes;
@@ -493,14 +486,18 @@ end = struct
     let readGlobals (env: t): value Bindings.t =
         env.globals.bs
 
-    let initialize (env: t) (xs: bigint list): unit =
-        setVar
-            Unknown
-            env
-            (Ident "_R")
-            (VArray (List.fold_left2 (fun arr n v ->
-                ImmutableArray.add n (VBits { n = 64; v}) arr
-            ) ImmutableArray.empty (Utils.range 0 (List.length xs)) xs, VBits {n=64; v=Z.zero}))
+    let initializeGlobals (env: t): unit =
+        env.globals.bs <- Bindings.map eval_uninit_to_defaults env.globals.bs
+
+    let initializeRegisters (env: t) (xs: bigint list): unit =
+        let d = VBits {n=64; v=Z.zero} in
+        let vals = List.mapi (fun i v -> (i, VBits {n=64; v})) xs in
+        let arr = List.fold_left
+            (fun a (k,v) -> ImmutableArray.add k v a)
+            ImmutableArray.empty
+            vals
+        in
+        setVar Unknown env (Ident "_R") (VArray (arr, d))
 
 end
 

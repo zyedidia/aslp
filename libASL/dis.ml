@@ -930,14 +930,17 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     ) in
                     let ((),lenv',stmts) = dis_stmts (opost' @ exec) env lenv in
 
+                    let stmts' = Transforms.Bits.bitvec_conversion @@ remove_unused @@ stmts in
                     if !debug_level >= 2 then begin
                         Printf.printf "-----------\n";
                         List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts;
                         Printf.printf "-----------\n";
+                        Printf.printf "===========\n";
+                        List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts';
+                        Printf.printf "===========\n";
                     end;
                     (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
-                    (* Some stmts *)
-                    Some (Transforms.Bits.bitvec_conversion @@ remove_unused @@ stmts)
+                    Some (stmts')
                     (* Some (remove_unused @@ stmts) *)
                 end else begin
                     None

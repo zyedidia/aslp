@@ -58,14 +58,19 @@ let test_compare env () : unit =
     (try
         while true do
             (* Set up our environments *)
-            let initializedEnv = Eval.Env.copy env in
+            let initEnv = Eval.Env.copy env in
+            (* Obtain and set random initial values for _R registers. *)
             Random.self_init ();
-            Eval.Env.initialize initializedEnv (List.map (fun _ -> Z.of_int64 (Random.int64 Int64.max_int)) (Utils.range 0 64));
-            let uninitializedEnv = Eval.Env.copy env in
-            (* List.iter (fun (ident, _) -> Eval.Env.setVar Unknown uninitializedEnv ident VUninitialized) (Bindings.bindings (Eval.Env.getGlobals uninitializedEnv).bs); *)
-            let evalEnv = Eval.Env.copy initializedEnv in
-            let disEnv = Eval.Env.copy uninitializedEnv in
-            let disEvalEnv = Eval.Env.copy initializedEnv in
+            let vals = (List.init 64 (fun _ -> Z.of_int64 (Random.int64 Int64.max_int))) in
+            Eval.Env.initializeRegisters initEnv vals;
+            (* Replace remaining VUninitialized with default zero values. *)
+            Eval.Env.initializeGlobals initEnv;
+
+            (*  Disassembly uses original uninitialised environment.
+                Others use the randomly initialised environment for full evaluation. *)
+            let disEnv = Eval.Env.copy env in
+            let evalEnv = Eval.Env.copy initEnv in
+            let disEvalEnv = Eval.Env.copy initEnv in
 
             let opcode = input_line inchan in
             let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))) in
@@ -77,7 +82,7 @@ let test_compare env () : unit =
                 (try
                     (* Generate and evaluate partially evaluated instruction *)
                     let disStmts = Dis.dis_decode_case AST.Unknown disEnv decoder op in
-                    Eval.eval_stmt_case Unknown disEvalEnv decoder op disStmts;
+                    List.iter (Eval.eval_stmt disEvalEnv) disStmts;
 
                     compare_env evalEnv disEvalEnv opcode
                 with
@@ -94,9 +99,9 @@ let test_compare env () : unit =
 
 let tests : unit Alcotest.test_case list =
     let prelude = LoadASL.read_file "../../../prelude.asl" true false in
-    let mra = List.map (fun tool -> LoadASL.read_file tool false false) (mra_tools ()) in
+    let mra = List.concat_map (fun tool -> LoadASL.read_file tool false false) (mra_tools ()) in
     let tcenv   = TC.Env.mkEnv TC.env0 in
-    let env     = Eval.build_evaluation_environment (List.concat (prelude::mra)) in
+    let env     = Eval.build_evaluation_environment (prelude @ mra) in
     [
         ("arith", `Quick, test_arith tcenv env);
         ("compare", `Quick, test_compare env)

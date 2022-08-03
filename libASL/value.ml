@@ -449,6 +449,22 @@ let eval_unknown_real    (_: unit): value = VUninitialized (type_builtin "real")
 let eval_unknown_string  (_: unit): value = VUninitialized (type_builtin "string") (*VString "<UNKNOWN string>"*)
 
 
+let rec eval_uninit_to_defaults (v: value): value =
+    match v with
+    | VUninitialized t ->
+        (match t with
+        | Type_Bits (Expr_LitInt wd) -> VBits (Primops.mkBits (int_of_string wd) Z.zero)
+        | Type_Constructor (Ident "__RAM") -> VRAM (Primops.init_ram (char_of_int 0))
+        | Type_Constructor (Ident "integer") -> VInt Z.zero
+        | Type_Constructor (Ident "real") -> VReal Q.zero
+        | Type_Constructor (Ident "string") -> VString "<UNKNOWN string>"
+        | _ -> failwith ("unsupported case: " ^ pp_type t))
+    | VRecord bs -> VRecord (Bindings.map eval_uninit_to_defaults bs)
+    | VTuple vs -> VTuple (List.map eval_uninit_to_defaults vs)
+    | VArray (arr, d) -> VArray (arr, eval_uninit_to_defaults d)
+    | _ -> v
+
+
 (****************************************************************
  * End
  ****************************************************************)

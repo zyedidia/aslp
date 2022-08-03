@@ -59,28 +59,48 @@ let mkLoc (fname: string) (input: string): AST.l =
     let finish: Lexing.position = { pos_fname = fname; pos_lnum = 1; pos_bol = 0; pos_cnum = len } in
     AST.Range (start, finish)
 
+let () = Random.self_init ()
+
 let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0: string): unit =
     let input = String.trim input0 in
     (match String.split_on_char ' ' input with
     | [""] ->
         ()
+    | [":init"; "globals"] ->
+        Eval.Env.initializeGlobals cpu.env;
+    | [":init"; "regs"] ->
+        let vals = (List.init 64 (fun _ -> Z.of_int64 (Random.int64 Int64.max_int))) in
+        Eval.Env.initializeRegisters cpu.env vals;
+    | [":enumerate"; iset] ->
+        let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
+        (* (match (Testing.try_decode_case Unknown cpu.env decoder (VBits {n=64; v=Z.of_int 2332164128})) with
+        | Some e -> Printf.printf "%s\n" (pprint_ident e)
+        | None -> Printf.printf "none"); *)
+        ignore @@ Testing.try_decode_all cpu.env decoder;
     | [":compare"; iset; file] ->
         let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
         let inchan = open_in file in
         (try
             while true do
                 (* Set up our environments *)
-                let initializedEnv = Eval.Env.copy cpu.env in
-                Random.self_init ();
-                Eval.Env.initialize initializedEnv (List.map (fun _ -> Z.of_int64 (Random.int64 Int64.max_int)) (Utils.range 0 64));
-                let uninitializedEnv = Eval.Env.copy cpu.env in
-                (* List.iter (fun (ident, _) -> Eval.Env.setVar Unknown uninitializedEnv ident VUninitialized) (Bindings.bindings (Eval.Env.getGlobals uninitializedEnv).bs); *)
-                let evalEnv = Eval.Env.copy initializedEnv in
-                let disEnv = Eval.Env.copy uninitializedEnv in
-                let disEvalEnv = Eval.Env.copy initializedEnv in
+                let initEnv = Eval.Env.copy cpu.env in
+                (* Obtain and set random initial values for _R registers. *)
+                let vals = (List.init 64 (fun _ -> Z.of_int64 (Random.int64 Int64.max_int))) in
+                Eval.Env.initializeRegisters initEnv vals;
+                (* Replace remaining VUninitialized with default zero values. *)
+                Eval.Env.initializeGlobals initEnv;
+
+                (* Disassembly uses original uninitialised environment.
+                   Others use the randomly initialised environment for full evaluation. *)
+                let disEnv = Eval.Env.copy cpu.env in
+                let evalEnv = Eval.Env.copy initEnv in
+                let disEvalEnv = Eval.Env.copy initEnv in
 
                 let opcode = input_line inchan in
                 let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))) in
+
+                (* Printf.printf "PRE Eval env: %s\n\n" (Testing.pp_eval_env evalEnv);
+                Printf.printf "PRE Dis eval env: %s\n\n" (Testing.pp_eval_env disEvalEnv); *)
 
                 (try
                     (* Evaluate original instruction *)
@@ -89,7 +109,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
                     (try
                         (* Generate and evaluate partially evaluated instruction *)
                         let disStmts = Dis.dis_decode_case AST.Unknown disEnv decoder op in
-                        Eval.eval_stmt_case Unknown disEvalEnv decoder op disStmts;
+                        List.iter (eval_stmt disEvalEnv) disStmts;
 
                         if Eval.Env.compare evalEnv disEvalEnv then
                             Printf.printf "No errors detected\n"
@@ -100,7 +120,9 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
                     )
                 with
                     EvalError (loc, message) -> Printf.printf "Eval error: %s\n" message;
-                )
+                );
+                (* Printf.printf "POST Eval env: %s\n\n" (Testing.pp_eval_env evalEnv);
+                Printf.printf "POST Dis eval env: %s\n\n" (Testing.pp_eval_env disEvalEnv); *)
             done
         with
         | End_of_file ->
@@ -120,11 +142,10 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         Printf.printf "Decoding and executing instruction %s %s\n" iset (Z.format "%x" op);
         cpu.opcode iset op
     | [":sem"; iset; opcode] ->
-        let cpuCopy = Cpu.mkCPU (Eval.Env.copy cpu.env) in
-        (* List.iter (fun (ident, _) -> Eval.Env.setVar Unknown cpuCopy.env ident VUninitialized) (Bindings.bindings (Eval.Env.getGlobals cpuCopy.env).bs); *)
+        let cpu' = Cpu.mkCPU (Eval.Env.copy cpu.env) in
         let op = Z.of_int (int_of_string opcode) in
         Printf.printf "Decoding instruction %s %s\n" iset (Z.format "%x" op);
-        cpuCopy.sem iset op
+        cpu'.sem iset op
     | (":set" :: "impdef" :: rest) ->
         let cmd = String.concat " " rest in
         let loc = mkLoc fname cmd in
@@ -191,10 +212,11 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
         with
         | exc ->
             Printf.printf "  Error %s\n" (Printexc.to_string exc);
+            Printexc.print_backtrace stdout;
             (* truncate backtrace to 1000 characters. *)
-            let bt = Printexc.get_backtrace () in
-            let k = String.index_from bt 1000 '\n' in
-            Printf.printf "%s\n[...]\n" (String.sub bt 0 k)
+            (* let bt = Printexc.get_backtrace () in
+            let k = if 1000 < String.length bt then String.index_from bt 1000 '\n' else String.length bt in
+            Printf.printf "%s\n[...]\n" (String.sub bt 0 k) *)
         );
         repl tcenv cpu
     )
