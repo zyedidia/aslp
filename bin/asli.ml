@@ -71,12 +71,14 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
     | [":init"; "regs"] ->
         let vals = (List.init 64 (fun _ -> Z.of_int64 (Random.int64 Int64.max_int))) in
         Eval.Env.initializeRegisters cpu.env vals;
-    | [":enumerate"; iset] ->
+    | ":enumerate" :: iset :: tail ->
+        let (start,stop,fname) = (match tail with
+        | [start;stop;fname] -> (int_of_string start, int_of_string stop, fname)
+        | [] -> (0, Int.shift_left 1 32, "ops.txt")
+        | _ -> invalid_arg "invalid argument to :enumerate") in
+
         let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
-        (* (match (Testing.try_decode_case Unknown cpu.env decoder (VBits {n=64; v=Z.of_int 2332164128})) with
-        | Some e -> Printf.printf "%s\n" (pprint_ident e)
-        | None -> Printf.printf "none"); *)
-        ignore @@ Testing.try_decode_all cpu.env decoder;
+        Testing.try_decode_all cpu.env decoder start stop fname
     | [":compare"; iset; file] ->
         let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
         let inchan = open_in file in

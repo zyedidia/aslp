@@ -106,11 +106,10 @@ let pair_list_cons i: pair_list -> pair_list =
 let pp_pair_list =
   Utils.pp_list (fun (x,y) -> string_of_int x ^ "," ^ string_of_int y)
 
-let try_decode_all (env: Env.t) (case: decode_case): pair_list Bindings.t =
+let try_decode_all (env: Env.t) (case: decode_case) start stop fname: unit =
 
   let debug_interval = Int.shift_left 1 20 in
-  let max = Int.shift_left 1 32 in
-  let i = ref 0 in
+  let i = ref start in
   let j = ref 1 in
 
   let t0 = (Sys.time ()) in
@@ -121,11 +120,11 @@ let try_decode_all (env: Env.t) (case: decode_case): pair_list Bindings.t =
 
   let result = ref Bindings.empty in
 
-  let f = open_out "ops.txt" in
+  let f = open_out fname in
 
-  while !i <> max do
+  while !i <> stop do
     let opresult =
-      (try try_decode_case Unknown env case (VBits {n=64; v=Z.of_int !i})
+      (try try_decode_case Unknown env case (VBits {n=32; v=Z.of_int !i})
       with Throw _ -> None) in
 
     (match opresult with
@@ -139,15 +138,20 @@ let try_decode_all (env: Env.t) (case: decode_case): pair_list Bindings.t =
         no := succ !no);
 
     if (!j = debug_interval) then begin
-      let n = (!yes + !no) in
-      let t = Sys.time () in
-      Printf.printf "t: %f (0x%08x), n: %d (+%d in %f), valid: %d, invalid: %d\n"
-        (Sys.time () -. t0) n !i
-        (n - !nprev) (t -. !tprev)
+      let n = !yes + !no in
+      let t = Sys.time () -. t0 in
+
+      let dn = n - !nprev in
+      let dt = t -. !tprev in
+
+      Printf.printf "t: %f, 0x%08x (%d): average %f/s (+%d in %f, %f/s), valid: %d, invalid: %d\n"
+        t
+        !i !i (float n /. t)
+        dn dt (float dn /. dt)
         !yes !no;
       Stdlib.flush stdout;
 
-      Printf.fprintf f "%s\n" (pp_bindings (pp_pair_list) !result);
+      Printf.fprintf f "0x%08x (%d): %s\n" !i !i (pp_bindings (pp_pair_list) !result);
       Stdlib.flush f;
       result := Bindings.empty;
 
@@ -158,4 +162,3 @@ let try_decode_all (env: Env.t) (case: decode_case): pair_list Bindings.t =
     j := succ !j;
     i := succ !i;
   done;
-  !result
