@@ -25,7 +25,8 @@ let debug_level = ref 0
 *)
 type dis_trace = (string * string * l) list
 
-exception DisError of dis_trace * exn
+exception DisTrace of dis_trace * exn
+exception DisUnsupported of l * string
 
 let print_dis_trace (trace: dis_trace) =
     String.concat "\n" @@ List.map (fun (f, e, l) ->
@@ -34,9 +35,11 @@ let print_dis_trace (trace: dis_trace) =
 
 let () = Printexc.register_printer
     (function
-    | DisError (trace, exn) ->
-        Some ("DisError: " ^ Printexc.to_string exn ^ "\n"
+    | DisTrace (trace, exn) ->
+        Some ("exception in disassembly: " ^ Printexc.to_string exn ^ "\n"
             ^ print_dis_trace trace)
+    | DisUnsupported (loc, s) ->
+        Some ("DisUnsupported: " ^ pp_loc loc ^ " " ^ s)
     | _ -> None)
 
 
@@ -246,8 +249,8 @@ module DisEnv = struct
         (* run computation but obtain state and writer to output in debugging. *)
         let* (result,s',w') = locally (catcherror x) in
         let x' = (match result with
-        | Left ((DisError _) as e, bt) -> Printexc.raise_with_backtrace e bt
-        | Left (exn, bt) -> Printexc.raise_with_backtrace (DisError (trace, exn)) bt
+        | Left ((DisTrace _) as e, bt) -> Printexc.raise_with_backtrace e bt
+        | Left (exn, bt) -> Printexc.raise_with_backtrace (DisTrace (trace, exn)) bt
         | Right x' -> x') in
         (* restore state and writer. *)
         write w' >>
@@ -739,9 +742,9 @@ and dis_lexpr' (loc: l) (x: AST.lexpr) (r: sym): unit rws =
             in
             dis_fields (List.rev fields) 0
         | Val _ -> failwith "expected VRecord in field modification"
-        | _ -> DisEnv.write [Stmt_Assign(x, sym_expr r, loc)])
+        | _ -> raise (DisUnsupported (loc, "dis_lexpr: unable to determine widths for multi-field assign: " ^ pp_lexpr x)))
     | _ ->
-        DisEnv.write [Stmt_Assign(x, sym_expr r, loc)]
+        raise (DisUnsupported (loc, "dis_lexpr: " ^ pp_lexpr x))
 
 (** Dissassemble list of statements *)
 and dis_stmts (xs: AST.stmt list): unit rws =
@@ -871,18 +874,21 @@ and dis_stmt' (x: AST.stmt): unit rws =
             declare_var loc type_integer v' >>
             dis_for startval
         | _, _ ->
-            DisEnv.warn ("for loop bounds not statically known: " ^ pp_loc loc) >>
-            (* Add local variable to internal state. emitting declaration statements are not needed because
-               that will be done by the interpreter.  *)
-            let@ (env',body') = DisEnv.locally_
-                (DisEnv.modify
-                    (LocalEnv.addLocalVar loc v' (Val (VUninitialized TC.type_integer))) >>
-                dis_stmts body) in
-            (* Note: Check propagation of env' from loop body to outer state. assumes one iteration. *)
-            DisEnv.put env' >>
-            DisEnv.write
-                [Stmt_For(v', sym_expr start', dir, sym_expr stop', body', loc)])
-    | x -> DisEnv.write [x]
+            raise (DisUnsupported (loc, "for loop bounds not statically known: " ^ pp_stmt x)))
+    | Stmt_Unpred _
+    | Stmt_ConstrainedUnpred _
+    | Stmt_ImpDef (_, _)
+    | Stmt_Undefined _
+    | Stmt_ExceptionTaken _
+    | Stmt_Dep_Unpred _
+    | Stmt_Dep_ImpDef (_, _)
+    | Stmt_Dep_Undefined _
+    | Stmt_See (_, _)
+    | Stmt_Throw (_, _)
+    | Stmt_DecodeExecute (_, _, _)
+    | Stmt_While (_, _, _)
+    | Stmt_Repeat (_, _, _)
+    | Stmt_Try (_, _, _, _, _) -> raise (DisUnsupported (stmt_loc x, "dis_stmt: unsupported statement: " ^ pp_stmt x))
     )
 
 (* Duplicate of eval_decode_case modified to print rather than eval *)
