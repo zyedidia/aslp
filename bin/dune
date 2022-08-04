@@ -13,3 +13,11 @@
  (modules testlexer)
  (flags (-cclib -lstdc++))
  (libraries libASL))
+
+(executable
+ (name processops)
+ (modes exe)
+ ; (public_name test_asl_lexer)
+ (modules processops)
+ (flags (-cclib -lstdc++))
+ (libraries libASL))
