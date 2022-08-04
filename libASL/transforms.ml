@@ -114,14 +114,30 @@ module Bits = struct
     method to_bits_fun f tes =
       match (f, tes) with
       | (FIdent ("add_int", 0), []) -> (FIdent ("add_bits", 0), [Expr_LitInt width])
+      | (FIdent ("mul_int", 0), []) -> (FIdent ("mul_bits", 0), [Expr_LitInt width])
       | _ -> (f, tes)
 
     method! vexpr e = match e with
     | Expr_LitBits (s) when String.length s = int_of_string width -> SkipChildren
 
-    | Expr_TApply (FIdent ("cvt_bits_uint", 0), [Expr_LitInt w], [e]) when w = width ->
-      (* Printf.printf "base expr: %s\n" (pp_expr e); *)
-      ChangeTo e
+
+    | Expr_TApply (FIdent ("cvt_bits_uint", 0), [Expr_LitInt w], [e]) ->
+      let w = int_of_string w in
+      let width = int_of_string width in
+      let padwidth = width - w in
+      if padwidth = 0 then
+        (* width matches what we want. just return original bitvector expression.  *)
+        ChangeTo e
+      else if padwidth > 0 then
+        (* expression width is shorter than what we want, pad it with padwidth zeros. *)
+        let pad = String.init padwidth (fun _ -> '0') in
+        ChangeTo (
+          Expr_TApply (FIdent ("append_bits", 0),
+          [Expr_LitInt (string_of_int padwidth); Expr_LitInt (string_of_int w)],
+          [Expr_LitBits pad; e])
+        )
+      else
+        raise (Non_bits_atomic e)
 
     | Expr_TApply (ident, tes, es) -> ChangeDoChildrenPost (e,
       function
