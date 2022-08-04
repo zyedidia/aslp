@@ -375,6 +375,12 @@ and dis_expr (loc: l) (env: Env.t) (x: AST.expr): result_or_simplified writer =
             (match (get_array loc (to_value a') (to_value i')) with
             | VUninitialized -> return (Simplified (Expr_Array(a, to_expr i')))
             | v -> return (Result v))
+    | Expr_Parens(e) -> 
+        let* e' = dis_expr loc env e in
+        (match e' with
+        | Result v -> return (Result v)
+        | Simplified e'' -> return (Simplified (Expr_Parens(e'')))
+        )
     | x -> try (match eval_expr loc env x with VUninitialized -> return (Simplified x) | v -> return (Result v)) with EvalError (loc, message) -> return (Simplified x)
 
 (** Evaluate and simplify guards and bodies of an elseif chain, without removing branches *)
