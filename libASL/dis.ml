@@ -421,6 +421,51 @@ and capture_expr loc (x: expr): sym rws =
         (Val (VUninitialized (Type_OfExpr x)))) in
     Exp (Expr_Var v)
 
+(**
+   Disassemble an access 'chain', consisting of some series of field and array lookups down to a base variable.
+   Needs special handling as we want to preserve the structure of access chains based on a global variable,
+   so that these can be easily recognised when ultimately converting to our target.
+   Additionally, we do not want to create residual programs with access chains based on local variables,
+   as these are not supported by our target's semantics.
+
+   TODO:
+   Real solution is to lower the concepts of fields and arrays to something the target supports,
+   but that appears to be overkill for the instructions we are interested in.
+  *)
+and dis_access loc x access =
+    DisEnv.scope "dis_access" (pp_expr x) pp_sym (dis_access' loc x access)
+
+and dis_access' (loc: l) (x: AST.expr) (access: value -> value): sym rws =
+  (match x with
+  | Expr_Var(id) ->
+      let@ localid = DisEnv.gets (LocalEnv.getLocalName id) in
+      let@ local = DisEnv.gets (LocalEnv.getLocalVar loc localid) in
+      (match local with
+      (* Base variable is local with a concrete value *)
+      | Some (Val v) -> DisEnv.pure @@ Val (access v)
+      (* Base variable is local but maps to a symbol, which is not supported *)
+      | Some (Exp _) -> raise (EvalError (loc, "Symbolic record in local variable"))
+      | None ->
+          (* Base variable is global, return the accessed value or the variable if not initialised *)
+          let+ v = DisEnv.reads (fun env -> Env.getVar loc env id) in
+          match access v with
+          | VUninitialized _ -> Exp (Expr_Var id)
+          | v' -> Val v')
+  | Expr_Field(e,f) ->
+      let+ r = dis_access loc e (fun v -> get_field loc (access v) f) in
+      (match r with
+      | Exp e -> Exp (Expr_Field(e,f))
+      | v -> v)
+  | Expr_Array(a,i) ->
+      let@ i' = dis_expr loc i in
+      let+ r = dis_access loc a (fun v -> match i' with
+        | Val i -> get_array loc (access v) i
+        | _ -> VUninitialized type_unknown) in
+      (match r with
+      | Exp e -> Exp (Expr_Array(e,sym_expr i'))
+      | v -> v)
+  | x -> raise (EvalError (loc, "Unsupported access chain expression: " ^ pp_expr x)))
+
 (** Dissassemble expression. This should never return Result VUninitialized *)
 and dis_expr loc x =
     DisEnv.scope "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x)
@@ -440,11 +485,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     | Expr_Binop(a, op, b) ->
             raise (EvalError (loc, "binary operation should have been removed in expression "
                    ^ Utils.to_string (PP.pp_expr x)))
-    | Expr_Field(e, f) ->
-            let@ e' = dis_expr loc e in
-            (match e' with
-            | Val v -> DisEnv.pure @@ Val (get_field loc v f)
-            | Exp e -> capture_expr loc (Expr_Field(e,f)))
+    | Expr_Field(e, f) -> dis_access loc x (fun v -> v)
     | Expr_Fields(e, fs) ->
             let@ e' = dis_expr loc e in
             (match e' with
@@ -478,7 +519,6 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
                 (match sym_initialised v with
                 | Some s -> DisEnv.pure s
                 | None -> capture_expr loc (Expr_Var id')))
-                (* TODO: Partially defined structures? *)
     | Expr_Parens(e) ->
             dis_expr loc e
     | Expr_TApply(f, tes, es) ->
@@ -534,16 +574,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             DisEnv.reads (fun env -> Val (Env.getImpdef loc env s))
     | Expr_ImpDef(t, None) ->
             raise (EvalError (loc, "unnamed IMPLEMENTATION_DEFINED behavior"))
-    | Expr_Array(a, i) ->
-            let@ a' = dis_expr loc a in
-            let@ i' = dis_expr loc i in
-            (match (a',i') with
-            | Val av, Val iv ->
-                (match get_array loc av iv with
-                | VUninitialized _ -> capture_expr loc
-                    (Expr_Array(a, val_expr iv))
-                | v -> DisEnv.pure @@ Val v)
-            | _ -> capture_expr loc (Expr_Array(a, to_expr i')))
+    | Expr_Array(a, i) ->  dis_access loc x (fun v -> v)
     | Expr_LitInt(i) ->    DisEnv.pure (Val (from_intLit i))
     | Expr_LitHex(i) ->    DisEnv.pure (Val (from_hexLit i))
     | Expr_LitReal(r) ->   DisEnv.pure (Val (from_realLit r))
