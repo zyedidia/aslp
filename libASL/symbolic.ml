@@ -3,6 +3,7 @@ module AST = Asl_ast
 open AST
 open Value
 open Asl_utils
+open Primops
 
 type sym =
   | Val of value
@@ -152,6 +153,11 @@ let sym_bool_and = prim_binop "bool_and"
 let sym_inmask   = prim_binop "in_mask"
 let sym_add_int  = prim_binop "add_int"
 let sym_sub_int  = prim_binop "sub_int"
+
+let sym_append_bits loc x y =
+  (match (x,y) with
+  | (Val (VBits x),Val (VBits y)) -> Val (VBits (prim_append_bits x y))
+  | (x,y) -> Exp (Expr_TApply(FIdent("append_bits",0), [], (sym_expr x)::[sym_expr y])))
 
 (* TODO: There is no eval_eq, we need to find the types of x & y *)
 let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
