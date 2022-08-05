@@ -36,10 +36,10 @@ let print_dis_trace (trace: dis_trace) =
 let () = Printexc.register_printer
     (function
     | DisTrace (trace, exn) ->
-        Some ("exception in disassembly: " ^ Printexc.to_string exn ^ "\n"
+        Some (Printexc.to_string exn ^ "\n"
             ^ print_dis_trace trace)
     | DisUnsupported (loc, s) ->
-        Some ("DisUnsupported: " ^ pp_loc loc ^ " " ^ s)
+        Some ("DisUnsupported: " ^ pp_loc loc ^ ": " ^ s)
     | _ -> None)
 
 
@@ -746,9 +746,35 @@ and dis_lexpr' (loc: l) (x: AST.lexpr) (r: sym): unit rws =
     | _ ->
         raise (DisUnsupported (loc, "dis_lexpr: " ^ pp_lexpr x))
 
-(** Dissassemble list of statements *)
-and dis_stmts (xs: AST.stmt list): unit rws =
-    DisEnv.traverse_ dis_stmt xs
+(** Concatenates two lists of statements, but ensures nothing is
+    added after a return statement.  *)
+and stmt_append (xs: stmt list) (ys: stmt list): stmt list =
+    match xs with
+    | [] -> ys
+    | [Stmt_FunReturn _] | [Stmt_ProcReturn _] -> xs
+    | x::xs -> x :: stmt_append xs ys
+
+(** Dissassemble list of statements. *)
+and dis_stmts (stmts: AST.stmt list): unit rws =
+    match stmts with
+    | [] -> DisEnv.unit
+    | (Stmt_If(c, tstmts, elsif, fstmts, loc)::rest) ->
+        (* append everything after the if statement into each of its branches. *)
+        let tstmts' = stmt_append tstmts rest
+        and elsif' = List.map (fun (S_Elsif_Cond(e,ss)) ->
+            S_Elsif_Cond(e,stmt_append ss rest)) elsif
+        and fstmts' = stmt_append fstmts rest in
+        dis_stmt (Stmt_If (c, tstmts', elsif', fstmts', loc))
+    | (Stmt_FunReturn _ | Stmt_ProcReturn _) as ret :: rest ->
+        (match rest with
+        | [] -> dis_stmt ret
+        | _ -> raise (DisUnsupported (stmt_loc ret,
+            "unexpected statements after return: " ^
+            Utils.pp_list pp_stmt rest)))
+    | (s::rest) ->
+        dis_stmt s >> dis_stmts rest
+
+
 
 
 (** Disassemble statement *)
