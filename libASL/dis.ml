@@ -487,6 +487,17 @@ and type_access (loc: l) (x: expr): ty option =
           | _ -> None))
   | _ -> None)
 
+and dis_load loc x: sym rws =
+  let@ v = dis_access loc x (fun v -> v) in
+  (match v with
+  | Val v -> DisEnv.pure @@ Val v
+  | Exp e -> capture_expr loc (force_type_access loc e) e)
+
+and force_type_access (loc: l) (x: expr): ty =
+  match type_access loc x with
+  | Some t -> t
+  | None -> raise (EvalError (loc, "types"))
+
 (** Dissassemble expression. This should never return Result VUninitialized *)
 and dis_expr loc x =
     DisEnv.scope "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x)
@@ -506,17 +517,13 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     | Expr_Binop(a, op, b) ->
             raise (EvalError (loc, "binary operation should have been removed in expression "
                    ^ Utils.to_string (PP.pp_expr x)))
-    | Expr_Field(e, f) -> 
-            let@ v = dis_access loc x (fun v -> v) in
-            (match v with
-            | Val v -> DisEnv.pure @@ Val v
-            | Exp e -> match type_access loc x with Some t -> capture_expr loc t e | None -> raise (EvalError (loc, "types")))
+    | Expr_Field(e, f) -> dis_load loc x
     | Expr_Fields(e, fs) ->
-            let@ e' = dis_expr loc e in
-            (match e' with
-            | Val v -> DisEnv.pure @@
-                Val (eval_concat loc (List.map (get_field loc v) fs))
-            | Exp e -> capture_expr loc type_unknown (Expr_Fields(e, fs)))
+            let append = function
+              | [] -> raise (EvalError (loc, "Record access with no nominated fields"))
+              | (x::xs) -> List.fold_left (sym_append_bits loc) x xs in
+            let+ vs = DisEnv.traverse (fun f -> dis_load loc (Expr_Field(e,f))) fs in
+            append vs
     | Expr_Slices(e, ss) ->
             let@ e' = dis_expr loc e
             and@ ss' = DisEnv.traverse (dis_slice loc) ss in
@@ -534,7 +541,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             (match p' with
             | Val v -> DisEnv.pure (Val v)
             | Exp e -> capture_expr loc type_bool e)
-    | Expr_Var id ->
+    | Expr_Var id -> (* TODO: Unift with dis_load*)
             let@ idopt = DisEnv.findVar loc id in
             (match idopt with
             (* variable not found *)
@@ -602,11 +609,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             DisEnv.reads (fun env -> Val (Env.getImpdef loc env s))
     | Expr_ImpDef(t, None) ->
             raise (EvalError (loc, "unnamed IMPLEMENTATION_DEFINED behavior"))
-    | Expr_Array(a, i) ->
-            let@ v = dis_access loc x (fun v -> v) in
-            (match v with
-            | Val v -> DisEnv.pure @@ Val v
-            | Exp e -> match type_access loc x with Some t -> capture_expr loc t e | None -> raise (EvalError (loc, "types")))
+    | Expr_Array(a,i) ->   dis_load loc x
     | Expr_LitInt(i) ->    DisEnv.pure (Val (from_intLit i))
     | Expr_LitHex(i) ->    DisEnv.pure (Val (from_hexLit i))
     | Expr_LitReal(r) ->   DisEnv.pure (Val (from_realLit r))
