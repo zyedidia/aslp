@@ -63,7 +63,7 @@ let rec val_expr (v: Value.value): AST.expr =
   | VEnum (id, n) -> Expr_LitInt(string_of_int n)
   | VInt n -> Expr_LitInt(Z.to_string n)
   | VReal n -> Expr_LitReal(Q.to_string n)
-  | VBits {n; v} -> Expr_LitBits(Z.to_string v)
+  | VBits {n; v} -> Expr_LitBits(Z.format ("%0" ^ string_of_int n ^ "b") v)
   | VString s -> Expr_LitString(s)
   | VTuple vs -> Expr_Tuple(List.map val_expr vs)
   | _ -> raise (EvalError (Unknown, "Casting unhandled value type to expression"))
