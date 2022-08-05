@@ -141,12 +141,12 @@ let rec visit_exprs (vis: aslVisitor) (xs: expr list): expr list =
     and visit_expr (vis: aslVisitor) (x: expr): expr =
         let aux (vis: aslVisitor) (x: expr): expr =
             (match x with
-            | Expr_If(c, t, els, e) ->
+            | Expr_If(ty, c, t, els, e) ->
                     let c'   = visit_expr vis c in
                     let t'   = visit_expr vis t in
                     let els' = mapNoCopy (visit_e_elsif vis) els in
                     let e'   = visit_expr vis e in
-                    if c == c' && t == t' && els == els' && e == e' then x else Expr_If(c', t', els', e')
+                    if c == c' && t == t' && els == els' && e == e' then x else Expr_If(ty, c', t', els', e')
             | Expr_Binop(a, op, b) ->
                     let a' = visit_expr vis a in
                     let b' = visit_expr vis b in

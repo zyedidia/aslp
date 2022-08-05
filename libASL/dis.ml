@@ -306,14 +306,14 @@ let declare_fresh_const (loc: l) (t: ty) (name: string) (x: expr): ident rws =
     - What are the implications of type_unknown?
     - Can we cache a single return variable without sacrificing the simplicity of this approach?
  *)
-let sym_if (loc: l) (test: sym rws) (tcase: sym rws) (fcase: sym rws): sym rws =
+let sym_if (loc: l) (t: ty) (test: sym rws) (tcase: sym rws) (fcase: sym rws): sym rws =
   let@ r = test in
   (match r with
   | Val (VBool (true))  -> tcase
   | Val (VBool (false)) -> fcase
   | Val _ -> failwith ("Split on non-boolean value")
   | Exp e ->
-      let@ tmp = declare_fresh_named_var loc "If" type_unknown in
+      let@ tmp = declare_fresh_named_var loc "If" t in
       (* Evaluate true branch statements. *)
       let@ (tenv,tstmts) = DisEnv.locally_
           (tcase >>= assign_var loc tmp) in
@@ -346,13 +346,13 @@ let unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit r
 let rec sym_for_all2 p l1 l2 =
   match (l1, l2) with
   | ([], []) -> DisEnv.pure sym_true
-  | (a1::l1, a2::l2) -> sym_if Unknown (p a1 a2) (sym_for_all2 p l1 l2) (DisEnv.pure sym_false)
+  | (a1::l1, a2::l2) -> sym_if Unknown (type_bool) (p a1 a2) (sym_for_all2 p l1 l2) (DisEnv.pure sym_false)
   | (_, _) -> invalid_arg "sym_for_all2"
 
 (** Symbolic implementation of List.exists *)
 let rec sym_exists p = function
   | [] -> DisEnv.pure sym_false
-  | a::l -> sym_if Unknown (p a) (DisEnv.pure sym_true) (sym_exists p l)
+  | a::l -> sym_if Unknown (type_bool) (p a) (DisEnv.pure sym_true) (sym_exists p l)
 
 (** Disassembly Functions *)
 
@@ -472,11 +472,11 @@ and dis_expr loc x =
 
 and dis_expr' (loc: l) (x: AST.expr): sym rws =
     (match x with
-    | Expr_If(c, t, els, e) ->
+    | Expr_If(ty, c, t, els, e) ->
             let rec eval_if xs d : sym rws = match xs with
                 | [] -> dis_expr loc d
                 | AST.E_Elsif_Cond (c,b)::xs' ->
-                    sym_if loc (dis_expr loc c)
+                    sym_if loc ty (dis_expr loc c) (* then *)
                       (dis_expr loc b)
                     (* else *)
                       (eval_if xs' d)
@@ -529,7 +529,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             if name_of_FIdent f = "and_bool" then begin
                 (match (tes, es) with
                 | ([], [x; y]) ->
-                    sym_if loc (dis_expr loc x) (* then *)
+                    sym_if loc (type_bool) (dis_expr loc x) (* then *)
                       (dis_expr loc y)
                     (* else *)
                       (DisEnv.pure sym_false)
@@ -540,7 +540,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             end else if name_of_FIdent f = "or_bool" then begin
                 (match (tes, es) with
                 | ([], [x; y]) ->
-                    sym_if loc (dis_expr loc x) (* then *)
+                    sym_if loc (type_bool) (dis_expr loc x) (* then *)
                       (DisEnv.pure sym_true)
                     (* else *)
                       (dis_expr loc y)
@@ -551,7 +551,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             end else if name_of_FIdent f = "implies_bool" then begin
                 (match (tes, es) with
                 | ([], [x; y]) ->
-                    sym_if loc (dis_expr loc x) (* then *)
+                    sym_if loc (type_bool) (dis_expr loc x) (* then *)
                       (dis_expr loc y)
                     (* else *)
                       (DisEnv.pure sym_true)
