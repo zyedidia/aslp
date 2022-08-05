@@ -485,7 +485,11 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     | Expr_Binop(a, op, b) ->
             raise (EvalError (loc, "binary operation should have been removed in expression "
                    ^ Utils.to_string (PP.pp_expr x)))
-    | Expr_Field(e, f) -> dis_access loc x (fun v -> v)
+    | Expr_Field(e, f) -> 
+            let@ v = dis_access loc x (fun v -> v) in
+            (match v with
+            | Val v -> DisEnv.pure @@ Val v
+            | Exp e -> capture_expr loc e)
     | Expr_Fields(e, fs) ->
             let@ e' = dis_expr loc e in
             (match e' with
@@ -574,7 +578,11 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             DisEnv.reads (fun env -> Val (Env.getImpdef loc env s))
     | Expr_ImpDef(t, None) ->
             raise (EvalError (loc, "unnamed IMPLEMENTATION_DEFINED behavior"))
-    | Expr_Array(a, i) ->  dis_access loc x (fun v -> v)
+    | Expr_Array(a, i) ->
+            let@ v = dis_access loc x (fun v -> v) in
+            (match v with
+            | Val v -> DisEnv.pure @@ Val v
+            | Exp e -> capture_expr loc e)
     | Expr_LitInt(i) ->    DisEnv.pure (Val (from_intLit i))
     | Expr_LitHex(i) ->    DisEnv.pure (Val (from_hexLit i))
     | Expr_LitReal(r) ->   DisEnv.pure (Val (from_realLit r))
@@ -781,11 +789,10 @@ and dis_stmt' (x: AST.stmt): unit rws =
         let@ e' = dis_expr loc e in
         (match e' with
         | Val v ->
-            DisEnv.write [Stmt_Assert(val_expr v, loc)]
-            (* if not (to_bool loc v) then
+            if not (to_bool loc v) then
                 raise (EvalError (loc, "assertion failure during symbolic phase"))
             else
-                DisEnv.unit *)
+                DisEnv.unit
         | Exp e'' ->
             DisEnv.write [Stmt_Assert(e'', loc)]
         )
