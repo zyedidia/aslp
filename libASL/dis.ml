@@ -302,9 +302,6 @@ let declare_fresh_const (loc: l) (t: ty) (name: string) (x: expr): ident rws =
 (** Monadic Utilities *)
 
 (** Symbolic implementation of an if statement that returns an expression
-  TODO:
-    - What are the implications of type_unknown?
-    - Can we cache a single return variable without sacrificing the simplicity of this approach?
  *)
 let sym_if (loc: l) (t: ty) (test: sym rws) (tcase: sym rws) (fcase: sym rws): sym rws =
   let@ r = test in
@@ -415,8 +412,8 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
             (lo', wd')
     )
 
-and capture_expr loc (x: expr): sym rws =
-    let@ v = declare_fresh_const loc type_unknown "Exp" x in
+and capture_expr loc (t: ty) (x: expr): sym rws =
+    let@ v = declare_fresh_const loc t "Exp" x in
     let+ () = DisEnv.modify (LocalEnv.setLocalVar loc v
         (Val (VUninitialized (Type_OfExpr x)))) in
     Exp (Expr_Var v)
@@ -466,6 +463,30 @@ and dis_access' (loc: l) (x: AST.expr) (access: value -> value): sym rws =
       | v -> v)
   | x -> raise (EvalError (loc, "Unsupported access chain expression: " ^ pp_expr x)))
 
+and type_access (loc: l) (x: expr): ty option =
+  let env = Tcheck.env0 in
+  (match x with
+  | Expr_Var(id) -> Tcheck.GlobalEnv.getGlobalVar env id
+  | Expr_Field(e,f) ->
+      (match type_access loc e with
+      | None -> None
+      | Some t ->
+            (match Tcheck.typeFields env loc t with
+            | FT_Record rfs ->
+                Some (Tcheck.get_recordfield loc rfs f)
+            | FT_Register rfs ->
+                let (ss, ty') = Tcheck.get_regfield loc rfs f in
+                Some ty'
+            ))
+  | Expr_Array(a,i) ->
+      (match type_access loc a with
+      | None -> None
+      | Some t ->
+          (match Tcheck.derefType env t with
+          | Type_Array(ixty, elty) -> Some elty
+          | _ -> None))
+  | _ -> None)
+
 (** Dissassemble expression. This should never return Result VUninitialized *)
 and dis_expr loc x =
     DisEnv.scope "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x)
@@ -489,13 +510,13 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             let@ v = dis_access loc x (fun v -> v) in
             (match v with
             | Val v -> DisEnv.pure @@ Val v
-            | Exp e -> capture_expr loc e)
+            | Exp e -> match type_access loc x with Some t -> capture_expr loc t e | None -> raise (EvalError (loc, "types")))
     | Expr_Fields(e, fs) ->
             let@ e' = dis_expr loc e in
             (match e' with
             | Val v -> DisEnv.pure @@
                 Val (eval_concat loc (List.map (get_field loc v) fs))
-            | Exp e -> capture_expr loc (Expr_Fields(e, fs)))
+            | Exp e -> capture_expr loc type_unknown (Expr_Fields(e, fs)))
     | Expr_Slices(e, ss) ->
             let@ e' = dis_expr loc e
             and@ ss' = DisEnv.traverse (dis_slice loc) ss in
@@ -512,17 +533,20 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             let@ p' = dis_pattern loc e' p in
             (match p' with
             | Val v -> DisEnv.pure (Val v)
-            | Exp e -> capture_expr loc e)
+            | Exp e -> capture_expr loc type_bool e)
     | Expr_Var id ->
             let@ idopt = DisEnv.findVar loc id in
             (match idopt with
             (* variable not found *)
-            | None -> capture_expr loc (Expr_Var id)
+            | None -> raise (EvalError (loc, "unknown variable"))
             | Some id' ->
                 let@ v = DisEnv.getVar loc id' in
                 (match sym_initialised v with
                 | Some s -> DisEnv.pure s
-                | None -> capture_expr loc (Expr_Var id')))
+                | None -> 
+                    match type_access loc x with Some t -> capture_expr loc t (Expr_Var id') | None -> raise (EvalError (loc, "types"))
+
+                    ))
     | Expr_Parens(e) ->
             dis_expr loc e
     | Expr_TApply(f, tes, es) ->
@@ -582,7 +606,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             let@ v = dis_access loc x (fun v -> v) in
             (match v with
             | Val v -> DisEnv.pure @@ Val v
-            | Exp e -> capture_expr loc e)
+            | Exp e -> match type_access loc x with Some t -> capture_expr loc t e | None -> raise (EvalError (loc, "types")))
     | Expr_LitInt(i) ->    DisEnv.pure (Val (from_intLit i))
     | Expr_LitHex(i) ->    DisEnv.pure (Val (from_hexLit i))
     | Expr_LitReal(r) ->   DisEnv.pure (Val (from_realLit r))
@@ -679,7 +703,7 @@ and dis_prim (f: ident) (tes: sym list) (es: sym list): sym rws =
         | None -> let f' = Expr_TApply(f, List.map sym_expr tes, List.map sym_expr es) in
             if List.mem name Value.prims_pure
                 then DisEnv.pure (Exp f')
-                else capture_expr Unknown f'
+                else capture_expr Unknown type_unknown f'
 
 and dis_lexpr loc x r: unit rws =
     DisEnv.scope
