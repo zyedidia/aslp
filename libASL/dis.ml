@@ -351,6 +351,24 @@ let rec sym_exists p = function
   | [] -> DisEnv.pure sym_false
   | a::l -> sym_if Unknown (type_bool) (p a) (DisEnv.pure sym_true) (sym_exists p l)
 
+(** Determine the type of memory access expression (Var, Array, Field) *)
+let rec type_of_load (loc: l) (x: expr): ty =
+  let env = Tcheck.env0 in
+  (match x with
+  | Expr_Var(id) ->
+      (match Tcheck.GlobalEnv.getGlobalVar env id with
+      | Some t -> t
+      | None -> raise (EvalError (loc, "Unknown type for variable: " ^ pprint_ident id)))
+  | Expr_Field(e,f) ->
+      (match Tcheck.typeFields env loc (type_of_load loc e) with
+      | FT_Record rfs -> Tcheck.get_recordfield loc rfs f
+      | FT_Register rfs -> let (_,t) = Tcheck.get_regfield loc rfs f in t)
+  | Expr_Array(a,i) ->
+      (match Tcheck.derefType env (type_of_load loc a) with
+      | Type_Array(ixty, elty) -> elty
+      | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr a)))
+  | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr x)))
+
 (** Disassembly Functions *)
 
 (** Disassemble type *)
@@ -419,29 +437,35 @@ and capture_expr loc (t: ty) (x: expr): sym rws =
     Exp (Expr_Var v)
 
 (**
-   Disassemble an access 'chain', consisting of some series of field and array lookups down to a base variable.
-   Needs special handling as we want to preserve the structure of access chains based on a global variable,
-   so that these can be easily recognised when ultimately converting to our target.
-   Additionally, we do not want to create residual programs with access chains based on local variables,
-   as these are not supported by our target's semantics.
+  Disassemble a variable load, either accessing local or global state, potentially with a chain of
+  aggregate structure accesses.
 
-   TODO:
-   Real solution is to lower the concepts of fields and arrays to something the target supports,
-   but that appears to be overkill for the instructions we are interested in.
+  Locals are expected to all be defined by the symbolic state and assumed to never contain symbolic aggregate structures.
+  These structures are not supported by the target and must be removed for successful translation.
+  TODO: This does not appear to be a problem at the moment, but requires greater testing to be sure.
+
+  Globals are expected to be defined by the global environment as either a constant or an unknown dynamic value.
+  Loads of dynamic globals, along with their access chains, are stored into temporary variables to create a pure
+  symbol to refer to their current value.
   *)
-and dis_access loc x access =
-    DisEnv.scope "dis_access" (pp_expr x) pp_sym (dis_access' loc x access)
+and dis_load loc x =
+  DisEnv.scope "dis_load" (pp_expr x) pp_sym (dis_load' loc x)
 
-and dis_access' (loc: l) (x: AST.expr) (access: value -> value): sym rws =
+and dis_load' loc x: sym rws =
+  let@ v = dis_load_chain loc x (fun v -> v) in
+  (match v with
+  | Val v -> DisEnv.pure @@ Val v
+  | Exp e -> capture_expr loc (type_of_load loc e) e)
+
+and dis_load_chain (loc: l) (x: expr) (access: value -> value): sym rws =
   (match x with
   | Expr_Var(id) ->
-      let@ localid = DisEnv.gets (LocalEnv.getLocalName id) in
-      let@ local = DisEnv.gets (LocalEnv.getLocalVar loc localid) in
+      let@ local = DisEnv.gets (fun env -> LocalEnv.getLocalVar loc (LocalEnv.getLocalName id env) env) in
       (match local with
       (* Base variable is local with a concrete value *)
       | Some (Val v) -> DisEnv.pure @@ Val (access v)
-      (* Base variable is local but maps to a symbol, which is not supported *)
-      | Some (Exp _) -> raise (EvalError (loc, "Symbolic record in local variable"))
+      (* Base variable is local with a symbolic value, should not expect a structure *)
+      | Some (Exp e) -> DisEnv.pure @@ Exp e (* TODO: Assert access x = x *)
       | None ->
           (* Base variable is global, return the accessed value or the variable if not initialised *)
           let+ v = DisEnv.reads (fun env -> Env.getVar loc env id) in
@@ -449,54 +473,19 @@ and dis_access' (loc: l) (x: AST.expr) (access: value -> value): sym rws =
           | VUninitialized _ -> Exp (Expr_Var id)
           | v' -> Val v')
   | Expr_Field(e,f) ->
-      let+ r = dis_access loc e (fun v -> get_field loc (access v) f) in
+      let+ r = dis_load_chain loc e (fun v -> get_field loc (access v) f) in
       (match r with
       | Exp e -> Exp (Expr_Field(e,f))
       | v -> v)
   | Expr_Array(a,i) ->
       let@ i' = dis_expr loc i in
-      let+ r = dis_access loc a (fun v -> match i' with
+      let+ r = dis_load_chain loc a (fun v -> match i' with
         | Val i -> get_array loc (access v) i
         | _ -> VUninitialized type_unknown) in
       (match r with
       | Exp e -> Exp (Expr_Array(e,sym_expr i'))
       | v -> v)
-  | x -> raise (EvalError (loc, "Unsupported access chain expression: " ^ pp_expr x)))
-
-and type_access (loc: l) (x: expr): ty option =
-  let env = Tcheck.env0 in
-  (match x with
-  | Expr_Var(id) -> Tcheck.GlobalEnv.getGlobalVar env id
-  | Expr_Field(e,f) ->
-      (match type_access loc e with
-      | None -> None
-      | Some t ->
-            (match Tcheck.typeFields env loc t with
-            | FT_Record rfs ->
-                Some (Tcheck.get_recordfield loc rfs f)
-            | FT_Register rfs ->
-                let (ss, ty') = Tcheck.get_regfield loc rfs f in
-                Some ty'
-            ))
-  | Expr_Array(a,i) ->
-      (match type_access loc a with
-      | None -> None
-      | Some t ->
-          (match Tcheck.derefType env t with
-          | Type_Array(ixty, elty) -> Some elty
-          | _ -> None))
-  | _ -> None)
-
-and dis_load loc x: sym rws =
-  let@ v = dis_access loc x (fun v -> v) in
-  (match v with
-  | Val v -> DisEnv.pure @@ Val v
-  | Exp e -> capture_expr loc (force_type_access loc e) e)
-
-and force_type_access (loc: l) (x: expr): ty =
-  match type_access loc x with
-  | Some t -> t
-  | None -> raise (EvalError (loc, "types"))
+  | x -> raise (EvalError (loc, "Unsupported load chain expression: " ^ pp_expr x)))
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
 and dis_expr loc x =
@@ -517,7 +506,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     | Expr_Binop(a, op, b) ->
             raise (EvalError (loc, "binary operation should have been removed in expression "
                    ^ Utils.to_string (PP.pp_expr x)))
-    | Expr_Field(e, f) -> dis_load loc x
+    | Expr_Field(_, _) -> dis_load loc x
     | Expr_Fields(e, fs) ->
             let append = function
               | [] -> raise (EvalError (loc, "Record access with no nominated fields"))
@@ -541,19 +530,11 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             (match p' with
             | Val v -> DisEnv.pure (Val v)
             | Exp e -> capture_expr loc type_bool e)
-    | Expr_Var id -> (* TODO: Unift with dis_load*)
-            let@ idopt = DisEnv.findVar loc id in
-            (match idopt with
-            (* variable not found *)
-            | None -> raise (EvalError (loc, "unknown variable"))
-            | Some id' ->
-                let@ v = DisEnv.getVar loc id' in
-                (match sym_initialised v with
-                | Some s -> DisEnv.pure s
-                | None -> 
-                    match type_access loc x with Some t -> capture_expr loc t (Expr_Var id') | None -> raise (EvalError (loc, "types"))
-
-                    ))
+    | Expr_Var id ->
+            let@ local = DisEnv.gets (fun env -> LocalEnv.getLocalVar loc (LocalEnv.getLocalName id env) env) in
+            (match local with
+            | Some v -> DisEnv.pure v
+            | None -> dis_load loc x)
     | Expr_Parens(e) ->
             dis_expr loc e
     | Expr_TApply(f, tes, es) ->
