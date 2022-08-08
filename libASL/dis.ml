@@ -22,7 +22,7 @@ let debug_level = ref 1
 
 module LocalEnv = struct
     type t = {
-        locals          : sym Bindings.t list;
+        locals          : (ty * sym) Bindings.t list;
         returnSymbols   : expr list;
         numSymbols      : int;
         indent          : int;
@@ -46,13 +46,12 @@ module LocalEnv = struct
         assert (l.indent = r.indent);
 
         let merge_bindings l r =
-            Bindings.fold (fun k v1 bs ->
+            Bindings.fold (fun k (t1,v1) bs ->
                 match Bindings.find_opt k r with
                 | None -> bs
-                | Some v2 ->
-                    let v = if v1 = v2
-                        then v1 else Val (VUninitialized (sym_type v1)) in
-                    Bindings.add k v bs)
+                | Some (t2,v2) ->
+                    let v = if v1 = v2 then v1 else Val (VUninitialized (sym_type v1)) in
+                    Bindings.add k (t1,v) bs)
             l Bindings.empty in
         let locals' = List.map2 merge_bindings l.locals r.locals in
         {
@@ -64,8 +63,8 @@ module LocalEnv = struct
 
     let pp_value_bindings = Utils.pp_list (pp_bindings pp_value)
 
-    let pp_sym_bindings (bss: sym Bindings.t list) =
-        Utils.pp_list (pp_bindings pp_sym) bss
+    let pp_sym_bindings (bss: (ty * sym) Bindings.t list) =
+        Utils.pp_list (pp_bindings (fun (_,e) -> pp_sym e)) bss
 
     let pp_locals (env: t): string =
         Printf.sprintf "locals = %s" (pp_sym_bindings env.locals)
@@ -105,21 +104,21 @@ module LocalEnv = struct
         | [] -> raise (EvalError (Unknown, "No levels exist"))
         | (_::ls) -> {env with locals = ls}
 
-    let rec search (x: ident) (bss : sym Bindings.t list): sym Bindings.t option =
+    let rec search (x: ident) (bss : 'a Bindings.t list): 'a Bindings.t option =
         match bss with
         | (bs :: bss') ->
             if Bindings.mem x bs then Some bs else search x bss'
         | [] -> None
 
-    let addLocalVar (loc: l) (k: ident) (v: sym) (env: t): t =
+    let addLocalVar (loc: l) (k: ident) (v: sym) (t: ty) (env: t): t =
         if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident k) (pp_sym v);
         match env.locals with
-        | (bs :: rest) -> {env with locals = (Bindings.add k v bs :: rest)}
+        | (bs :: rest) -> {env with locals = (Bindings.add k (t,v) bs :: rest)}
         | []        -> raise (EvalError (loc, "LocalEnv::addLocalVar bindings empty"))
 
     let addLocalConst = addLocalVar
 
-    let getLocalVar (loc: l) (x: ident) (env: t): sym option =
+    let getLocalVar (loc: l) (x: ident) (env: t): (ty * sym) option =
         (match (search x env.locals) with
         | Some bs -> Some (Bindings.find x bs)
         | None -> None)
@@ -127,11 +126,10 @@ module LocalEnv = struct
     let setLocalVar (loc: l) (x: ident) (v: sym) (env: t): t =
         if !trace_write then Printf.printf "TRACE: write %s = %s\n" (pprint_ident x) (pp_sym v);
         let locals' = Utils.replace_in_list (fun b ->
-            if (Bindings.mem x b)
-                then Some (Bindings.add x v b)
-                else None
-            )
-            env.locals in
+          match Bindings.find_opt x b with
+          | Some (t,_) -> Some (Bindings.add x (t,v) b)
+          | None -> None
+        ) env.locals in
         { env with locals = locals' }
 
     let trySetLocalVar (loc: l) (x: ident) (v: sym) (env: t): t =
@@ -161,13 +159,13 @@ module DisEnv = struct
     let getVar (loc: l) (x: ident): sym rws =
         let* v = gets (LocalEnv.getLocalVar loc x) in
         match (v) with
-            | Some v -> pure (v)
+            | Some (_,v) -> pure (v)
             | None -> reads (fun env -> Val (Env.getVar loc env x))
 
     let getVarOpt (loc: l) (x: ident): sym option rws =
         let* v = gets (LocalEnv.getLocalVar loc x) in
         match (v) with
-            | Some v -> pure (Some v)
+            | Some (_,v) -> pure (Some v)
             | None -> reads (catch (fun env -> Val (Env.getVar loc env x)))
 
     let getLocalName (x: ident): ident rws =
@@ -270,14 +268,14 @@ let declare_var (loc: l) (t: ty) (i: ident): unit rws =
   let@ i' = DisEnv.getLocalName i in
   check_var_shadowing loc i >>
   DisEnv.modify
-    (LocalEnv.addLocalVar loc i (Val (VUninitialized t))) >>
+    (LocalEnv.addLocalVar loc i (Val (VUninitialized t)) t) >>
   DisEnv.write [Stmt_VarDeclsNoInit(t, [i'], loc)]
 
 let declare_assign_var (loc: l) (t: ty) (i: ident) (x: sym): unit rws =
   let@ i' = DisEnv.getLocalName i in
   check_var_shadowing loc i >>
   DisEnv.modify
-    (LocalEnv.addLocalVar loc i x) >>
+    (LocalEnv.addLocalVar loc i x t) >>
   DisEnv.write [Stmt_VarDecl(t, i', sym_expr x, loc)]
 
 let declare_fresh_named_var (loc: l) (name: string)  (t: ty): ident rws =
@@ -292,11 +290,11 @@ let assign_var (loc: l) (i: ident) (x: sym): unit rws =
   DisEnv.modify (LocalEnv.trySetLocalVar loc i x) >>
   DisEnv.write [Stmt_Assign(LExpr_Var(i'), sym_expr x, loc)]
 
-let declare_const (loc: l) (ty: ty) (i: ident) (x: sym): unit rws =
+let declare_const (loc: l) (t: ty) (i: ident) (x: sym): unit rws =
   let@ i' = DisEnv.getLocalName i in
   check_var_shadowing loc i >>
-  DisEnv.modify (LocalEnv.addLocalConst loc i x) >>
-  DisEnv.write [Stmt_ConstDecl(ty, i', sym_expr x, loc)]
+  DisEnv.modify (LocalEnv.addLocalConst loc i x t) >>
+  DisEnv.write [Stmt_ConstDecl(t, i', sym_expr x, loc)]
 
 let declare_fresh_const (loc: l) (t: ty) (name: string) (x: expr): ident rws =
   let@ i = DisEnv.nextVarName name in
@@ -468,9 +466,9 @@ and dis_load_chain (loc: l) (x: expr) (access: value -> value): sym rws =
       let@ local = DisEnv.gets (LocalEnv.getLocalVar loc id) in
       (match local with
       (* Base variable is local with a concrete value *)
-      | Some (Val v) -> DisEnv.pure @@ Val (access v)
+      | Some (_,Val v) -> DisEnv.pure @@ Val (access v)
       (* Base variable is local with a symbolic value, should not expect a structure *)
-      | Some (Exp e) -> raise (EvalError (loc, "Local variable with dynamic structure, unsupported by target"))
+      | Some (_,Exp e) -> raise (EvalError (loc, "Local variable with dynamic structure, unsupported by target"))
       | None ->
           (* Base variable is global, return the accessed value or the variable if not initialised *)
           let+ v = DisEnv.reads (fun env -> Env.getVar loc env id) in
@@ -537,8 +535,10 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             | Exp e -> capture_expr loc type_bool e)
     | Expr_Var id ->
             let@ local = DisEnv.gets (LocalEnv.getLocalVar loc id) in
+            let@ localid = DisEnv.getLocalName id in
             (match local with
-            | Some v -> DisEnv.pure v
+            | Some (t,Val (VUninitialized _)) -> capture_expr loc t (Expr_Var localid)
+            | Some (_,v) -> DisEnv.pure v
             | None -> dis_load loc x)
     | Expr_Parens(e) ->
             dis_expr loc e
