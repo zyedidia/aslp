@@ -4,48 +4,34 @@ open AST
 open Value
 open Asl_utils
 
+type sym_type =
+  | T_Bool
+  | T_Integer
+  | T_Real
+  | T_String
+  | T_Bits of int
+  | T_Tuple of sym_type list
+
+  | T_Enum of ty * ident list
+  | T_Array of ixtype * sym_type
+  | T_Record of ty * (ident * ty) list
+  | T_Register of string * (slice list * ident) list
+
+let rec pp_sym_type = function
+  | T_Bool -> "T_Bool"
+  | T_Integer -> "T_Integer"
+  | T_Real -> "T_Real"
+  | T_String -> "T_String"
+  | T_Bits i -> "T_Bits(" ^ string_of_int i ^ ")"
+  | T_Tuple ts -> "T_Tuple(" ^ String.concat "," (List.map pp_sym_type ts) ^ ")"
+  | T_Enum (ty, _) -> "T_Enum(" ^ pp_type ty ^ ")"
+  | T_Array (ix, ty) -> "T_Array(" ^ pp_ixtype ix ^ "," ^ pp_sym_type ty ^ ")"
+  | T_Record (ty, _) -> "T_Record(" ^ pp_type ty ^ ")"
+  | T_Register (name, _) -> "T_Register(" ^ name ^ ")"
+
 type sym =
-  | Val of value
-  | Exp of expr
-
-type 'a sym_pattern =
-  | SymPat_LitInt of bitsLit
-  | SymPat_LitHex of bitsLit
-  | SymPat_LitBits of bitsLit
-  | SymPat_LitMask of bitsLit
-  | SymPat_Const of ident
-  | SymPat_Wildcard
-  | SymPat_Tuple of pattern list
-  | SymPat_Set of pattern list
-  | SymPat_Range of 'a * 'a
-  | SymPat_Single of 'a
-
-type 'a sym_expr =
-  | SymExpr_If of 'a * 'a * ('a * 'a) list * 'a
-  | SymExpr_Binop of 'a * binop * 'a
-  | SymExpr_Unop of unop * 'a
-  | SymExpr_Field of 'a * ident
-  | SymExpr_Fields of 'a * ident list
-  | SymExpr_Slices of 'a * ('a * 'a) list
-  | SymExpr_In of 'a * 'a sym_pattern
-  | SymExpr_Var of ident
-  | SymExpr_Parens of 'a
-  | SymExpr_Tuple of 'a list
-  | SymExpr_Unknown of ty
-  | SymExpr_ImpDef of ty * string option
-  | SymExpr_TApply of ident * 'a list * 'a list
-  | SymExpr_Array of 'a * 'a
-  | SymExpr_LitInt of string
-  | SymExpr_LitHex of string
-  | SymExpr_LitReal of string
-  | SymExpr_LitBits of string
-  | SymExpr_LitMask of string
-  | SymExpr_LitString of string
-
-
-type sym' =
-  | Val' of value
-  | Exp' of ty * (sym' sym_expr)
+  | Val of sym_type * value
+  | Exp of sym_type * expr
 
 let is_val (x: AST.expr): bool =
     (match x with
@@ -56,6 +42,15 @@ let is_val (x: AST.expr): bool =
     | Expr_Tuple _ -> true
     | x -> false
     )
+
+let sym_type = function
+  | Val (t, _) -> t
+  | Exp (t, _) -> t
+
+let sym_type_width x =
+  match (sym_type x) with
+  | T_Bits w -> w
+  | t -> invalid_arg ("expected bits type but got: " ^ pp_sym_type t)
 
 let rec val_expr (v: Value.value): AST.expr =
   match v with
@@ -90,13 +85,13 @@ let filter_uninit (v: value option): value option =
 
 let sym_val_or_uninit (x: sym): value =
   match x with
-  | Val v -> v
-  | Exp e -> VUninitialized (Type_OfExpr e)
+  | Val (_, v) -> v
+  | Exp (_, e) -> VUninitialized (Type_OfExpr e)
 
 let sym_expr (x: sym): expr =
   match x with
-    | Val v -> val_expr v
-    | Exp e -> e
+    | Val (_, v) -> val_expr v
+    | Exp (_, e) -> e
 
 let sym_pair_has_exp (pair: sym * sym): bool =
   match pair with
@@ -106,7 +101,7 @@ let sym_pair_has_exp (pair: sym * sym): bool =
 
 let sym_initialised (x: sym): sym option =
   match x with
-  | Val v -> if val_initialised v then Some x else None
+  | Val (_, v) -> if val_initialised v then Some x else None
   | Exp _ -> Some x
 
 (** Deconstructs the given list of symbolics.
@@ -115,27 +110,24 @@ let sym_initialised (x: sym): sym option =
 let rec sym_collect_list (xs: sym list): (expr list, value list) Either.t =
   match xs with
   | [] -> Right []
-  | Val v::xs ->
+  | Val (_, v)::xs ->
     (match sym_collect_list xs with
     | Right rs -> Right (v::rs)
     | Left ls -> Left ((val_expr v)::ls))
-  | Exp e::xs -> Left (e :: List.map sym_expr xs)
+  | Exp (_, e)::xs -> Left (e :: List.map sym_expr xs)
 
 let pp_sym (rs: sym): string =
     match rs with
-    | Val v -> Printf.sprintf "Val(%s)" (pp_value v)
-    | Exp e -> Printf.sprintf "Exp(%s)" (pp_expr e)
+    | Val (_, v) -> Printf.sprintf "Val(%s)" (pp_value v)
+    | Exp (_, e) -> Printf.sprintf "Exp(%s)" (pp_expr e)
 
 let sym_of_tuple (loc: AST.l) (v: sym): sym list  =
   match v with
-  | Val (VTuple vs) -> (List.map (fun v -> Val v) vs)
-  | Exp (Expr_Tuple vs) -> (List.map (fun v -> Exp v) vs)
+  | Val (T_Tuple ts, VTuple vs) -> (List.map2 (fun t v -> Val (t,v)) ts vs)
+  | Exp (T_Tuple ts, Expr_Tuple vs) -> (List.map2 (fun t v -> Exp (t,v)) ts vs)
   | _ -> raise (EvalError (loc, "tuple expected. Got "^ pp_sym v))
 
 (* Types *)
-
-let type_bool = Type_Constructor(Ident "boolean")
-let type_unknown = Type_Constructor(Ident "unknown")
 
 (* Primatives *)
 
@@ -143,49 +135,61 @@ let type_unknown = Type_Constructor(Ident "unknown")
     TODO: This will fail to evaluate if the primitive requires a type argument.
           Need to derive this from the arguments somehow.
   *)
-let prim_binop (f: string) (loc: AST.l) (x: sym) (y: sym) : sym  =
+let prim_binop (f: string) (rty: sym_type) (targs: value list) (loc: AST.l) (x: sym) (y: sym) : sym  =
   (match (x,y) with
-  | (Val x,Val y) ->
-      (match eval_prim f [] (x::[y]) with
-      | Some v -> Val v
+  | (Val (_, x),Val (_, y)) ->
+      (match eval_prim f targs [x;y] with
+      | Some v -> Val (rty, v)
       | None -> raise (EvalError (loc, "Unknown primitive operation: "^ f)))
-  | (x,y) -> Exp (Expr_TApply(FIdent(f,0), [], (sym_expr x)::[sym_expr y])))
+  | (x,y) -> Exp (rty, Expr_TApply(FIdent(f,0), List.map val_expr targs, (sym_expr x)::[sym_expr y])))
 
-let sym_true     = Val (from_bool true)
-let sym_false    = Val (from_bool false)
-let sym_eq_int   = prim_binop "eq_int"
-let sym_eq_bits  = prim_binop "eq_bits"
-let sym_leq      = prim_binop "leq"
-let sym_bool_and = prim_binop "bool_and"
-let sym_inmask   = prim_binop "in_mask"
-let sym_add_int  = prim_binop "add_int"
-let sym_sub_int  = prim_binop "sub_int"
+(** Apply a primitive operation to two arguments with return type and type arguments
+    possibly dependent on the argument expressions.  *)
+let prim_binop_dep (f: string) (make: sym -> sym -> (sym_type * value list)) loc x y =
+  let (rty, targs) = make x y in
+  prim_binop f rty targs loc x y
 
-(* TODO: There is no eval_eq, we need to find the types of x & y *)
-let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
-  (match (x,y) with
-  | (Val x,Val y) -> Val (from_bool (eval_eq loc x y))
-  | (_,_) -> prim_binop "eval_eq" loc x y)
+let sym_bool_and = prim_binop "bool_and" T_Bool []
+
+let sym_true     = Val (T_Bool, from_bool true)
+let sym_false    = Val (T_Bool, from_bool false)
+let sym_eq_int   = prim_binop "eq_int" T_Integer []
+let sym_leq      = prim_binop "leq" T_Integer []
+let sym_add_int  = prim_binop "add_int" T_Integer []
+let sym_sub_int  = prim_binop "sub_int" T_Integer []
+
+
+let sym_eq_bool  = prim_binop "eq_enum" T_Bool []
+let sym_eq_enum  = prim_binop "eq_enum" T_Bool []
+let sym_eq_real  = prim_binop "eq_real" T_Bool []
+let sym_eq_string = prim_binop "eq_str" T_Bool []
+let sym_eq_bits  = prim_binop_dep "eq_bits"
+  (fun x y -> (T_Integer, [VInt (Z.of_int (sym_type_width x))]))
+
+let sym_inmask   = prim_binop_dep "in_mask"
+  (fun x y -> (T_Integer, [VInt (Z.of_int (sym_type_width x))]))
 
 let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
   let int_expr i = Expr_LitInt (string_of_int i) in
+  let ty = T_Bits wd in
   match x with
-  | Val v -> Val (extract_bits' loc v lo wd)
-  | Exp e ->
+  | Val (_, v) -> Val (ty, extract_bits' loc v lo wd)
+  | Exp (_, e) ->
     let slice_expr =
       (Expr_Slices (e, [Slice_LoWd (int_expr lo, int_expr wd)])) in
     (match e with
     | (Expr_TApply (FIdent ("append_bits", 0), [Expr_LitInt t1; Expr_LitInt t2], [x1; x2])) ->
+      let t1 = int_of_string t1 in
       let t2 = int_of_string t2 in
       if (lo >= t2) then
         (* slice is entirely within upper part (i.e. significant bits). *)
-        sym_slice loc (Exp x1) (lo - t2) wd
+        sym_slice loc (Exp (T_Bits t1, x1)) (lo - t2) wd
       else if (lo + wd <= t2) then
         (* entirely within lower part. *)
-        sym_slice loc (Exp x2) lo wd
+        sym_slice loc (Exp (T_Bits t2, x2)) lo wd
       else
-        Exp slice_expr
-    | _ -> Exp slice_expr)
+        Exp (ty, slice_expr)
+    | _ -> Exp (ty, slice_expr))
 
 let rec contains_uninit (v: value): bool =
   match v with
@@ -208,12 +212,12 @@ let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option 
     | _ -> false in
 
   (match (name, tes, es) with
-  | ("add_int",     _,                [Val x1; x2])       when is_zero x1 -> Some x2
-  | ("add_int",     _,                [x1; Val x2])       when is_zero x2 -> Some x1
-  | ("append_bits", [Val t1; _],      [_; x2])            when is_zero t1 -> Some x2
-  | ("append_bits", [_; Val t2],      [x1; _])            when is_zero t2 -> Some x1
-  | ("or_bits",     _,                [Val x1; x2])       when is_zero_bits x1 -> Some x2
-  | ("or_bits",     _,                [x1; Val x2])       when is_zero_bits x2 -> Some x1
+  | ("add_int",     _,                [Val (_, x1); x2])       when is_zero x1 -> Some x2
+  | ("add_int",     _,                [x1; Val (_, x2)])       when is_zero x2 -> Some x1
+  | ("append_bits", [Val (_, t1); _], [_; x2])                 when is_zero t1 -> Some x2
+  | ("append_bits", [_; Val (_, t2)], [x1; _])                 when is_zero t2 -> Some x1
+  | ("or_bits",     _,                [Val (_, x1); x2])       when is_zero_bits x1 -> Some x2
+  | ("or_bits",     _,                [x1; Val (_, x2)])       when is_zero_bits x2 -> Some x1
   | _ -> None)
 
 let rec val_type (v: value): ty =
@@ -235,8 +239,8 @@ let rec val_type (v: value): ty =
 
 let sym_type =
   function
-  | Val v -> val_type v
-  | Exp e -> Type_OfExpr e (* FIXME: add type annotation to sym Exp constructor. *)
+  | Val (t, v) -> t
+  | Exp (t, e) -> t
 
 
 let stmt_loc (s: stmt): l =
