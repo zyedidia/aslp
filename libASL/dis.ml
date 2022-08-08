@@ -492,7 +492,10 @@ and dis_load_chain (loc: l) (x: expr) (access: value -> value): sym rws =
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
 and dis_expr loc x =
-    DisEnv.scope "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x)
+  let+ r = DisEnv.scope "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x) in
+  match r with
+  | Val (VUninitialized _) -> raise (EvalError (loc, "dis_expr returning VUninitialized, invalidating assumption"))
+  | _ -> r
 
 and dis_expr' (loc: l) (x: AST.expr): sym rws =
     (match x with
