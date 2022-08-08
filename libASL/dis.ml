@@ -470,7 +470,7 @@ and dis_load_chain (loc: l) (x: expr) (access: value -> value): sym rws =
       (* Base variable is local with a concrete value *)
       | Some (Val v) -> DisEnv.pure @@ Val (access v)
       (* Base variable is local with a symbolic value, should not expect a structure *)
-      | Some (Exp e) -> DisEnv.pure @@ Exp e (* TODO: Assert access x = x *)
+      | Some (Exp e) -> raise (EvalError (loc, "Local variable with dynamic structure, unsupported by target"))
       | None ->
           (* Base variable is global, return the accessed value or the variable if not initialised *)
           let+ v = DisEnv.reads (fun env -> Env.getVar loc env id) in
@@ -478,14 +478,14 @@ and dis_load_chain (loc: l) (x: expr) (access: value -> value): sym rws =
           | VUninitialized _ -> Exp (Expr_Var id)
           | v' -> Val v')
   | Expr_Field(e,f) ->
-      let+ r = dis_load_chain loc e (fun v -> get_field loc (access v) f) in
+      let+ r = dis_load_chain loc e (function VUninitialized t -> VUninitialized t | v -> access (get_field loc v f)) in
       (match r with
       | Exp e -> Exp (Expr_Field(e,f))
       | v -> v)
   | Expr_Array(a,i) ->
       let@ i' = dis_expr loc i in
       let+ r = dis_load_chain loc a (fun v -> match i' with
-        | Val i -> get_array loc (access v) i
+        | Val i -> access (get_array loc v i)
         | _ -> VUninitialized type_unknown) in
       (match r with
       | Exp e -> Exp (Expr_Array(e,sym_expr i'))
