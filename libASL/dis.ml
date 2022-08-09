@@ -77,7 +77,7 @@ module LocalEnv = struct
                 | None -> bs
                 | Some v2 ->
                     let v = if v1 = v2
-                        then v1 else Val (sym_type v1, VUninitialized (assert false)) in
+                        then v1 else Val (VUninitialized (sym_type v1)) in
                     Bindings.add k v bs)
             l Bindings.empty in
         let locals' = List.map2 merge_bindings l.locals r.locals in
@@ -403,13 +403,6 @@ let rec sym_for_all2 p l1 l2 =
 let rec sym_exists p = function
   | [] -> DisEnv.pure sym_false
   | a::l -> sym_if Unknown (p a) (DisEnv.pure sym_true) (sym_exists p l)
-
-(* TODO: There is no eval_eq, we need to find the types of x & y *)
-let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
-  match (sym_type x, sym_type y) with
-  (match (x,y) with
-  | (Val x,Val y) -> Val (from_bool (eval_eq loc x y))
-  | (_,_) -> prim_binop "eval_eq" loc x y)
 
 (** Disassembly Functions *)
 

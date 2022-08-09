@@ -513,7 +513,6 @@ let pp_type  (x: ty):    string = Utils.to_string (PP.pp_ty    x)
 let pp_expr  (x: expr):  string = Utils.to_string (PP.pp_expr  x)
 let pp_lexpr (x: lexpr): string = Utils.to_string (PP.pp_lexpr x)
 let pp_stmt  (x: stmt):  string = Utils.to_string (PP.pp_stmt  x)
-let pp_ixtype (x: ixtype):  string = Utils.to_string (PP.pp_ixtype x)
 
 
 (****************************************************************)
