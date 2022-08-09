@@ -704,7 +704,7 @@ expr :: 'Expr_' ::=
 
 % dexpr in hand parser
 conditional_expression :: 'Expr_' ::= {{ quotient-with expr }}
-    | if cexpr1 then expr1 e_elsif1 .. e_elsifn else expr2   :: :: If
+    | if cexpr1 then expr1 e_elsif1 .. e_elsifn else expr2   :: S :: TIf {{ ocaml Expr_If(Type_Constructor(Ident("unknown")), [[cexpr1]], [[expr1]], [[e_elsif1 .. e_elsifn]], [[expr2]]) }}
     | cexpr                                                  :: :: CExpr  {{ quotient-remove }} {{ ocaml [[cexpr]] }}
 
 e_elsif :: 'E_Elsif_' ::= {{ ocaml expr * expr }}
@@ -776,6 +776,7 @@ aexpr :: 'Expr_' ::= {{ quotient-with expr }}
 
 expr_spice :: 'Expr_' ::= {{ quotient-with expr }}
     | qualident {{ expr1' , .. , exprm' }} ( expr1 , .. , exprn ) ::   :: TApply  {{ com spice for desugaring function call with explicit type parameters }}
+    | if {{ ty }} cexpr1 then expr1 e_elsif1 .. e_elsifn else expr2 :: :: If {{ com spice for desugaring expression ifs }}
     | __array expr1 [ expr2 ]                    ::   :: Array     {{ com spice for desugaring array accesses }}
 
 opt_stringLit :: 'String_' ::=
@@ -798,7 +799,7 @@ slice :: 'Slice_' ::=
 % almost identical to conditional_expression except that it omits : binop
 sexpr :: 'Expr_' ::= {{ quotient-with expr }}
     | scexpr                                                 :: :: CExpr2  {{ quotient-remove }} {{ ocaml [[scexpr]] }}
-    | if cexpr1 then expr1 e_elsif1 .. e_elsifn else scexpr2 :: :: If2  {{ quotient-remove }} {{ ocaml Expr_If([[cexpr1]], [[expr1]], [[e_elsif1 .. e_elsifn]], [[scexpr2]]) }}
+    | if cexpr1 then expr1 e_elsif1 .. e_elsifn else scexpr2 :: :: If2  {{ quotient-remove }} {{ ocaml Expr_If(Type_Constructor(Ident("unknown")), [[cexpr1]], [[expr1]], [[e_elsif1 .. e_elsifn]], [[scexpr2]]) }}
 
 scexpr :: 'Expr_' ::= {{ quotient-with expr }}
     | bexpr sfactor1 .. sfactorn :: :: Binop2  {{ quotient-remove }} {{ ocaml buildExpression [[bexpr]] [[sfactor1..sfactorn]] (Range($startpos([[bexpr]]),$endpos([[sfactor1..sfactorn]]))) }}

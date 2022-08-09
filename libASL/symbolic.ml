@@ -3,6 +3,7 @@ module AST = Asl_ast
 open AST
 open Value
 open Asl_utils
+open Primops
 
 type sym =
   | Val of value
@@ -63,7 +64,7 @@ let rec val_expr (v: Value.value): AST.expr =
   | VEnum (id, n) -> Expr_LitInt(string_of_int n)
   | VInt n -> Expr_LitInt(Z.to_string n)
   | VReal n -> Expr_LitReal(Q.to_string n)
-  | VBits {n; v} -> Expr_LitBits(Z.to_string v)
+  | VBits {n; v} -> Expr_LitBits(Z.format ("%0" ^ string_of_int n ^ "b") v)
   | VString s -> Expr_LitString(s)
   | VTuple vs -> Expr_Tuple(List.map val_expr vs)
   | _ -> failwith @@ "Casting unhandled value type to expression: " ^ pp_value v
@@ -160,6 +161,11 @@ let sym_bool_and = prim_binop "bool_and"
 let sym_inmask   = prim_binop "in_mask"
 let sym_add_int  = prim_binop "add_int"
 let sym_sub_int  = prim_binop "sub_int"
+
+let sym_append_bits loc x y =
+  (match (x,y) with
+  | (Val (VBits x),Val (VBits y)) -> Val (VBits (prim_append_bits x y))
+  | (x,y) -> Exp (Expr_TApply(FIdent("append_bits",0), [], (sym_expr x)::[sym_expr y])))
 
 (* TODO: There is no eval_eq, we need to find the types of x & y *)
 let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
