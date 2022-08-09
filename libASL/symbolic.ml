@@ -14,8 +14,8 @@ type sym_type =
 
   | T_Enum of ty * ident list
   | T_Array of ixtype * sym_type
-  | T_Record of ty * (ty * ident) list
-  | T_Register of ty * (slice list * ident) list
+  | T_Record of ty * (ident * ty) list
+  | T_Register of string * (slice list * ident) list
 
 let rec pp_sym_type = function
   | T_Bool -> "T_Bool"
@@ -27,20 +27,7 @@ let rec pp_sym_type = function
   | T_Enum (ty, _) -> "T_Enum(" ^ pp_type ty ^ ")"
   | T_Array (ix, ty) -> "T_Array(" ^ pp_ixtype ix ^ "," ^ pp_sym_type ty ^ ")"
   | T_Record (ty, _) -> "T_Record(" ^ pp_type ty ^ ")"
-  | T_Register (ty, _) -> "T_Register(" ^ pp_type ty ^ ")"
-
-let rec ty_of_sym_type = function
-  | T_Bool -> Tcheck.type_bool
-  | T_Integer -> Tcheck.type_integer
-  | T_Real -> Tcheck.type_real
-  | T_String -> Tcheck.type_string
-  | T_Bits i -> Tcheck.type_bitsK (string_of_int i)
-  | T_Tuple ts -> Type_Tuple (List.map ty_of_sym_type ts)
-  | T_Enum (ty, _) -> ty
-  | T_Array (ix, ty) -> Type_Array(ix, ty_of_sym_type ty)
-  | T_Record (ty, _) -> ty
-  | T_Register (ty, _) -> ty
-
+  | T_Register (name, _) -> "T_Register(" ^ name ^ ")"
 
 type sym =
   | Val of sym_type * value
@@ -61,19 +48,9 @@ let sym_type = function
   | Exp (t, _) -> t
 
 let sym_type_width x =
-  match (x) with
+  match (sym_type x) with
   | T_Bits w -> w
-  | t -> failwith ("expected bits type but got: " ^ pp_sym_type t)
-
-let sym_type_append_bits x y =
-  let n = sym_type_width x
-  and m = sym_type_width y in
-  T_Bits (n+m)
-
-let sym_type_field t i =
-  match (t) with
-  | T_Record (_, fields) -> Tcheck.get_recordfield Unknown fields i
-  | _ -> failwith ("expected record type but got: " ^ pp_sym_type t)
+  | t -> invalid_arg ("expected bits type but got: " ^ pp_sym_type t)
 
 let rec val_expr (v: Value.value): AST.expr =
   match v with
@@ -116,11 +93,6 @@ let sym_expr (x: sym): expr =
     | Val (_, v) -> val_expr v
     | Exp (_, e) -> e
 
-let sym_val (x: sym): value =
-  match x with
-  | Val (_, v) -> v
-  | Exp (_, e) -> failwith ("failed to get value from sym: " ^ pp_expr e)
-
 let sym_pair_has_exp (pair: sym * sym): bool =
   match pair with
   | Exp _, _ -> true
@@ -135,15 +107,14 @@ let sym_initialised (x: sym): sym option =
 (** Deconstructs the given list of symbolics.
     Returns a Right of values if the entire list was concrete values,
     otherwise returns a Left of everything coerced to expressions. *)
-let rec sym_tuple (xs: sym list): sym =
+let rec sym_collect_list (xs: sym list): (expr list, value list) Either.t =
   match xs with
-  | [] -> Val (T_Tuple [], VTuple [])
-  | Val (t,v)::xs ->
-    (match sym_tuple xs with
-    | Val (T_Tuple ts,VTuple vs) -> Val (T_Tuple (t::ts), VTuple (v::vs))
-    | Exp (T_Tuple ts,Expr_Tuple es) -> Exp (T_Tuple (t::ts), Expr_Tuple (val_expr v :: es))
-    | _ -> failwith "expected tuples from sym_tuple call.")
-  | _ -> Exp (T_Tuple (List.map sym_type xs), Expr_Tuple (List.map sym_expr xs))
+  | [] -> Right []
+  | Val (_, v)::xs ->
+    (match sym_collect_list xs with
+    | Right rs -> Right (v::rs)
+    | Left ls -> Left ((val_expr v)::ls))
+  | Exp (_, e)::xs -> Left (e :: List.map sym_expr xs)
 
 let pp_sym (rs: sym): string =
     match rs with
@@ -152,9 +123,9 @@ let pp_sym (rs: sym): string =
 
 let sym_of_tuple (loc: AST.l) (v: sym): sym list  =
   match v with
-  | Val (T_Tuple ts, VTuple vs) -> List.map2 (fun t v -> Val (t,v)) ts vs
-  | Exp (T_Tuple ts, Expr_Tuple vs) -> List.map2 (fun t v -> Exp (t,v)) ts vs
-  | _ -> raise (EvalError (loc, "tuple value or expression expected. Got "^ pp_sym v))
+  | Val (T_Tuple ts, VTuple vs) -> (List.map2 (fun t v -> Val (t,v)) ts vs)
+  | Exp (T_Tuple ts, Expr_Tuple vs) -> (List.map2 (fun t v -> Exp (t,v)) ts vs)
+  | _ -> raise (EvalError (loc, "tuple expected. Got "^ pp_sym v))
 
 (* Types *)
 
@@ -193,18 +164,10 @@ let sym_eq_enum  = prim_binop "eq_enum" T_Bool []
 let sym_eq_real  = prim_binop "eq_real" T_Bool []
 let sym_eq_string = prim_binop "eq_str" T_Bool []
 let sym_eq_bits  = prim_binop_dep "eq_bits"
-  (fun x y -> (T_Integer, [VInt (Z.of_int (sym_type_width (sym_type x)))]))
+  (fun x y -> (T_Integer, [VInt (Z.of_int (sym_type_width x))]))
 
 let sym_inmask   = prim_binop_dep "in_mask"
-  (fun x y -> (T_Integer, [VInt (Z.of_int (sym_type_width (sym_type x)))]))
-
-let sym_append_bits (x: sym) (y: sym) =
-  let t = sym_type_append_bits (sym_type x) (sym_type y) in
-  (match (x,y) with
-  | (Val (_, VBits x),Val (_, VBits y)) -> Val (t, VBits (Primops.prim_append_bits x y))
-  | (Val _, Val _) -> failwith ("expected bits values in sym_append_bits but got: " ^ pp_sym x ^ ", " ^ pp_sym y)
-  | (x,y) -> Exp (t, Expr_TApply(FIdent("append_bits",0), [], (sym_expr x)::[sym_expr y])))
-
+  (fun x y -> (T_Integer, [VInt (Z.of_int (sym_type_width x))]))
 
 let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
   let int_expr i = Expr_LitInt (string_of_int i) in
@@ -265,13 +228,13 @@ let rec val_type (v: value): ty =
   | VInt _ -> type_builtin "integer"
   | VReal _ -> type_builtin "real"
   | VBits {n=n; _} -> type_bits (string_of_int n)
+  | VMask mask -> unsupported ()
   | VString _ -> type_builtin "string"
   | VExc _ -> type_builtin "__Exception"
   | VTuple vs -> Type_Tuple (List.map val_type vs)
-  | VRAM _ -> type_builtin "__RAM"
-  | VMask mask -> unsupported ()
   | VRecord (_) -> unsupported ()
   | VArray (arr, def) -> unsupported ()
+  | VRAM _ -> type_builtin "__RAM"
   | VUninitialized ty -> ty
 
 let sym_type =

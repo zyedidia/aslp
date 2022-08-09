@@ -25,16 +25,8 @@ let debug_level = ref 0
 *)
 type dis_trace = (string * string * l) list
 
-(** Wraps an exception with a disassembly trace for debugging. *)
 exception DisTrace of dis_trace * exn
-
-(** Attempt to disassemble an unsupported construct or with insufficient
-    static information. *)
 exception DisUnsupported of l * string
-
-(** Unexpected internal failure in disassembly. Most likely caused by
-    a broken internal invariant. *)
-exception DisInternalError of l * string
 
 let print_dis_trace (trace: dis_trace) =
     String.concat "\n" @@ List.map (fun (f, e, l) ->
@@ -49,51 +41,6 @@ let () = Printexc.register_printer
     | DisUnsupported (loc, s) ->
         Some ("DisUnsupported: " ^ pp_loc loc ^ ": " ^ s)
     | _ -> None)
-
-let type_of_global (loc: l) (id: ident): ty =
-    let env = Tcheck.env0 in
-    (match Tcheck.GlobalEnv.getGlobalVar env id with
-    | Some t -> t
-    | None -> raise (EvalError (loc, "Unknown type for variable: " ^ pprint_ident id)))
-
-let rec sym_type_of_ty (loc: l) (t: ty): sym_type =
-    let env = Tcheck.env0 in
-    match t with
-    | Type_Constructor (Ident "boolean") -> T_Bool
-    | Type_Constructor (Ident "integer") -> T_Integer
-    | Type_Constructor (Ident "real") -> T_Real
-    | Type_Constructor (Ident "string") -> T_String
-    | Type_Constructor (Ident "__Exception")
-    | Type_Constructor (Ident "__RAM") ->
-        raise (DisUnsupported (loc, "cannot construct sym_type of type: " ^ pp_type t))
-    | Type_Constructor name ->
-        (* assumes types are fully dereferenced so the only constructors are record/registers. *)
-        (match Tcheck.typeFields env loc t with
-        | Tcheck.FT_Record fields -> T_Record (t, fields)
-        | Tcheck.FT_Register slices -> T_Register (t, slices))
-    | Type_Bits (Expr_LitInt n) -> T_Bits (int_of_string n)
-    | Type_Register (name, slices) -> T_Register (t, slices)
-    | Type_Array (ix, ty) -> T_Array (ix, sym_type_of_ty loc ty)
-    | Type_Tuple ts -> T_Tuple (List.map (sym_type_of_ty loc) ts)
-    | Type_App _
-    | Type_Bits _
-    | Type_OfExpr _ ->
-        raise (DisUnsupported (loc, "cannot construct sym_type of type: " ^ pp_type t))
-
-(** Determine the type of memory access expression (Var, Array, Field) *)
-let rec type_of_load (loc: l) (x: expr): ty =
-    let env = Tcheck.env0 in
-    (match x with
-    | Expr_Var(id) -> type_of_global loc id
-    | Expr_Field(e,f) ->
-        (match Tcheck.typeFields env loc (type_of_load loc e) with
-        | FT_Record rfs -> Tcheck.get_recordfield loc rfs f
-        | FT_Register rfs -> let (_,t) = Tcheck.get_regfield loc rfs f in t)
-    | Expr_Array(a,i) ->
-        (match Tcheck.derefType env (type_of_load loc a) with
-        | Type_Array(ixty, elty) -> elty
-        | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr a)))
-    | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr x)))
 
 
 module LocalEnv = struct
@@ -129,12 +76,8 @@ module LocalEnv = struct
                 match Bindings.find_opt k r with
                 | None -> bs
                 | Some v2 ->
-                    let t1 = sym_type v1
-                    and t2 = sym_type v2 in
-                    assert (t1 = t2);
-                    let v =
-                        if v1 = v2 then v1
-                        else Val (t1, VUninitialized (ty_of_sym_type t1)) in
+                    let v = if v1 = v2
+                        then v1 else Val (sym_type v1, VUninitialized (assert false)) in
                     Bindings.add k v bs)
             l Bindings.empty in
         let locals' = List.map2 merge_bindings l.locals r.locals in
@@ -238,19 +181,17 @@ module DisEnv = struct
         try Some (f x)
         with EvalError _ -> None
 
+    let getVar (loc: l) (x: ident): sym rws =
+        let* v = gets (LocalEnv.getLocalVar loc x) in
+        match (v) with
+            | Some v -> pure (v)
+            | None -> reads (fun env -> Val (Env.getVar loc env x))
+
     let getVarOpt (loc: l) (x: ident): sym option rws =
         let* v = gets (LocalEnv.getLocalVar loc x) in
         match (v) with
             | Some v -> pure (Some v)
-            | None ->
-                let ty = sym_type_of_ty loc (type_of_global loc x) in
-                reads (catch (fun env -> Val (ty, Env.getVar loc env x)))
-
-    let getVar (loc: l) (x: ident): sym rws =
-        let+ opt = getVarOpt loc x in
-        match opt with
-        | Some x -> x
-        | None -> raise (DisInternalError (loc, "failed to get variable: " ^ pprint_ident x))
+            | None -> reads (catch (fun env -> Val (Env.getVar loc env x)))
 
     let getLocalName (x: ident): ident rws =
         gets (LocalEnv.getLocalName x)
@@ -344,13 +285,12 @@ let (>>=) = DisEnv.(>>=)
     print it or use it symbolically *)
 let to_expr = sym_expr
 
-(*
 (** Converts a result_or_simplified to a value.
     Raises an exception if an expression is given, as an expression cannot be casted to a value.
     Requires checking beforehand *)
 let to_value (v: sym): value =
     match v with
-    | Val (_, v') -> v'
+    | Val v' -> v'
     | Exp _ -> raise (EvalError (Unknown, "Unreachable"))
 
 let is_expr (v: sym): bool =
@@ -360,33 +300,29 @@ let is_expr (v: sym): bool =
 
 let contains_expr (xs: sym list): bool =
     List.exists is_expr xs
-*)
 
-let getGlobalConst (c: ident): sym rws =
-  let ty = sym_type_of_ty Unknown (type_of_global Unknown c) in
-  DisEnv.reads (fun env -> Val (ty, Env.getGlobalConst env c))
+let getGlobalConst(c: ident): sym rws =
+  DisEnv.reads (fun env -> Val (Env.getGlobalConst env c))
 
 let check_var_shadowing (loc: l) (i: ident): unit rws =
-  let@ old = DisEnv.gets (LocalEnv.getLocalVar loc i) in
-  (match old with
-  | Some _ -> DisEnv.warn ("shadowing local variable: " ^ pprint_ident i)
-  | None -> DisEnv.unit)
+    let@ old = DisEnv.gets (LocalEnv.getLocalVar loc i) in
+    (match old with
+    | Some _ -> DisEnv.warn ("shadowing local variable: " ^ pprint_ident i)
+    | None -> DisEnv.unit)
 
-let declare_var (loc: l) (t: sym_type) (i: ident): unit rws =
-  let ty = ty_of_sym_type t in
+let declare_var (loc: l) (t: ty) (i: ident): unit rws =
   check_var_shadowing loc i >>
-  DisEnv.modify (LocalEnv.addLocalVar loc i
-    (Val (t, VUninitialized ty))) >>
-  DisEnv.write [Stmt_VarDeclsNoInit(ty, [i], loc)]
+  DisEnv.modify
+    (LocalEnv.addLocalVar loc i (Val (VUninitialized t))) >>
+  DisEnv.write [Stmt_VarDeclsNoInit(t, [i], loc)]
 
-let declare_assign_var (loc: l) (t: sym_type) (i: ident) (x: sym): unit rws =
-  let ty = ty_of_sym_type t in
+let declare_assign_var (loc: l) (t: ty) (i: ident) (x: sym): unit rws =
   check_var_shadowing loc i >>
   DisEnv.modify
     (LocalEnv.addLocalVar loc i x) >>
-  DisEnv.write [Stmt_VarDecl(ty, i, sym_expr x, loc)]
+  DisEnv.write [Stmt_VarDecl(t, i, sym_expr x, loc)]
 
-let declare_fresh_named_var (loc: l) (name: string)  (t: sym_type): ident rws =
+let declare_fresh_named_var (loc: l) (name: string)  (t: ty): ident rws =
   let@ res = DisEnv.nextVarName name in
   let+ () = declare_var loc t res in
   res
@@ -397,46 +333,37 @@ let assign_var (loc: l) (i: ident) (x: sym): unit rws =
   DisEnv.modify (LocalEnv.trySetLocalVar loc i x) >>
   DisEnv.write [Stmt_Assign(LExpr_Var(i), sym_expr x, loc)]
 
-let declare_const (loc: l) (t: sym_type) (i: ident) (x: sym): unit rws =
-  let ty = ty_of_sym_type t in
+let declare_const (loc: l) (ty: ty) (i: ident) (x: sym): unit rws =
   check_var_shadowing loc i >>
   DisEnv.modify (LocalEnv.addLocalConst loc i x) >>
   DisEnv.write [Stmt_ConstDecl(ty, (i), sym_expr x, loc)]
 
-let declare_fresh_const (loc: l) (t: sym_type) (name: string) (x: expr): ident rws =
+let declare_fresh_const (loc: l) (t: ty) (name: string) (x: expr): ident rws =
   let@ i = DisEnv.nextVarName name in
-  let+ () = declare_const loc t i (Exp (t, x)) in
+  let+ () = declare_const loc t i (Exp x) in
   i
 
-let capture_expr loc (t: sym_type) (x: expr): sym rws =
-  let@ v = declare_fresh_const loc t "Exp" x in
+let capture_expr loc (x: expr): sym rws =
+  let@ v = declare_fresh_const loc type_unknown "Exp" x in
   let+ () = DisEnv.modify (LocalEnv.setLocalVar loc v
-    (Val (t, VUninitialized (ty_of_sym_type t)))) in
-  Exp (t, Expr_Var v)
+    (Val (VUninitialized (Type_OfExpr x)))) in
+  Exp (Expr_Var v)
 
 (** Monadic Utilities *)
 
-(** Infer the type from a symbolic computation without evaluating the
-    computation.  *)
-let sym_infer_type (expr: sym rws): sym_type rws =
-    let+ (ty,_,_) = DisEnv.locally
-        (let+ x = expr in sym_type x) in
-    ty
-
 (** Symbolic implementation of an if statement that returns an expression
   TODO:
+    - What are the implications of type_unknown?
     - Can we cache a single return variable without sacrificing the simplicity of this approach?
  *)
 let sym_if (loc: l) (test: sym rws) (tcase: sym rws) (fcase: sym rws): sym rws =
   let@ r = test in
   (match r with
-  | Val (_, VBool (true))  -> tcase
-  | Val (_, VBool (false)) -> fcase
+  | Val (VBool (true))  -> tcase
+  | Val (VBool (false)) -> fcase
   | Val _ -> failwith ("Split on non-boolean value")
-  | Exp (_, e) ->
-      (** Extract type from true case. Assume this will be identical to false case.  *)
-      let@ t = sym_infer_type tcase in
-      let@ tmp = declare_fresh_named_var loc "If" t in
+  | Exp e ->
+      let@ tmp = declare_fresh_named_var loc "If" type_unknown in
       (* Evaluate true branch statements. *)
       let@ (tenv,tstmts) = DisEnv.locally_
           (tcase >>= assign_var loc tmp) in
@@ -447,16 +374,16 @@ let sym_if (loc: l) (test: sym rws) (tcase: sym rws) (fcase: sym rws): sym rws =
           (DisEnv.put env' >> fcase >>= assign_var loc tmp) in
       let@ () = DisEnv.put (LocalEnv.join_merge tenv fenv) in
       let+ () = DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)] in
-      Exp (t, Expr_Var (tmp)))
+      Exp (Expr_Var (tmp)))
 
 (** Symbolic implementation of an if statement with no return *)
 let unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit rws =
   let@ r = test in
   (match r with
-  | Val (_, VBool (true))  -> tcase
-  | Val (_, VBool (false)) -> fcase
+  | Val (VBool (true))  -> tcase
+  | Val (VBool (false)) -> fcase
   | Val _ -> failwith ("Split on non-boolean value")
-  | Exp (_, e) ->
+  | Exp e ->
       let@ (tenv,tstmts) = DisEnv.locally_ tcase in
 
       let@ env' = DisEnv.gets (fun env -> LocalEnv.sequence_merge env tenv) in
@@ -477,37 +404,28 @@ let rec sym_exists p = function
   | [] -> DisEnv.pure sym_false
   | a::l -> sym_if Unknown (p a) (DisEnv.pure sym_true) (sym_exists p l)
 
+(* TODO: There is no eval_eq, we need to find the types of x & y *)
+let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
+  match (sym_type x, sym_type y) with
+  (match (x,y) with
+  | (Val x,Val y) -> Val (from_bool (eval_eq loc x y))
+  | (_,_) -> prim_binop "eval_eq" loc x y)
+
 (** Disassembly Functions *)
 
-(* TODO: There is no eval_eq, we need to find the types of x & y *)
-let rec sym_eq (l: AST.l) (x: sym) (y: sym): sym rws =
-  match (sym_type x, sym_type y) with
-  | T_Bool, T_Bool       -> DisEnv.pure @@ sym_eq_bool l x y
-  | T_Enum _, T_Enum _   -> DisEnv.pure @@ sym_eq_enum l x y
-  | T_Integer, T_Integer -> DisEnv.pure @@ sym_eq_int l x y
-  | T_Real, T_Real       -> DisEnv.pure @@ sym_eq_real l x y
-  | T_Bits _, T_Bits _   -> DisEnv.pure @@ sym_eq_bits l x y
-  | T_String, T_String   -> DisEnv.pure @@ sym_eq_string l x y
-  | T_Tuple _, T_Tuple _ ->
-    let xs = sym_of_tuple l x in
-    let ys = sym_of_tuple l y in
-    sym_for_all2 (fun x y -> sym_eq l x y) xs ys
-  | t1, t2 -> raise (EvalError (l, "matchable types expected. Got "
-                                  ^ pp_sym_type t1 ^", "^ pp_sym_type t2))
-
 (** Disassemble type *)
-let rec dis_type (loc: l) (t: ty): sym_type rws =
+let rec dis_type (loc: l) (t: ty): ty rws =
     match t with
     | Type_Bits ex ->
         let+ ex' = dis_expr loc ex in
-        sym_type_of_ty loc (Type_Bits (sym_expr ex'))
+        (Type_Bits (sym_expr ex'))
     | Type_OfExpr ex ->
         let+ ex' = dis_expr loc ex in
-        sym_type_of_ty loc (Type_OfExpr (sym_expr ex'))
+        (Type_OfExpr (sym_expr ex'))
     | Type_Tuple tys ->
         let+ exprs = DisEnv.traverse (dis_type loc) tys in
-        T_Tuple exprs
-    | t' -> DisEnv.pure (sym_type_of_ty loc t')
+        (Type_Tuple exprs)
+    | t' -> DisEnv.pure t'
 
 (** Disassemble list of expressions *)
 and dis_exprs (loc: l) (xs: AST.expr list): sym list rws =
@@ -516,11 +434,11 @@ and dis_exprs (loc: l) (xs: AST.expr list): sym list rws =
 (** Disassemble a pattern match, mirrors eval_pattern *)
 and dis_pattern (loc: l) (v: sym) (x: AST.pattern): sym rws =
     (match x with
-    | Pat_LitInt(l)  -> DisEnv.pure (sym_eq_int  loc v (Val (T_Bool, from_intLit l)))
-    | Pat_LitHex(l)  -> DisEnv.pure (sym_eq_int  loc v (Val (T_Bool, from_hexLit l)))
-    | Pat_LitBits(l) -> DisEnv.pure (sym_eq_bits loc v (Val (T_Bool, from_bitsLit l)))
-    | Pat_LitMask(l) -> DisEnv.pure (sym_inmask  loc v (Val (T_Bool, from_maskLit l)))
-    | Pat_Const(c)   -> let@ c' = getGlobalConst c in sym_eq loc v c'
+    | Pat_LitInt(l)  -> DisEnv.pure (sym_eq_int  loc v (Val (from_intLit l)))
+    | Pat_LitHex(l)  -> DisEnv.pure (sym_eq_int  loc v (Val (from_hexLit l)))
+    | Pat_LitBits(l) -> DisEnv.pure (sym_eq_bits loc v (Val (from_bitsLit l)))
+    | Pat_LitMask(l) -> DisEnv.pure (sym_inmask  loc v (Val (from_maskLit l)))
+    | Pat_Const(c)   -> let+ c' = getGlobalConst c in sym_eq loc v c'
     | Pat_Wildcard   -> DisEnv.pure sym_true
     | Pat_Tuple(ps) ->
             let vs = sym_of_tuple loc v in
@@ -529,7 +447,7 @@ and dis_pattern (loc: l) (v: sym) (x: AST.pattern): sym rws =
     | Pat_Set(ps) ->
             sym_exists (dis_pattern loc v) ps
     | Pat_Single(e) ->
-            let@ v' = dis_expr loc e in
+            let+ v' = dis_expr loc e in
             sym_eq loc v v'
     | Pat_Range(lo, hi) ->
             let+ lo' = dis_expr loc lo
@@ -542,11 +460,11 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
     (match x with
     | Slice_Single(i) ->
             let+ i' = dis_expr loc i in
-            (i', Val (T_Integer, VInt Z.one))
+            (i', Val (VInt Z.one))
     | Slice_HiLo(hi, lo) ->
             let+ hi' = dis_expr loc hi
             and+ lo' = dis_expr loc lo in
-            let wd' = sym_add_int loc (sym_sub_int loc hi' lo') (Val (T_Integer, VInt Z.one)) in
+            let wd' = sym_add_int loc (sym_sub_int loc hi' lo') (Val (VInt Z.one)) in
             (lo', wd')
     | Slice_LoWd(lo, wd) ->
             let+ lo' = dis_expr loc lo
@@ -575,47 +493,34 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
                    ^ Utils.to_string (PP.pp_expr x)))
     | Expr_Field(e, f) ->
             let@ e' = dis_expr loc e in
-            let t = sym_type_of_ty loc (sym_type_field (sym_type e') f) in
             (match e' with
-            | Val (_, v) -> DisEnv.pure @@ Val (t, get_field loc v f)
-            | Exp (_, e) -> capture_expr loc t (Expr_Field(e,f)))
+            | Val v -> DisEnv.pure @@ Val (get_field loc v f)
+            | Exp e -> capture_expr loc (Expr_Field(e,f)))
     | Expr_Fields(e, fs) ->
             let@ e' = dis_expr loc e in
-            let t_of f = sym_type_of_ty loc (sym_type_field (sym_type e') f) in
-            let ts = List.map t_of fs in
-            assert false
+            (match e' with
+            | Val v -> DisEnv.pure @@
+                Val (eval_concat loc (List.map (get_field loc v) fs))
+            | Exp e -> capture_expr loc (Expr_Fields(e, fs)))
     | Expr_Slices(e, ss) ->
             let@ e' = dis_expr loc e
             and@ ss' = DisEnv.traverse (dis_slice loc) ss in
-
-            let pair_to_ints (x,y) = (match (x,y) with
-            | (Val (_, VInt x'), Val (_, VInt y')) -> (x', y')
-            | _ -> raise (DisUnsupported (loc, "non-constant expression in slice: " ^ pp_sym x ^ ", ")))
-            in
-
-            let slices = List.map pair_to_ints ss' in
-            let widths = List.map (fun (l,w) -> Z.to_int w) slices in
-            let t = T_Bits (List.fold_left (+) 0 widths) in
-
-            (match (e') with
-            | Val (_, v) ->
-                let vs = List.map (fun (l,w) ->
-                    extract_bits loc v (VInt l) (VInt w)) slices
-                in
-                DisEnv.pure @@ Val (t, eval_concat loc vs)
+            (match (e',List.exists sym_pair_has_exp ss') with
+            | (Val v, false) ->
+                let vs = List.map (fun (l,w) -> extract_bits loc v (sym_val_or_uninit l) (sym_val_or_uninit w)) ss' in
+                DisEnv.pure @@ Val (eval_concat loc vs)
             | _ ->
                 let vs = List.map (fun (l,w) ->
                     Slice_LoWd(sym_expr l, sym_expr w)) ss' in
-                DisEnv.pure @@ Exp (t, Expr_Slices(sym_expr e', vs)))
+                DisEnv.pure @@ Exp (Expr_Slices(sym_expr e', vs)))
     | Expr_In(e, p) ->
             let@ e' = dis_expr loc e in
             let@ p' = dis_pattern loc e' p in
             (match p' with
-            | Val (t, v) -> DisEnv.pure (Val (t,v))
-            | Exp (t, e) -> capture_expr loc t e)
+            | Val v -> DisEnv.pure (Val v)
+            | Exp e -> capture_expr loc e)
     | Expr_Var id ->
-        assert false
-            (* let@ idopt = DisEnv.findVar loc id in
+            let@ idopt = DisEnv.findVar loc id in
             (match idopt with
             | None ->
                 let@ id' = (DisEnv.getLocalName id) in
@@ -626,7 +531,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
                 let@ v = DisEnv.getVar loc id' in
                 (match sym_initialised v with
                 | Some s -> DisEnv.pure s
-                | None -> capture_expr loc (Expr_Var id'))) *)
+                | None -> capture_expr loc (Expr_Var id')))
                 (* TODO: Partially defined structures? *)
     | Expr_Parens(e) ->
             dis_expr loc e
@@ -671,21 +576,20 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             end
     | Expr_Tuple(es) ->
             let+ es' = DisEnv.traverse (dis_expr loc) es in
-            sym_tuple es'
+            (match sym_collect_list es' with
+            | Right vals -> Val (VTuple vals)
+            | Left exps -> Exp (Expr_Tuple exps))
     | Expr_Unop(op, e) ->
             raise (EvalError (loc, "unary operation should have been removed"))
     | Expr_Unknown(t) -> (* TODO: Is this enough? *)
             let+ t' = dis_type loc t in
-            Exp (t', Expr_Unknown(ty_of_sym_type t'))
+            Exp (Expr_Unknown(t'))
     | Expr_ImpDef(t, Some(s)) ->
-            DisEnv.reads (fun env ->
-                let v = Env.getImpdef loc env s in
-                Val (sym_type_of_ty loc (val_type v), v))
+            DisEnv.reads (fun env -> Val (Env.getImpdef loc env s))
     | Expr_ImpDef(t, None) ->
             raise (EvalError (loc, "unnamed IMPLEMENTATION_DEFINED behavior"))
     | Expr_Array(a, i) ->
-        assert false
-            (* let@ a' = dis_expr loc a in
+            let@ a' = dis_expr loc a in
             let@ i' = dis_expr loc i in
             (match (a',i') with
             | Val av, Val iv ->
@@ -693,13 +597,13 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
                 | VUninitialized _ -> capture_expr loc
                     (Expr_Array(a, val_expr iv))
                 | v -> DisEnv.pure @@ Val v)
-            | _ -> capture_expr loc (Expr_Array(a, to_expr i'))) *)
-    | Expr_LitInt(i) ->    DisEnv.pure (Val (T_Integer, from_intLit i))
-    | Expr_LitHex(i) ->    DisEnv.pure (Val (T_Integer, from_hexLit i))
-    | Expr_LitReal(r) ->   DisEnv.pure (Val (T_Real, from_realLit r))
-    | Expr_LitBits(b) ->   DisEnv.pure (Val (T_Bits (String.length (String.trim b)), from_bitsLit b))
-    | Expr_LitMask(b) ->   raise (DisUnsupported (loc, "mask expression unspported")) (*DisEnv.pure (Val (from_maskLit b))*)
-    | Expr_LitString(s) -> DisEnv.pure (Val (T_String, from_stringLit s))
+            | _ -> capture_expr loc (Expr_Array(a, to_expr i')))
+    | Expr_LitInt(i) ->    DisEnv.pure (Val (from_intLit i))
+    | Expr_LitHex(i) ->    DisEnv.pure (Val (from_hexLit i))
+    | Expr_LitReal(r) ->   DisEnv.pure (Val (from_realLit r))
+    | Expr_LitBits(b) ->   DisEnv.pure (Val (from_bitsLit b))
+    | Expr_LitMask(b) ->   DisEnv.pure (Val (from_maskLit b))
+    | Expr_LitString(s) -> DisEnv.pure (Val (from_stringLit s))
     )
 
 (** Disassemble call to function *)
@@ -731,7 +635,7 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
         (* Assign targs := tes *)
         let@ () = DisEnv.sequence_ @@ List.map2 (fun arg e ->
             let@ arg' = DisEnv.gets (LocalEnv.getLocalName arg) in
-            declare_const loc T_Integer arg' e
+            declare_const loc type_integer arg' e
             ) targs tes in
 
         assert (List.length atys == List.length args);
@@ -756,7 +660,7 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
             let+ name = declare_fresh_named_var loc fname t' in
             Expr_Var name
         | None ->
-            DisEnv.pure (Expr_Unknown (Type_Tuple []))) in
+            DisEnv.pure (Expr_Unknown type_unknown)) in
 
         let@ env = DisEnv.get in
         let@ () = DisEnv.if_ (!debug_level >= 2)
@@ -773,10 +677,10 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
         (* Pop enviroment. *)
         let@ () = DisEnv.modify LocalEnv.popLevel in
         DisEnv.pure result
-    | None -> dis_prim loc f tes es
+    | None -> dis_prim f tes es
     )
 
-and dis_prim (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
+and dis_prim (f: ident) (tes: sym list) (es: sym list): sym rws =
     let name = name_of_FIdent f in
 
     match sym_prim_simplify name tes es with
@@ -786,9 +690,8 @@ and dis_prim (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
         and es_vals = List.map sym_val_or_uninit es in
 
         match filter_uninit (eval_prim name tes_vals es_vals) with
-        | Some v -> DisEnv.pure (Val (sym_type_of_ty loc (val_type v),v))
-        | None ->
-            let f' = Expr_TApply(f, List.map sym_expr tes, List.map sym_expr es) in
+        | Some v -> DisEnv.pure (Val v)
+        | None -> let f' = Expr_TApply(f, List.map sym_expr tes, List.map sym_expr es) in
             if List.mem name Value.prims_pure
                 then DisEnv.pure (Exp f')
                 else capture_expr Unknown f'
