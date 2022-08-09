@@ -558,11 +558,8 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
                    ^ Utils.to_string (PP.pp_expr x)))
     | Expr_Field(_, _) -> dis_load loc x
     | Expr_Fields(e, fs) ->
-            let append = function
-              | [] -> raise (EvalError (loc, "Record access with no nominated fields"))
-              | (x::xs) -> List.fold_left (sym_append_bits loc) x xs in
             let+ vs = DisEnv.traverse (fun f -> dis_load loc (Expr_Field(e,f))) fs in
-            append vs
+            sym_concat loc vs
     | Expr_Slices(e, ss) ->
             let@ e' = dis_expr loc e
             and@ ss' = DisEnv.traverse (dis_slice loc) ss in

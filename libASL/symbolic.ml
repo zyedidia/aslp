@@ -193,6 +193,11 @@ let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
         Exp slice_expr
     | _ -> Exp slice_expr)
 
+let sym_concat (loc: AST.l) (xs: sym list): sym =
+  match xs with
+  | [] -> Val (VBits empty_bits)
+  | x::xs -> List.fold_left (sym_append_bits loc) x xs
+
 let rec contains_uninit (v: value): bool =
   match v with
   | VUninitialized _ -> true
@@ -243,7 +248,6 @@ let sym_type =
   function
   | Val v -> val_type v
   | Exp e -> Type_OfExpr e (* FIXME: add type annotation to sym Exp constructor. *)
-
 
 let stmt_loc (s: stmt): l =
   match s with
