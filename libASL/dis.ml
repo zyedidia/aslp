@@ -581,7 +581,10 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             let@ local = DisEnv.gets (LocalEnv.getLocalVar loc id) in
             let@ localid = DisEnv.getLocalName id in
             (match local with
-            | Some (t,Val (VUninitialized _)) -> capture_expr loc t (Expr_Var localid)
+            | Some (t,Val (VUninitialized _)) ->
+                let@ e' = capture_expr loc t (Expr_Var localid) in
+                let+ () = DisEnv.modify (LocalEnv.setLocalVar loc id e') in
+                e'
             | Some (_,v) -> DisEnv.pure v
             | None -> dis_load loc x)
     | Expr_Parens(e) ->
