@@ -276,3 +276,27 @@ let stmt_loc (s: stmt): l =
   | Stmt_While (_, _, l) -> l
   | Stmt_Repeat (_, _, l) -> l
   | Stmt_Try (_, _, _, _, l) -> l
+
+(** Structure to represent a chain of reference expressions *)
+
+type access_chain =
+  | Field of ident
+  | Index of value
+
+let rec get_access_chain (loc: l) (v: value) (a: access_chain list) : value =
+  (match a with
+  | (Field f)::a -> get_field loc (get_access_chain loc v a) f
+  | (Index i)::a -> get_array loc (get_access_chain loc v a) i
+  | [] -> v)
+
+let rec lexpr_access_chain (x: lexpr) (a: access_chain list): lexpr =
+  (match a with
+  | (Field f)::a -> lexpr_access_chain (LExpr_Field(x,f)) a
+  | (Index i)::a -> lexpr_access_chain (LExpr_Array(x,val_expr i)) a
+  | [] -> x)
+
+let rec expr_access_chain (x: expr) (a: access_chain list): expr =
+  (match a with
+  | (Field f)::a -> expr_access_chain (Expr_Field(x,f)) a
+  | (Index i)::a -> expr_access_chain (Expr_Array(x,val_expr i)) a
+  | [] -> x)
