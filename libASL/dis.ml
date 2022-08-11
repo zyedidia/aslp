@@ -28,6 +28,9 @@ type dis_trace = (string * string * l) list
 exception DisTrace of dis_trace * exn
 exception DisUnsupported of l * string
 
+let unsupported (loc: l) (msg: string) =
+  raise (DisUnsupported (loc, msg))
+
 let print_dis_trace (trace: dis_trace) =
     String.concat "\n" @@ List.map (fun (f, e, l) ->
         Printf.sprintf "... at %s: %s --> %s" (pp_loc l) f e)
@@ -496,43 +499,41 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
   symbol to refer to their current value.
   *)
 and dis_load loc x =
-  DisEnv.scope loc "dis_load" (pp_expr x) pp_sym (dis_load' loc x)
+  DisEnv.scope loc "dis_load" (pp_expr x) pp_sym (dis_load_chain loc x [])
 
-and dis_load' loc x: sym rws =
-  let@ v = dis_load_chain loc x (fun v -> v) in
-  (match v with
-  | Val v -> DisEnv.pure @@ Val v
-  | Exp e -> capture_expr loc (type_of_load loc e) e)
-
-and dis_load_chain (loc: l) (x: expr) (access: value -> value): sym rws =
+and dis_load_chain (loc: l) (x: expr) (ref: access_chain list): sym rws =
   (match x with
   | Expr_Var(id) ->
       let@ local = DisEnv.gets (LocalEnv.getLocalVar loc id) in
       (match local with
-      (* Base variable is local with a concrete value *)
-      | Some (_,Val v) -> DisEnv.pure @@ Val (access v)
-      (* Base variable is local with a symbolic value, should not expect a structure *)
-      | Some (_,Exp e) -> raise (EvalError (loc, "Local variable with dynamic structure, unsupported by target"))
+      (* Variable is local with a unknown value, capture it in a temporary *)
+      | Some (t,Val (VUninitialized _)) ->
+          let@ localid = DisEnv.getLocalName id in
+          let@ e' = capture_expr loc t (Expr_Var localid) in
+          let+ () = DisEnv.modify (LocalEnv.setLocalVar loc id e') in
+          e'
+      (* Variable is local with a concrete value *)
+      | Some (_,Val v) ->
+          DisEnv.pure @@ Val (get_access_chain loc v ref)
+      (* Variable is local with a symbolic value, should not expect a structure *)
+      | Some (_,Exp e) ->
+          if ref = [] then DisEnv.pure @@ Exp e
+          else unsupported loc "Local variable with dynamic structure"
       | None ->
-          (* Base variable is global, return the accessed value or the variable if not initialised *)
-          let+ v = DisEnv.reads (fun env -> Env.getVar loc env id) in
-          match access v with
-          | VUninitialized _ -> Exp (Expr_Var id)
-          | v' -> Val v')
-  | Expr_Field(e,f) ->
-      let+ r = dis_load_chain loc e (function VUninitialized t -> VUninitialized t | v -> access (get_field loc v f)) in
-      (match r with
-      | Exp e -> Exp (Expr_Field(e,f))
-      | v -> v)
+          (* Variable is global, return the accessed value or the variable if not initialised *)
+          let@ v = DisEnv.reads (fun env -> Env.getVar loc env id) in
+          match get_access_chain loc v ref with
+          | VUninitialized _ ->
+              let e = expr_access_chain (Expr_Var id) ref in
+              capture_expr loc (type_of_load loc e) e
+          | v' -> DisEnv.pure @@ Val v')
+  | Expr_Field(e,f) -> dis_load_chain loc e (Field f::ref)
   | Expr_Array(a,i) ->
-      let@ i' = dis_expr loc i in
-      let+ r = dis_load_chain loc a (fun v -> match i' with
-        | Val i -> access (get_array loc v i)
-        | _ -> VUninitialized type_unknown) in
-      (match r with
-      | Exp e -> Exp (Expr_Array(e,sym_expr i'))
-      | v -> v)
-  | x -> raise (EvalError (loc, "Unsupported load chain expression: " ^ pp_expr x)))
+      let@ i = dis_expr loc i in
+      (match i with
+      | Val i -> dis_load_chain loc a (Index i::ref)
+      | _ -> unsupported loc "Dynamic array index")
+  | x -> unsupported loc @@ "Unknown Exp chain: " ^ pp_expr x)
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
 and dis_expr loc x =
@@ -577,16 +578,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             (match p' with
             | Val v -> DisEnv.pure (Val v)
             | Exp e -> capture_expr loc type_bool e)
-    | Expr_Var id ->
-            let@ local = DisEnv.gets (LocalEnv.getLocalVar loc id) in
-            let@ localid = DisEnv.getLocalName id in
-            (match local with
-            | Some (t,Val (VUninitialized _)) ->
-                let@ e' = capture_expr loc t (Expr_Var localid) in
-                let+ () = DisEnv.modify (LocalEnv.setLocalVar loc id e') in
-                e'
-            | Some (_,v) -> DisEnv.pure v
-            | None -> dis_load loc x)
+    | Expr_Var(_) -> dis_load loc x
     | Expr_Parens(e) ->
             dis_expr loc e
     | Expr_TApply(f, tes, es) ->
