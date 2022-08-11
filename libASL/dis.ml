@@ -800,7 +800,14 @@ and dis_lexpr' (loc: l) (x: AST.lexpr) (r: sym): unit rws =
 and stmt_append (xs: stmt list) (ys: stmt list): stmt list =
     match xs with
     | [] -> ys
-    | [Stmt_FunReturn _] | [Stmt_ProcReturn _] -> xs
+
+    (* these interrupt control flow so we shouldn't append after them. *)
+    | [Stmt_FunReturn _]
+    | [Stmt_ProcReturn _]
+    | [Stmt_Throw _]
+    | [Stmt_Dep_Undefined _]
+    | [Stmt_Undefined _] -> xs
+
     | x::xs -> x :: stmt_append xs ys
 
 (** Dissassemble list of statements. *)
@@ -958,7 +965,10 @@ and dis_stmt' (x: AST.stmt): unit rws =
     | Stmt_DecodeExecute (_, _, _)
     | Stmt_While (_, _, _)
     | Stmt_Repeat (_, _, _)
-    | Stmt_Try (_, _, _, _, _) -> raise (DisUnsupported (stmt_loc x, "dis_stmt: unsupported statement: " ^ pp_stmt x))
+    | Stmt_Try (_, _, _, _, _) ->
+        (* need to defer raising so this does not throw in unreachable cases. *)
+        let@ () = DisEnv.unit in
+        raise (DisUnsupported (stmt_loc x, "dis_stmt: unsupported statement: " ^ pp_stmt x))
     )
 
 let dis_encoding (x: encoding) (op: value): bool rws =
@@ -985,7 +995,7 @@ let dis_encoding (x: encoding) (op: value): bool rws =
                     raise (Throw (loc, Exc_Unpredictable))
             ) unpreds;
             (* dis_encoding: we cannot guarantee that these statements are fully evaluated. *)
-            let@ () = DisEnv.traverse_ dis_stmt b in
+            let@ () = dis_stmts b in
             DisEnv.pure true
         end else begin
             DisEnv.pure false
