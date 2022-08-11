@@ -27,6 +27,7 @@ type dis_trace = (string * string * l) list
 
 exception DisTrace of dis_trace * exn
 exception DisUnsupported of l * string
+exception DisInternalError of l * string
 
 let print_dis_trace (trace: dis_trace) =
     String.concat "\n" @@ List.map (fun (f, e, l) ->
@@ -960,32 +961,88 @@ and dis_stmt' (x: AST.stmt): unit rws =
     | Stmt_Try (_, _, _, _, _) -> raise (DisUnsupported (stmt_loc x, "dis_stmt: unsupported statement: " ^ pp_stmt x))
     )
 
+let dis_encoding (x: encoding) (op: value): bool rws =
+    let Encoding_Block (nm, iset, fields, opcode, guard, unpreds, b, loc) = x in
+    (* todo: consider checking iset *)
+    (* Printf.printf "Checking opcode match %s == %s\n" (Utils.to_string (PP.pp_opcode_value opcode)) (pp_value op); *)
+    let ok = (match opcode with
+    | Opcode_Bits b -> eval_eq     loc op (from_bitsLit b)
+    | Opcode_Mask m -> eval_inmask loc op (from_maskLit m)
+    ) in
+    if ok then begin
+        if !trace_instruction then Printf.printf "TRACE: instruction %s\n" (pprint_ident nm);
+
+        let@ () = DisEnv.traverse_ (function (IField_Field (f, lo, wd)) ->
+            let v = extract_bits' loc op lo wd in
+            if !trace_instruction then Printf.printf "      %s = %s\n" (pprint_ident f) (pp_value v);
+            declare_assign_var Unknown (val_type v) f (Val v)
+        ) fields in
+
+        let@ guard' = dis_expr loc guard in
+        if to_bool loc (sym_value_unsafe guard') then begin
+            List.iter (fun (i, b) ->
+                if eval_eq loc (extract_bits' loc op i 1) (from_bitsLit b) then
+                    raise (Throw (loc, Exc_Unpredictable))
+            ) unpreds;
+            (* dis_encoding: we cannot guarantee that these statements are fully evaluated. *)
+            let@ () = DisEnv.traverse_ dis_stmt b in
+            DisEnv.pure true
+        end else begin
+            DisEnv.pure false
+        end
+    end else begin
+        DisEnv.pure false
+    end
+
+let dis_decode_slice (loc: l) (x: decode_slice) (op: value): value rws =
+    (match x with
+    | DecoderSlice_Slice (lo, wd) ->
+        DisEnv.pure @@ extract_bits' loc op lo wd
+    | DecoderSlice_FieldName f ->
+        (* assumes expression always evaluates to concrete value. *)
+        let+ f' = DisEnv.getVar loc f in sym_value_unsafe f'
+    | DecoderSlice_Concat fs ->
+        (* assumes expression always evaluates to concrete value. *)
+        let+ fs' = DisEnv.traverse (DisEnv.getVar loc) fs in
+        eval_concat loc (List.map sym_value_unsafe fs')
+    )
+
 (* Duplicate of eval_decode_case modified to print rather than eval *)
-let rec dis_decode_case (loc: AST.l) (env: Env.t) (x: decode_case) (op: value): stmt list =
+let rec dis_decode_case (loc: AST.l) (x: decode_case) (op: value): unit rws =
+    DisEnv.scope loc "dis_decode_case" (pp_decode_case x) Utils.pp_unit
+        (dis_decode_case' loc x op)
+and dis_decode_case' (loc: AST.l) (x: decode_case) (op: value): unit rws =
     (match x with
     | DecoderCase_Case (ss, alts, loc) ->
-            let vs = List.map (fun s -> eval_decode_slice loc env s op) ss in
+            let@ vs = DisEnv.traverse (fun s -> dis_decode_slice loc s op) ss in
             let rec dis alts =
                 (match alts with
                 | (alt :: alts') ->
-                    (match dis_decode_alt loc env alt vs op with Some stmts -> stmts | None -> dis alts')
+                    let@ alt' = dis_decode_alt loc alt vs op in
+                    (match alt' with
+                    | true -> DisEnv.unit
+                    | false -> dis alts')
                 | [] ->
-                        raise (EvalError (loc, "unmatched decode pattern"))
+                        raise (DisInternalError (loc, "unmatched decode pattern"))
                 )
             in
             dis alts
     )
 
 (* Duplicate of eval_decode_alt modified to print rather than eval *)
-and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): stmt list option =
+and dis_decode_alt (loc: l) (x: decode_alt) (vs: value list) (op: value): bool rws =
+    DisEnv.scope loc "dis_decode_alt" (pp_decode_alt x) string_of_bool
+        (dis_decode_alt' loc x vs op)
+and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): bool rws =
     if List.for_all2 (eval_decode_pattern loc) ps vs then
         (match b with
         | DecoderBody_UNPRED loc -> raise (Throw (loc, Exc_Unpredictable))
         | DecoderBody_UNALLOC loc -> raise (Throw (loc, Exc_Undefined))
-        | DecoderBody_NOP loc -> raise (Throw (loc, Exc_Undefined))
+        | DecoderBody_NOP loc -> DisEnv.pure true
         | DecoderBody_Encoding (inst, l) ->
-                let (enc, opost, cond, exec) = Env.getInstruction loc env inst in
-                if eval_encoding env enc op then begin
+                let@ (enc, opost, cond, exec) = DisEnv.reads (fun env -> Env.getInstruction loc env inst) in
+                let@ enc_match = dis_encoding enc op in
+                if enc_match then begin
                     (* todo: should evaluate ConditionHolds to decide whether to execute body *)
                     Printf.printf "Dissasm: %s\n" (pprint_ident inst);
                     (* Uncomment this if you want to see output with no evaluation *)
@@ -993,9 +1050,9 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     (* Env.removeGlobals env; *)
 
                     (* (Printf.printf "\n\nENV GLOBALS: %s\n" (pp_bindings pp_value (Env.readGlobals env))); *)
+                    let@ env = DisEnv.read in
                     (Printf.printf "\n\nENV LOCALS: %s\n" (LocalEnv.pp_value_bindings (Env.readLocals env)));
                     (* execute disassembly inside newly created local environment. *)
-                    let lenv = LocalEnv.empty () in
 
                     let opost' = (match opost with
                     | Some post ->
@@ -1003,32 +1060,32 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                         post
                     | None -> []
                     ) in
-                    let ((),lenv',stmts) = dis_stmts (opost' @ exec) env lenv in
+                    let@ (lenv',stmts) = DisEnv.locally_ (dis_stmts (opost' @ exec)) in
 
-                    let stmts' = Transforms.Bits.bitvec_conversion @@ remove_unused @@ stmts in
                     if !debug_level >= 2 then begin
                         Printf.printf "-----------\n";
                         List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts;
                         Printf.printf "-----------\n";
-                        Printf.printf "===========\n";
-                        List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts';
-                        Printf.printf "===========\n";
                     end;
-                    (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) (join_decls (remove_unused (copy_propagation (constant_propagation stmts)))); *)
-                    Some (stmts')
-                    (* Some (remove_unused @@ stmts) *)
+
+                    let@ () = DisEnv.write stmts in
+                    DisEnv.pure true
                 end else begin
-                    None
+                    DisEnv.pure false
                 end
         | DecoderBody_Decoder (fs, c, loc) ->
-                (* let env = Env.empty in  *)
-                List.iter (function (IField_Field (f, lo, wd)) ->
-                    Env.addLocalVar loc env f (extract_bits' loc op lo wd)
-                ) fs;
-                Some (dis_decode_case loc env c op)
+                let@ () = DisEnv.modify (LocalEnv.addLevel) in
+                let@ () = DisEnv.traverse_ (function (IField_Field (f, lo, wd)) ->
+                    let v = extract_bits' loc op lo wd in
+                    declare_assign_var loc (val_type v) f (Val v)
+                ) fs
+                in
+                let@ () = dis_decode_case loc c op in
+                let@ () = DisEnv.modify (LocalEnv.popLevel) in
+                DisEnv.pure true
         )
     else
-      None
+        DisEnv.pure false
 
 and remove_unused xs = (remove_unused' IdentSet.empty xs)
 
@@ -1067,7 +1124,22 @@ and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
         | x -> emit x
     ) xs ([], used)
 
+let dis_decode_entry (env: Env.t) (decode: decode_case) (op: value): stmt list =
+    let DecoderCase_Case (_,_,loc) = decode in
+
+    let lenv = LocalEnv.empty () in
+    let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
+    let stmts' = Transforms.Bits.bitvec_conversion @@ remove_unused @@ stmts in
+    if !debug_level >= 2 then begin
+        Printf.printf "===========\n";
+        List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts';
+        Printf.printf "===========\n";
+    end;
+    stmts'
+
+
 let retrieveDisassembly (env: Env.t) (opcode: string): stmt list =
     let decoder = Eval.Env.getDecoder env (Ident "A64") in
+    let DecoderCase_Case (_,_,loc) = decoder in
     (* List.iter (fun (ident, _) -> Eval.Env.setVar Unknown env ident VUninitialized) (Bindings.bindings (Eval.Env.getGlobals env).bs); *)
-    dis_decode_case AST.Unknown env decoder (Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))))
+    dis_decode_entry env decoder (Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))))

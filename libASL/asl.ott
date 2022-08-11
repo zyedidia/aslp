@@ -345,8 +345,8 @@ instr_field :: 'IField_' ::=
 % because intLit is a terminal not a non-terminal
 offset :: 'Offset_' ::=
     {{ phantom }} {{ ocaml int }}
-    {{ pp-raw x = string "??" }}
-    {{ pp     x = string "??" }}
+    {{ pp-raw x = string (string_of_int x) }}
+    {{ pp     x = string (string_of_int x) }}
     | intLit :: :: Int {{ ocaml int_of_string [[intLit]] }}
 
 opcode_value :: 'Opcode_' ::=

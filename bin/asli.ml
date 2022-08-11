@@ -110,7 +110,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
 
                     (try
                         (* Generate and evaluate partially evaluated instruction *)
-                        let disStmts = Dis.dis_decode_case AST.Unknown disEnv decoder op in
+                        let disStmts = Dis.dis_decode_entry disEnv decoder op in
                         List.iter (eval_stmt disEvalEnv) disStmts;
 
                         if Eval.Env.compare evalEnv disEvalEnv then

@@ -81,7 +81,7 @@ let test_compare env () : unit =
 
                 (try
                     (* Generate and evaluate partially evaluated instruction *)
-                    let disStmts = Dis.dis_decode_case AST.Unknown disEnv decoder op in
+                    let disStmts = Dis.dis_decode_entry disEnv decoder op in
                     List.iter (Eval.eval_stmt disEvalEnv) disStmts;
 
                     compare_env evalEnv disEvalEnv opcode

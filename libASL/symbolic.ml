@@ -89,6 +89,11 @@ let filter_uninit (v: value option): value option =
   | Some (VUninitialized _) -> None
   | _ -> v
 
+let sym_value_unsafe (x: sym): value =
+  match x with
+  | Val v -> v
+  | Exp e -> failwith ("sym_value_unsafe: required value but got " ^ pp_expr e)
+
 let sym_val_or_uninit (x: sym): value =
   match x with
   | Val v -> v
@@ -110,9 +115,8 @@ let sym_initialised (x: sym): sym option =
   | Val v -> if val_initialised v then Some x else None
   | Exp _ -> Some x
 
-(** Deconstructs the given list of symbolics.
-    Returns a Right of values if the entire list was concrete values,
-    otherwise returns a Left of everything coerced to expressions. *)
+(** Constructs a sym of a tuple when given a sym for each element in the tuple.
+    Result is a Val iff all components are Val.  *)
 let rec sym_tuple (syms: sym list): sym =
   match syms with
   | [] -> Val (VTuple [])
