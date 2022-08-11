@@ -247,9 +247,9 @@ module DisEnv = struct
         (* run computation but obtain state and writer to output in debugging. *)
         let* (result,s',w') = locally (catcherror x) in
         let x' = (match result with
-        | Left ((DisTrace _) as e, bt) -> Printexc.raise_with_backtrace e bt
-        | Left (exn, bt) -> Printexc.raise_with_backtrace (DisTrace (trace, exn)) bt
-        | Right x' -> x') in
+        | Error ((DisTrace _) as e, bt) -> Printexc.raise_with_backtrace e bt
+        | Error (exn, bt) -> Printexc.raise_with_backtrace (DisTrace (trace, exn)) bt
+        | Ok x' -> x') in
         (* restore state and writer. *)
         write w' >>
         put s' >>
@@ -630,9 +630,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             end
     | Expr_Tuple(es) ->
             let+ es' = DisEnv.traverse (dis_expr loc) es in
-            (match sym_collect_list es' with
-            | Right vals -> Val (VTuple vals)
-            | Left exps -> Exp (Expr_Tuple exps))
+            sym_tuple es'
     | Expr_Unop(op, e) ->
             raise (EvalError (loc, "unary operation should have been removed"))
     | Expr_Unknown(t) -> (* TODO: Is this enough? *)

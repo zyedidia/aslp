@@ -113,14 +113,15 @@ let sym_initialised (x: sym): sym option =
 (** Deconstructs the given list of symbolics.
     Returns a Right of values if the entire list was concrete values,
     otherwise returns a Left of everything coerced to expressions. *)
-let rec sym_collect_list (xs: sym list): (expr list, value list) Either.t =
-  match xs with
-  | [] -> Right []
-  | Val v::xs ->
-    (match sym_collect_list xs with
-    | Right rs -> Right (v::rs)
-    | Left ls -> Left ((val_expr v)::ls))
-  | Exp e::xs -> Left (e :: List.map sym_expr xs)
+let rec sym_tuple (syms: sym list): sym =
+  match syms with
+  | [] -> Val (VTuple [])
+  | Val v::rest ->
+    (match sym_tuple rest with
+    | Val (VTuple vs) -> Val (VTuple (v::vs))
+    | Exp (Expr_Tuple es) -> Exp (Expr_Tuple (val_expr v :: es))
+    | _ -> failwith "unreachable: sym_tuple should only return tuple in values or expressions.")
+  | Exp e::_ -> Exp (Expr_Tuple (List.map sym_expr syms))
 
 let pp_sym (rs: sym): string =
     match rs with
