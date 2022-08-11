@@ -425,6 +425,16 @@ let rec type_of_load (loc: l) (x: expr): ty =
       | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr a)))
   | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr x)))
 
+let width_of_field (loc: l) (t: ty) (f: ident): int =
+  let env = Tcheck.env0 in
+  let ft = (match Tcheck.typeFields env loc t with
+  | FT_Record rfs -> Tcheck.get_recordfield loc rfs f
+  | FT_Register rfs -> let (_,t) = Tcheck.get_regfield loc rfs f in t)
+  in
+  (match ft with
+  | Type_Bits (Expr_LitInt wd) -> int_of_string  wd
+  | _ -> raise (EvalError (loc, "Can't get bit width of type: " ^ pp_type ft)))
+
 (** Disassembly Functions *)
 
 (** Disassemble type *)
@@ -737,56 +747,92 @@ and dis_lexpr loc x r: unit rws =
         Utils.pp_unit
         (dis_lexpr' loc x r)
 
-and dis_lexpr' (loc: l) (x: AST.lexpr) (r: sym): unit rws =
-    match x with
-    | LExpr_Write(setter, tes, es) ->
-        let@ tvs = DisEnv.traverse (dis_expr loc) tes in
-        let@ vs = DisEnv.traverse (dis_expr loc) es in
-        dis_proccall loc setter tvs (vs @ [r])
-        (* DisEnv.write [Stmt_Assign(LExpr_Write(setter, List.map sym_expr tvs, List.map sym_expr vs), sym_expr r, loc)] *)
+(** Remove potential effects from an lexpr *)
+and resolve_lexpr (loc: l) (x: lexpr): lexpr rws =
+  (match x with
+  | LExpr_Field(l,f) ->
+      let+ l = resolve_lexpr loc l in
+      LExpr_Field(l,f)
+  | LExpr_Array(l,i) ->
+      let@ e = dis_expr loc i in
+      let+ l = resolve_lexpr loc l in
+      (match e with
+      | Val i -> LExpr_Array(l, val_expr i)
+      | _ -> unsupported loc @@ "Dynamic array index in LExpr")
+  | _ -> DisEnv.pure(x))
+
+(* TODO: Missing ReadWrite LExpr, which introduces some complications for Fields case *)
+and dis_lexpr_chain (loc: l) (x: lexpr) (ref: access_chain list) (r: sym): unit rws =
+  (match x with
+  | LExpr_Field(l, f) -> dis_lexpr_chain loc l (Field f::ref) r
+  | LExpr_Array(l, i) ->
+      let@ e = dis_expr loc i in
+      (match e with
+      | Val i -> dis_lexpr_chain loc l (Index i::ref) r
+      | _ -> unsupported loc @@ "Dynamic array index in LExpr")
+  | LExpr_Var(id) ->
+      let@ local = DisEnv.gets (LocalEnv.getLocalVar loc id) in
+      (match local with
+      (* Base variable is local, can update as long as its primitive *)
+      | Some (_) ->
+          if ref = [] then assign_var loc id r
+          else unsupported loc @@ "Local variable as base of LExpr chain"
+      | None ->
+          (* Base variable is global, consider where it is dynamic or statically known *)
+          let@ g = DisEnv.reads (fun env -> Env.getVar loc env id) in
+          match get_access_chain loc g ref with
+          | VUninitialized _ -> DisEnv.write [Stmt_Assign(lexpr_access_chain x ref, sym_expr r, loc)]
+          (* TODO: The following seems to imply we want to be able to modify defined global state *)
+          | v' -> unsupported loc @@ "Write to assumed constant global variable: " ^ pp_lexpr x)
+  | _ -> unsupported loc @@ "Unknown LExpr modify constructor: " ^ pp_lexpr x)
+
+and dis_lexpr' (loc: l) (x: lexpr) (r: sym): unit rws =
+    (match x with
+    | LExpr_Wildcard ->
+        DisEnv.unit
     | LExpr_Var(v) ->
-        let@ idopt = DisEnv.findVar loc v in
-        let v' = (match idopt with
-        | Some v' -> v'
-        | None -> raise (EvalError (loc, "dis_lexpr: attempt to assign to undeclared variable"))) in
-        assign_var loc v' r
-    | LExpr_Tuple ls ->
-        (match r with
-        | Val (VTuple vs) ->
-            DisEnv.sequence_ @@
-                List.map2 (fun l v -> dis_lexpr loc l (Val v)) ls vs
-        | Exp (Expr_Tuple es) ->
-            DisEnv.sequence_ @@
-                List.map2 (fun l e -> dis_lexpr loc l (Exp e)) ls es
-        | _ -> DisEnv.write [Stmt_Assign (x, sym_expr r, loc)])
-    | LExpr_Wildcard -> DisEnv.unit
-    | LExpr_Array (arr, ind) ->
-        (* NOTE: Currently, we do not traverse the array part of an array index assignment.
-           Doing so would require a read-modify-write similar to eval_lexpr_modify. *)
-        let@ ind' = dis_expr loc ind in
-        DisEnv.write [Stmt_Assign(LExpr_Array(arr,sym_expr ind'), sym_expr r, loc)]
-    | LExpr_Fields (LExpr_Var lv, fields) ->
-        let@ lv' = DisEnv.getVar loc lv in
-        (match lv' with
-        | Val (VRecord bs) ->
-            let field_width f =
-                (match val_type (Bindings.find f bs) with
-                | Type_Bits (Expr_LitInt n) -> int_of_string n
-                | _ -> failwith "expected Type_Bits in record field assignment")
-            in let rec dis_fields fs lo: unit rws =
-                (match fs with
-                | [] -> DisEnv.unit
-                | (f::fs') ->
-                    let wd = field_width f in
-                    dis_lexpr loc (LExpr_Field (LExpr_Var lv, f)) (sym_slice loc r lo wd) >>
-                    dis_fields fs' (lo + wd)
-                )
-            in
-            dis_fields (List.rev fields) 0
-        | Val _ -> failwith "expected VRecord in field modification"
-        | _ -> raise (DisUnsupported (loc, "dis_lexpr: unable to determine widths for multi-field assign: " ^ pp_lexpr x)))
-    | _ ->
-        raise (DisUnsupported (loc, "dis_lexpr: " ^ pp_lexpr x))
+        dis_lexpr_chain loc x [] r
+    | LExpr_Field(_,_) ->
+        dis_lexpr_chain loc x [] r
+    | LExpr_Fields(l,fs) ->
+        let@ l = resolve_lexpr loc l in
+        let ty = type_of_load loc (lexpr_to_expr loc l) in
+        let rec set_fields (i: int) (fs: ident list): unit rws =
+            (match fs with
+            | [] -> DisEnv.unit
+            | (f::fs') ->
+                let w = width_of_field loc ty f in
+                let y = sym_slice loc r i w in
+                let@ () = dis_lexpr_chain loc l [Field f] y in
+                set_fields (i + w) fs'
+            )
+        in
+        set_fields 0 fs
+    | LExpr_Slices(l, ss) ->
+        let e = lexpr_to_expr loc l in
+        let rec eval (o: sym) (ss': AST.slice list) (prev: sym): sym rws =
+            (match ss' with
+            | [] -> DisEnv.pure prev
+            | (s :: ss) ->
+                let@ (i, w) = dis_slice loc s in
+                let v       = sym_extract_bits loc r o w in
+                eval (sym_add_int loc o w) ss (sym_insert_bits loc prev i w v)
+            )
+        in
+        let@ old = dis_expr loc e in
+        let@ rhs = eval (Val (VInt Z.zero)) ss old in
+        dis_lexpr_chain loc x [] rhs
+    | LExpr_Tuple(ls) ->
+        let rs = sym_of_tuple loc r in
+        assert (List.length ls = List.length rs);
+        DisEnv.traverse2_ (dis_lexpr loc) ls rs
+    | LExpr_Array(_,_) ->
+        dis_lexpr_chain loc x [] r
+    | LExpr_Write(setter, tes, es) ->
+        let@ tvs = dis_exprs loc tes in
+        let@ vs = dis_exprs loc es in
+        dis_proccall loc setter tvs (vs @ [r])
+    | _ -> unsupported loc @@ "Unknown LExpr constructor: " ^ pp_lexpr x)
 
 (** Concatenates two lists of statements, but ensures nothing is
     added after a return statement.  *)
