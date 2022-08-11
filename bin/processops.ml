@@ -51,8 +51,8 @@ let main () =
   let files = (List.tl @@ Array.to_list Sys.argv) in
   let merged = instrs_concat @@ List.map parse_file files in
 
-  Sys.mkdir "encodings" 0o777;
-  Sys.chdir "encodings";
+  Unix.mkdir "encodings" 0o777;
+  Unix.chdir "encodings";
 
   let pp_pair (x,y) = Printf.sprintf "0x%08x,0x%08x" x y in
   let seq = Bindings.to_seq merged in
