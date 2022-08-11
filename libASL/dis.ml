@@ -599,7 +599,7 @@ and dis_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
                     );
                     (* Env.removeGlobals env; *)
                     let stmts = read (dis_stmts env exec) in
-                    Some (join_decls (remove_unused (copy_propagation (constant_propagation stmts))));
+                    Some (remove_unused (copy_propagation (constant_propagation stmts)))
                 end else begin
                     None
                 end
@@ -661,24 +661,7 @@ and copy_propagation_helper (l: ident) (r: AST.expr) (bs: expr Bindings.t) (acc:
     | _ -> (acc @ [subst_stmt bs stmt], newBs))
 
 and remove_reassigned (l: ident) (bs: expr Bindings.t): expr Bindings.t =
-    List.fold_left (fun bs' (ident, expr) -> if expr = Expr_Var(l) then Bindings.remove ident bs' else bs') bs (Bindings.bindings bs);
-
-(* Don't print no init decls until they are assigned *)
-and join_decls (xs: stmt list): stmt list =
-    match List.fold_left (fun (acc, bs) stmt -> 
-        (match stmt with
-        | Stmt_VarDeclsNoInit(ty, vs, loc) ->
-            (acc, List.fold_left (fun bs v -> Bindings.add v ty bs) bs vs)
-        | Stmt_Assign(LExpr_Var(ident), r, loc) -> 
-            if Bindings.mem ident bs then 
-                (acc @ [Stmt_VarDecl(Bindings.find ident bs, ident, r, loc)], Bindings.remove ident bs)
-            else
-                (acc @ [stmt], bs)
-        | Stmt_If(c, t, els, e, loc) ->
-            (acc @ [Stmt_If(c, join_decls t, List.map (fun x -> match x with AST.S_Elsif_Cond(cond, b) -> AST.S_Elsif_Cond(cond, join_decls b)) els, join_decls e, loc)], bs)
-        | _ -> (acc @ [stmt], bs)
-        )
-    ) ([], Bindings.empty) xs with (acc, bs) -> acc
+    List.fold_left (fun bs' (ident, expr) -> if expr = Expr_Var(l) then Bindings.remove ident bs' else bs') bs (Bindings.bindings bs)
 
 let retrieveDisassembly (env: Env.t) (opcode: string): stmt list =
     let decoder = Eval.Env.getDecoder env (Ident "A64") in
