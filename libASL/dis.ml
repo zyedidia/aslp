@@ -674,6 +674,8 @@ and join_decls (xs: stmt list): stmt list =
                 (acc @ [Stmt_VarDecl(Bindings.find ident bs, ident, r, loc)], Bindings.remove ident bs)
             else
                 (acc @ [stmt], bs)
+        | Stmt_If(c, t, els, e, loc) ->
+            (acc @ [Stmt_If(c, join_decls t, List.map (fun x -> match x with AST.S_Elsif_Cond(cond, b) -> AST.S_Elsif_Cond(cond, join_decls b)) els, join_decls e, loc)], bs)
         | _ -> (acc @ [stmt], bs)
         )
     ) ([], Bindings.empty) xs with (acc, bs) -> acc
