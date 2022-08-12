@@ -520,6 +520,9 @@ let pp_decode_slice (x: decode_slice) = Utils.to_string (PP.pp_decode_slice x)
 let pp_decode_alt (DecoderAlt_Alt(ps, _): decode_alt) = "when (" ^ String.concat ", " (List.map pp_decode_pattern ps) ^ ") => ..."
 let pp_decode_case (DecoderCase_Case(slices,_,_): decode_case) = "case (" ^ String.concat ", " (List.map pp_decode_slice slices) ^ ") of ..."
 
+let pp_instr_field (IField_Field(name,_,_)) = pprint_ident name
+
+
 (****************************************************************)
 (** {2 Misc}                                                    *)
 (****************************************************************)

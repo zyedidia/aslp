@@ -78,7 +78,12 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         | _ -> invalid_arg "invalid argument to :enumerate") in
 
         let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
-        Testing.try_decode_all cpu.env decoder start stop fname
+        Testing.enumerate_opcodes cpu.env decoder start stop fname
+    | [":coverage"; instr] ->
+        let (enc,_,_,_) = Env.getInstruction Unknown cpu.env (Ident instr) in
+        let t = Testing.enumerate_encoding enc Testing.field_vals_flags_only in
+        let l = Testing.list_of_enc_tree t in
+        Printf.printf "%s" (Testing.pp_enc_list l)
     | [":compare"; iset; file] ->
         let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
         let inchan = open_in file in

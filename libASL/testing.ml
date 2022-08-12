@@ -5,20 +5,12 @@ open AST
 open Value
 open Asl_utils
 
-let pp_eval_env (env: Eval.Env.t): string =
-  let globals = (Eval.Env.readGlobals env) in
-  (* let locals = Eval.Env.readLocals env in *)
-  Printf.sprintf
-{|Env {
-  globals = %s;
-  locals = %s;
-}|}
-  ("{ _R = " ^ (Value.pp_value (Asl_utils.Bindings.find (Ident "_R") globals)) ^ "}")
-  "[...]"
-  (* (Asl_utils.pp_bindings Value.pp_value globals)
-  (Dis.LocalEnv.pp_value_bindings locals) *)
+(****************************************************************
+ * Opcode decoding without evaluation.
+ ****************************************************************)
 
-(* Copies of eval_decode_alt and eval_decode_case which do not evaluate their opcodes. *)
+(* Copies of eval_decode_alt and eval_decode_case which do not evaluate their opcodes.
+   These "try" decoding each opcode. *)
 
 (** Try to evaluate an "encoding" block to the given opcode. *)
 let rec try_encoding (env: Env.t) (x: encoding) (op: value): bool =
@@ -96,6 +88,12 @@ and try_decode_alt (loc: AST.l) (env: Env.t) (DecoderAlt_Alt (ps, b)) (vs: value
     else
         None
 
+(****************************************************************
+ * Data type for storing intervals of integers in a compressed format.
+ ****************************************************************)
+
+(** A list of intervals, where the pair (lo,hi) indicates that all
+    integers x such that lo <= x <= hi are in the list. *)
 type pair_list = (int * int) list
 
 let pair_list_cons i: pair_list -> pair_list =
@@ -106,7 +104,20 @@ let pair_list_cons i: pair_list -> pair_list =
 let pp_pair_list =
   Utils.pp_list (fun (x,y) -> string_of_int x ^ "," ^ string_of_int y)
 
-let try_decode_all (env: Env.t) (case: decode_case) start stop fname: unit =
+let rec pair_list_mem (xs: pair_list) (x: int): bool =
+  match xs with
+  | [] -> false
+  | (l,r)::rest ->
+    if l <= x && x <= r
+      then true
+      else pair_list_mem rest x
+
+
+(****************************************************************
+ * Opcode enumeration functions.
+ ****************************************************************)
+
+let enumerate_opcodes (env: Env.t) (case: decode_case) start stop fname: unit =
 
   let debug_interval = Int.shift_left 1 20 in
   let i = ref start in
@@ -162,3 +173,105 @@ let try_decode_all (env: Env.t) (case: decode_case) start stop fname: unit =
     j := succ !j;
     i := succ !i;
   done;
+
+
+
+(****************************************************************
+ * Opcode coverage testing.
+ ****************************************************************)
+
+module IntMap = Map.Make(struct
+  type t = int
+  let compare = compare
+end)
+
+let pp_intmap (f: 'a -> string) (m: 'a IntMap.t): string =
+  let pairs = List.map (fun (k,v) -> Printf.sprintf "%d: %s" k (f v)) (IntMap.bindings m) in
+  "{ " ^ String.concat ", " pairs ^ " }"
+
+let hex_of_int = Printf.sprintf "0x%08x"
+
+
+(** A tree of possible opcodes for a given encoding. *)
+type encoding_tree =
+
+  (* A single opcode. *)
+  | Op of int
+
+  (* A field branching into different subtrees depending on the value this
+     field takes. The map is keyed by this field's values and has values of subtrees. *)
+  | Field of instr_field * encoding_tree IntMap.t
+
+let rec pp_enc_tree =
+  function
+  | Op i -> hex_of_int i
+  | Field (f, t) ->
+    let f' = pp_instr_field f in
+    let t' = pp_intmap pp_enc_tree t in
+    "[\"" ^ f' ^ "\": " ^ t' ^ "]"
+
+type fields = (instr_field * int) list
+
+let rec list_of_enc_tree (t: encoding_tree): (fields * int) list =
+  (* add_field (f, i) prepends the field "f" with value "i" to the given
+     (fields, opcode) pair. *)
+  let add_field (f: instr_field * int) ((fs,op): fields * int) = (f::fs, op) in
+  match t with
+  | Op x -> [[], x]
+  | Field (f, t') ->
+    let x = List.map (fun (k,v) ->
+      let rest = list_of_enc_tree v in
+      List.map (add_field (f, k)) rest
+    ) (IntMap.bindings t') in
+    List.concat x
+
+let pp_enc_list (encs: (fields * int) list): string =
+  String.concat "\n"
+    (List.map
+      (Utils.pp_pair
+        (Utils.pp_list (fun (f,i) -> pp_instr_field f ^ "=" ^ string_of_int i))
+        hex_of_int)
+      encs)
+
+(* Functions for manipulating opcodes as integers. *)
+
+let set_field (IField_Field(_,lo,wd): instr_field) (op: int) (v: int) =
+  (* assert that value is within bounds for given width. *)
+  assert (0 <= v);
+  assert (v < Int.shift_left 1 wd);
+
+  (* mask to zero bits for the field before applying given value. *)
+  let ones_wd = Int.shift_left 1 wd - 1 in
+  let mask = Int.lognot (Int.shift_left ones_wd lo) in
+
+  Int.logor (Int.logand op mask) (Int.shift_left v lo)
+
+let int_of_opcode: opcode_value -> int =
+  function
+  | Opcode_Bits bits ->
+    int_of_string ("0b" ^ drop_chars bits ' ')
+  | Opcode_Mask mask ->
+    let v = String.map (function | 'x' -> '0' | c -> c) mask in
+    int_of_string ("0b" ^ drop_chars v ' ')
+
+
+(* Functions for enumerating encodings with encoding_tree. *)
+
+let field_vals_flags_only (name: string) (wd: int): int list =
+  match name with
+  | _ when Utils.startswith name "R" && name <> "R" -> [1]
+  | _ when Utils.startswith name "imm" -> [1]
+  | _ -> List.init (Int.shift_left 1 wd) (fun x -> x)
+
+let enumerate_encoding (enc: encoding) (field_vals: string -> int -> int list): encoding_tree =
+  let Encoding_Block(name, iset, fields, opcode, guard, unpreds, stmts, loc) = enc in
+  let rec go op fs =
+    (match fs with
+    | [] -> Op op
+    | (IField_Field(name,lo,wd) as f)::rest ->
+      let vals = field_vals (pprint_ident name) wd in
+      let pairs = List.map (fun v -> (v, go (set_field f op v) rest)) vals in
+      Field(f, IntMap.of_seq (List.to_seq pairs))
+  ) in
+  go (int_of_opcode opcode) fields
+
