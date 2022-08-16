@@ -287,18 +287,32 @@ end = struct
             ) (Bindings.bindings scope2.bs);
         ) env1.locals env2.locals
 
+    (* Compares the two environments, returning true iff they are equal. *)
     let compare (env1: t) (env2: t): bool =
-            List.for_all (fun (key, value) ->
-                if not (Bindings.mem key env2.globals.bs) then begin Printf.printf "%s not in second environment\n" (pprint_ident key); false
-                end else if Bindings.find key env2.globals.bs <> value then begin Printf.printf "%s has mismatched value: %s | %s\n" (pprint_ident key) (pp_value value) (pp_value (Bindings.find key env2.globals.bs)); false
-                end else true
-            ) (Bindings.bindings env1.globals.bs)
-            ||
-            List.for_all (fun (key, value) ->
-                if not (Bindings.mem key env1.globals.bs) then begin Printf.printf "%s not in first environment\n" (pprint_ident key); false
-                end else if Bindings.find key env1.globals.bs <> value then begin Printf.printf "%s has mismatched value: %s | %s\n" (pprint_ident key) (pp_value value) (pp_value (Bindings.find key env1.globals.bs)); false
-                end else true
-            ) (Bindings.bindings env2.globals.bs)
+            Bindings.for_all (fun k v1 ->
+                match (Bindings.find_opt k env2.globals.bs) with
+                | Some v2 when v1 = v2 -> true
+                | None ->
+                    Printf.printf "%s not in second environment\n" (pprint_ident k);
+                    false
+                | Some v2 ->
+                    Printf.printf "%s has mismatched value: %s | %s\n"
+                        (pprint_ident k) (pp_value v1) (pp_value v2);
+                    false
+            ) env1.globals.bs
+            &&
+            Bindings.for_all (fun k v2 ->
+                match (Bindings.find_opt k env1.globals.bs) with
+                | Some v1 when v1 = v2 -> true
+                | None ->
+                    Printf.printf "%s not in first environment\n"
+                        (pprint_ident k);
+                    false
+                | Some v1 ->
+                    Printf.printf "%s has mismatched value: %s | %s\n"
+                        (pprint_ident k) (pp_value v2) (pp_value v1);
+                    false
+            ) env2.globals.bs
 
     let addLocalVar (loc: l) (env: t) (x: ident) (v: value): unit =
         if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident x) (pp_value v);
