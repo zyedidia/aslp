@@ -179,10 +179,14 @@ let sym_append_bits loc x y =
   | (x,y) -> Exp (Expr_TApply(FIdent("append_bits",0), [], (sym_expr x)::[sym_expr y])))
 
 let sym_insert_bits loc old i w v =
-  assert false
+  match (old, v, i, w) with
+  | (Val old', Val v', Val i', Val w') -> Val (insert_bits loc old' i' w' v')
+  | _ -> assert false (* difficult because we need to know widths of each expression. *)
 
 let sym_extract_bits loc v i w =
-  assert false
+  match (v, i, w) with
+  | (Val v', Val i', Val w') -> Val (extract_bits loc v' i' w')
+  | _ -> Exp (Expr_Slices (sym_expr v, [Slice_LoWd (sym_expr i, sym_expr w)]))
 
 (* TODO: There is no eval_eq, we need to find the types of x & y *)
 let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
