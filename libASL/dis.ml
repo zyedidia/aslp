@@ -1179,6 +1179,7 @@ and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
 let dis_decode_entry (env: Env.t) (decode: decode_case) (op: value): stmt list =
     let DecoderCase_Case (_,_,loc) = decode in
 
+    let env = Env.freeze env in
     let lenv = LocalEnv.empty () in
     let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
     let stmts' = Transforms.Bits.bitvec_conversion @@ remove_unused @@ stmts in

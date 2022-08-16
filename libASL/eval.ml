@@ -89,6 +89,7 @@ module Env : sig
     val nestTop             : (t -> 'a) -> (t -> 'a)
     val nest                : (t -> 'a) -> (t -> 'a)
     val copy                : t -> t
+    val freeze              : t -> t
 
     val compare             : t -> t -> bool
     val compareLocals       : t -> t -> bool
@@ -148,8 +149,10 @@ module Env : sig
 
     val setLocals           : t -> scope list -> unit
     val getLocals           : t -> scope list
+    val readLocals          : t -> value Bindings.t list
 
     val getGlobals          : t -> scope
+    val readGlobals         : t -> value Bindings.t
     val removeGlobals       : t -> unit
 
 end = struct
@@ -169,7 +172,8 @@ end = struct
         mutable returnSymbols: AST.expr list;
         mutable numSymbols   : int;
         mutable localPrefixes: string list;
-        mutable implicitLevels: ((ident * value) list) list
+        mutable implicitLevels: ((ident * value) list) list;
+        frozen : bool
     }
 
     let empty = {
@@ -189,6 +193,7 @@ end = struct
         numSymbols   = 0;
         localPrefixes= [];
         implicitLevels = [];
+        frozen = false;
     }
 
     let nestTop (k: t -> 'a) (parent: t): 'a =
@@ -209,6 +214,7 @@ end = struct
             numSymbols   = parent.numSymbols;
             localPrefixes= parent.localPrefixes;
             implicitLevels = parent.implicitLevels;
+            frozen       = parent.frozen;
         } in
         k child
 
@@ -230,6 +236,7 @@ end = struct
             numSymbols   = parent.numSymbols;
             localPrefixes= parent.localPrefixes;
             implicitLevels = parent.implicitLevels;
+            frozen       = parent.frozen;
         } in
         k child
 
@@ -251,7 +258,11 @@ end = struct
             numSymbols   = env.numSymbols;
             localPrefixes= env.localPrefixes;
             implicitLevels = env.implicitLevels;
+            frozen       = false; (* copies are unfrozen by default. *)
         }
+
+    let freeze (env: t): t =
+        { env with frozen = true }
 
     let compareLocals (env1: t) (env2: t): bool =
         List.for_all2 (fun scope1 scope2 ->
@@ -295,7 +306,13 @@ end = struct
                     false
             ) env2.globals.bs
 
+    let assertNotFrozen (env: t): unit =
+        if env.frozen then begin
+            failwith "attempt to modify environment in immutable state."
+        end
+
     let addLocalVar (loc: l) (env: t) (x: ident) (v: value): unit =
+        assertNotFrozen env;
         if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident x) (pp_value v);
         (match env.locals with
         | (bs :: _) -> set_scope x v bs
@@ -303,6 +320,7 @@ end = struct
         )
 
     let addLocalConst (loc: l) (env: t) (x: ident) (v: value): unit =
+        assertNotFrozen env;
         (* todo: should constants be held separately from local vars? *)
         (match env.locals with
         | (bs :: _) -> set_scope x v bs
@@ -310,12 +328,14 @@ end = struct
         )
 
     let addGlobalConst (env: t) (x: ident) (v: value): unit =
+        assertNotFrozen env;
         set_scope x v env.constants
 
     let getGlobalConst (env: t) (x: ident): value =
         get_scope x env.constants
 
     let addEnum (env: t) (x: ident) (vs: value list): unit =
+        assertNotFrozen env;
         env.enums    <- Bindings.add x vs env.enums
 
     let getEnum (env: t) (x: ident): (value list) option =
@@ -325,18 +345,21 @@ end = struct
     let isEnumNeq (env: t) (x: ident): bool = IdentSet.mem x env.enumNeqs
 
     let addRecord (env: t) (x: ident) (fs: (AST.ty * ident) list): unit =
+        assertNotFrozen env;
         env.records <- Bindings.add x fs env.records
 
     let getRecord (env: t) (x: ident): ((AST.ty * ident) list) option =
         Bindings.find_opt x env.records
 
     let addTypedef (env: t) (x: ident) (ty: AST.ty): unit =
+        assertNotFrozen env;
         env.typedefs <- Bindings.add x ty env.typedefs
 
     let getTypedef (env: t) (x: ident): AST.ty option =
         Bindings.find_opt x env.typedefs
 
     let addGlobalVar (env: t) (x: ident) (v: value): unit =
+        assertNotFrozen env;
         set_scope x v env.globals
 
     let findScope (env: t) (x: ident): scope option =
@@ -359,6 +382,7 @@ end = struct
         )
 
     let setVar (loc: l) (env: t) (x: ident) (v: value): unit =
+        assertNotFrozen env;
         if !trace_write then Printf.printf "TRACE: write %s = %s\n" (pprint_ident x) (pp_value v);
         (match findScope env x with
         | Some bs -> set_scope x v bs
@@ -398,15 +422,18 @@ end = struct
         Bindings.find x env.instructions
 
     let addInstruction (loc: AST.l) (env: t) (x: ident) (instr: encoding * (stmt list) option * bool * stmt list): unit =
+        assertNotFrozen env;
         env.instructions <- Bindings.add x instr env.instructions
 
     let getDecoder (env: t) (x: ident): decode_case =
         Bindings.find x env.decoders
 
     let addDecoder (env: t) (x: ident) (d: decode_case): unit =
+        assertNotFrozen env;
         env.decoders <- Bindings.add x d env.decoders
 
     let setImpdef (env: t) (x: string) (v: value): unit =
+        assertNotFrozen env;
         env.impdefs <- ImpDefs.add x v env.impdefs
 
     let getImpdef (loc: l) (env: t) (x: string): value =
@@ -422,6 +449,7 @@ end = struct
         | (e :: rs) -> e
 
     let addReturnSymbol (env: t) (e: AST.expr): unit =
+        assertNotFrozen env;
         env.returnSymbols <- e :: env.returnSymbols
 
     let removeReturnSymbol (env: t): unit =
@@ -440,6 +468,7 @@ end = struct
         | (s :: ss) -> s
 
     let addLocalPrefix (env: t) (s: string): unit =
+        assertNotFrozen env;
         env.localPrefixes <- s :: env.localPrefixes
 
     let removeLocalPrefix (env: t): unit =
@@ -449,6 +478,7 @@ end = struct
         )
 
     let addImplicitValue (env: t) (arg: ident) (v: value): unit =
+        assertNotFrozen env;
         match env.implicitLevels with
         | [] -> raise (EvalError (Unknown, "No levels exist"))
         | (level::levels) -> (match level with
@@ -456,6 +486,7 @@ end = struct
             | values -> env.implicitLevels <- (((arg, v)::values)::levels))
 
     let addImplicitLevel (env: t): unit =
+        assertNotFrozen env;
         env.implicitLevels <- ([]::env.implicitLevels)
 
     let getImplicitLevel (env: t): (ident * value) list =
@@ -482,9 +513,11 @@ end = struct
         env.globals.bs
 
     let initializeGlobals (env: t): unit =
+        assertNotFrozen env;
         env.globals.bs <- Bindings.map eval_uninit_to_defaults env.globals.bs
 
     let initializeRegisters (env: t) (xs: bigint list): unit =
+        assertNotFrozen env;
         let d = VBits {n=64; v=Z.zero} in
         let vals = List.mapi (fun i v -> (i, VBits {n=64; v})) xs in
         let arr = List.fold_left

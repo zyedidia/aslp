@@ -336,6 +336,8 @@ let op_test_opcode (env: Env.t) (iset: string) (op: int): Env.t opresult =
   Eval.Env.initializeRegisters initenv vals;
   Env.initializeGlobals initenv;
 
+  let initenv = Env.freeze initenv in
+
   let (let*) = Result.bind in
   let* evalenv = op_eval initenv iset op in
   let* disstmts = op_dis env iset op in
