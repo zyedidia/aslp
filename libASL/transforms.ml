@@ -164,15 +164,12 @@ module Bits = struct
     method! vexpr e =
       (* post-order visit of x[0:+64] expressions. *)
       ChangeDoChildrenPost (e,
-        function
-        | Expr_Slices (expr, [Slice_LoWd(Expr_LitInt "0", Expr_LitInt w)]) when w = width ->
-          let expr' =
-            try Asl_visitor.visit_expr coerce_visitor expr
-            with Non_bits_atomic x ->
-              (* Printf.printf "non-bits-atomic: %s\n" (pp_expr x); *)
-              expr
-          in expr'
-        | e -> e)
+        fun e ->
+          match e with
+          | Expr_Slices (expr, [Slice_LoWd(Expr_LitInt "0", Expr_LitInt w)]) when w = width ->
+            (try Asl_visitor.visit_expr coerce_visitor expr
+            with | Non_bits_atomic _ -> e)
+          | _ -> e)
   end
 
   (** Performs the bitvector expression coercion on the given statement list.  *)
