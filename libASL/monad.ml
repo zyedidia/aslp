@@ -66,10 +66,16 @@ module Make (M : S) = struct
   let traverse (f: 'a -> 'b m) (x: 'a list): 'b list m =
     sequence (List.map f x)
 
+  let traverse2 (f: 'a -> 'b -> 'c m) (x: 'a list) (y: 'b list): 'c list m =
+    sequence (List.map2 f x y)
+
   (** Uses the given function to create a list of computations which are
       then run sequentually. Discards their results. *)
   let traverse_ (f: 'a -> 'b m) (x: 'a list): unit m =
     let+ _ = sequence (List.map f x) in ()
+
+  let traverse2_ (f: 'a -> 'b -> 'c m) (x: 'a list) (y: 'b list): unit m =
+    let+ _ = sequence (List.map2 f x y) in ()
 
   (** A nil computation. Does nothing and returns nothing of interest. *)
   let unit: unit m = pure ()

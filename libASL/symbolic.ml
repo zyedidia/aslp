@@ -83,6 +83,12 @@ let [@warning "-32"] rec expr_to_lexpr (e: expr): lexpr =
   | Expr_Tuple es -> LExpr_Tuple (List.map expr_to_lexpr es)
   | _ -> raise (EvalError (Unknown, "unexpected expression in expr_to_lexpr coercion: " ^ pp_expr e))
 
+let rec lexpr_to_expr (loc: l) (x: lexpr): expr =
+  (match x with
+  | LExpr_Var(id) -> Expr_Var(id)
+  | LExpr_Field(l,f) -> Expr_Field(lexpr_to_expr loc l,f)
+  | LExpr_Array(l,i) -> Expr_Array(lexpr_to_expr loc l,i)
+  | _ -> raise (EvalError (Unknown, "unexpected expression in lexpr_to_expr coercion: " ^ pp_lexpr x)))
 
 let filter_uninit (v: value option): value option =
   match v with
@@ -172,6 +178,12 @@ let sym_append_bits loc x y =
   | (Val (VBits x),Val (VBits y)) -> Val (VBits (prim_append_bits x y))
   | (x,y) -> Exp (Expr_TApply(FIdent("append_bits",0), [], (sym_expr x)::[sym_expr y])))
 
+let sym_insert_bits loc old i w v =
+  assert false
+
+let sym_extract_bits loc v i w =
+  assert false
+
 (* TODO: There is no eval_eq, we need to find the types of x & y *)
 let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
   (match (x,y) with
@@ -197,6 +209,11 @@ let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
       else
         Exp slice_expr
     | _ -> Exp slice_expr)
+
+let sym_concat (loc: AST.l) (xs: sym list): sym =
+  match xs with
+  | [] -> Val (VBits empty_bits)
+  | x::xs -> List.fold_left (sym_append_bits loc) x xs
 
 let rec contains_uninit (v: value): bool =
   match v with
@@ -249,7 +266,6 @@ let sym_type =
   | Val v -> val_type v
   | Exp e -> Type_OfExpr e (* FIXME: add type annotation to sym Exp constructor. *)
 
-
 let stmt_loc (s: stmt): l =
   match s with
   | Stmt_VarDeclsNoInit (_, _, l) -> l
@@ -277,3 +293,27 @@ let stmt_loc (s: stmt): l =
   | Stmt_While (_, _, l) -> l
   | Stmt_Repeat (_, _, l) -> l
   | Stmt_Try (_, _, _, _, l) -> l
+
+(** Structure to represent a chain of reference expressions *)
+
+type access_chain =
+  | Field of ident
+  | Index of value
+
+let rec get_access_chain (loc: l) (v: value) (a: access_chain list) : value =
+  (match a with
+  | (Field f)::a -> get_field loc (get_access_chain loc v a) f
+  | (Index i)::a -> get_array loc (get_access_chain loc v a) i
+  | [] -> v)
+
+let rec lexpr_access_chain (x: lexpr) (a: access_chain list): lexpr =
+  (match a with
+  | (Field f)::a -> lexpr_access_chain (LExpr_Field(x,f)) a
+  | (Index i)::a -> lexpr_access_chain (LExpr_Array(x,val_expr i)) a
+  | [] -> x)
+
+let rec expr_access_chain (x: expr) (a: access_chain list): expr =
+  (match a with
+  | (Field f)::a -> expr_access_chain (Expr_Field(x,f)) a
+  | (Index i)::a -> expr_access_chain (Expr_Array(x,val_expr i)) a
+  | [] -> x)
