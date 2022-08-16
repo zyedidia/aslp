@@ -37,10 +37,16 @@ let print_dis_trace (trace: dis_trace) =
 let () = Printexc.register_printer
     (function
     | DisTrace (trace, exn) ->
-        Some (Printexc.to_string exn ^ "\n"
-            ^ print_dis_trace trace)
+        let trace' =
+            if !debug_level >= 1
+            then "\n" ^ print_dis_trace trace
+            else ""
+        in
+        Some (Printexc.to_string exn ^ "\n" ^ trace')
     | DisUnsupported (loc, s) ->
         Some ("DisUnsupported: " ^ pp_loc loc ^ ": " ^ s)
+    | Value.Throw (loc, e) ->
+        Some ("LibASL.Value.Throw(" ^ Primops.pp_exc e ^ ") at " ^ pp_loc loc)
     | _ -> None)
 
 
@@ -306,7 +312,8 @@ let getGlobalConst(c: ident): sym rws =
 let check_var_shadowing (loc: l) (i: ident): unit rws =
     let@ old = DisEnv.gets (LocalEnv.getLocalVar loc i) in
     (match old with
-    | Some _ -> DisEnv.warn ("shadowing local variable: " ^ pprint_ident i)
+    | Some _ -> (*DisEnv.warn ("shadowing local variable: " ^ pprint_ident i)*)
+        DisEnv.unit
     | None -> DisEnv.unit)
 
 let declare_var (loc: l) (t: ty) (i: ident): unit rws =
@@ -1054,15 +1061,12 @@ and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: 
                 let@ enc_match = dis_encoding enc op in
                 if enc_match then begin
                     (* todo: should evaluate ConditionHolds to decide whether to execute body *)
-                    Printf.printf "Dissasm: %s\n" (pprint_ident inst);
-                    (* Uncomment this if you want to see output with no evaluation *)
-                    (* List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) exec; *)
-                    (* Env.removeGlobals env; *)
-
-                    (* (Printf.printf "\n\nENV GLOBALS: %s\n" (pp_bindings pp_value (Env.readGlobals env))); *)
                     let@ env = DisEnv.read in
-                    (Printf.printf "\n\nENV LOCALS: %s\n" (LocalEnv.pp_value_bindings (Env.readLocals env)));
-                    (* execute disassembly inside newly created local environment. *)
+
+                    if !debug_level >= 2 then begin
+                        Printf.printf "Dissasm: %s\n" (pprint_ident inst);
+                        Printf.printf "\n\nENV LOCALS: %s\n" (LocalEnv.pp_value_bindings (Env.readLocals env));
+                    end;
 
                     let opost' = (match opost with
                     | Some post ->

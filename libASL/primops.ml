@@ -238,7 +238,17 @@ type exc =
     | Exc_Undefined
     | Exc_Unpredictable
 
+let pp_exc (exc: exc): string =
+    match exc with
+    | Exc_ConstrainedUnpredictable -> "ConstrainedUnpredictable"
+    | Exc_ExceptionTaken           -> "ExceptionTaken"
+    | Exc_ImpDefined s             -> "ImpDefined" ^ s
+    | Exc_SEE s                    -> "SEE" ^ s
+    | Exc_Undefined                -> "Undefined"
+    | Exc_Unpredictable            -> "Unpredictable"
+
 let prim_is_cunpred_exc    (x: exc): bool = (match x with Exc_ConstrainedUnpredictable -> true | _ -> false)
+
 let prim_is_exctaken_exc   (x: exc): bool = (match x with Exc_ExceptionTaken -> true | _ -> false)
 let prim_is_impdef_exc     (x: exc): bool = (match x with Exc_ImpDefined _   -> true | _ -> false)
 let prim_is_see_exc        (x: exc): bool = (match x with Exc_SEE _          -> true | _ -> false)

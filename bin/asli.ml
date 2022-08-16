@@ -80,10 +80,17 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
         Testing.enumerate_opcodes cpu.env decoder start stop fname
     | [":coverage"; instr] ->
+        let open Testing in
+        Printf.printf "Coverage for encoding %s\n" instr;
         let (enc,_,_,_) = Env.getInstruction Unknown cpu.env (Ident instr) in
-        let t = Testing.enumerate_encoding enc Testing.field_vals_flags_only in
-        let l = Testing.list_of_enc_tree t in
-        Printf.printf "%s" (Testing.pp_enc_list l)
+        let t = enumerate_encoding enc field_vals_flags_only in
+        let l = list_of_enc_tree t in
+
+        List.iter (fun (fields, op) ->
+            Printf.printf "%s: %s" (hex_of_int op) (pp_enc_fields fields);
+            let result = op_test_opcode cpu.env op in
+            Printf.printf " --> %s\n" (pp_opresult (fun _ -> "OK") result);
+        ) l
     | [":compare"; iset; file] ->
         let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
         let inchan = open_in file in

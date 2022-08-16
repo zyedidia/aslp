@@ -517,8 +517,8 @@ let pp_stmt  (x: stmt):  string = Utils.to_string (PP.pp_stmt  x)
 let pp_decode_pattern (x: decode_pattern) = Utils.to_string (PP.pp_decode_pattern x)
 let pp_decode_slice (x: decode_slice) = Utils.to_string (PP.pp_decode_slice x)
 
-let pp_decode_alt (DecoderAlt_Alt(ps, _): decode_alt) = "when (" ^ String.concat ", " (List.map pp_decode_pattern ps) ^ ") => ..."
-let pp_decode_case (DecoderCase_Case(slices,_,_): decode_case) = "case (" ^ String.concat ", " (List.map pp_decode_slice slices) ^ ") of ..."
+let pp_decode_alt (DecoderAlt_Alt(ps, _): decode_alt) = "when (" ^ String.concat ", " (List.map pp_decode_pattern ps) ^ ")"
+let pp_decode_case (DecoderCase_Case(slices,_,_): decode_case) = "case (" ^ String.concat ", " (List.map pp_decode_slice slices) ^ ")"
 
 let pp_instr_field (IField_Field(name,_,_)) = pprint_ident name
 
