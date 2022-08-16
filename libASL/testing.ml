@@ -295,29 +295,29 @@ type 'a opresult = ('a, operror) Result.t
 
 let pp_opresult f = Result.fold ~ok:f ~error:pp_operror
 
-let op_eval (env: Env.t) (op: value): Env.t opresult =
+let op_eval (env: Env.t) (iset: string) (op: value): Env.t opresult =
   let evalenv = Env.copy env in
-  let decoder = Eval.Env.getDecoder env (Ident "A64") in
+  let decoder = Eval.Env.getDecoder evalenv (Ident iset) in
   try
     Eval.eval_decode_case AST.Unknown evalenv decoder op;
     Result.Ok evalenv
   with
     | e -> Result.Error (Op_EvalFail e)
 
-let op_dis (env: Env.t) (op: value): stmt list opresult =
-  let disenv = Env.copy env in
-  let decoder = Eval.Env.getDecoder env (Ident "A64") in
+let op_dis (env: Env.t) (iset: string) (op: value): stmt list opresult =
+  let env = Env.copy env in
+  let decoder = Eval.Env.getDecoder env (Ident iset) in
   try
-    let stmts = Dis.dis_decode_entry disenv decoder op in
+    let stmts = Dis.dis_decode_entry env decoder op in
     Result.Ok stmts
   with
     | e -> Result.Error (Op_DisFail e)
 
 let op_diseval (env: Env.t) (stmts: stmt list): Env.t opresult =
-  let disevalenv = Env.copy env in
+  let env = Env.copy env in
   try
     List.iter (Eval.eval_stmt env) stmts;
-    Result.Ok disevalenv
+    Result.Ok env
   with
     | e -> Result.Error (Op_DisEvalFail e)
 
@@ -327,7 +327,7 @@ let op_compare ((evalenv, disenv): Env.t * Env.t): Env.t opresult =
   else
     Result.Error (Op_DisEvalNotEqual)
 
-let op_test_opcode (env: Env.t) (op: int): Env.t opresult =
+let op_test_opcode (env: Env.t) (iset: string) (op: int): Env.t opresult =
   let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int op)) in
 
   let initenv = Env.copy env in
@@ -337,7 +337,7 @@ let op_test_opcode (env: Env.t) (op: int): Env.t opresult =
   Env.initializeGlobals initenv;
 
   let (let*) = Result.bind in
-  let* evalenv = op_eval initenv op in
-  let* disstmts = op_dis env op in
+  let* evalenv = op_eval initenv iset op in
+  let* disstmts = op_dis env iset op in
   let* disevalenv = op_diseval initenv disstmts in
   op_compare (evalenv, disevalenv)
