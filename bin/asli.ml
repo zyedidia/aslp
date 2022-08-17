@@ -82,15 +82,28 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
     | [":coverage"; iset; instr] ->
         let open Testing in
         Printf.printf "Coverage for encoding %s\n" instr;
-        let (enc,_,_,_) = Env.getInstruction Unknown cpu.env (Ident instr) in
-        let t = enumerate_encoding enc field_vals_flags_only in
-        let l = list_of_enc_tree t in
 
-        List.iter (fun (fields, op) ->
-            Printf.printf "%s: %s" (hex_of_int op) (pp_enc_fields fields);
-            let result = op_test_opcode cpu.env iset op in
-            Printf.printf " --> %s\n" (pp_opresult (fun _ -> "OK") result);
-        ) l
+        let re = Str.regexp instr in
+        let encoding_matches = function
+            | (Encoding_Block (Ident nm, Ident is, _, _, _, _, _, _)) ->
+                is = iset && Str.string_match re nm 0
+            | _ -> assert false
+        in
+        let encs = List.map (fun (x,_,_,_) -> x) (Env.listInstructions cpu.env) in
+        let encs' = List.filter encoding_matches encs in
+
+        List.iter (fun enc ->
+            let Encoding_Block (nm, _,_,_,_,_,_,_) = enc in
+            Printf.printf "ENCODING: %s\n" (pprint_ident nm);
+            let t = enumerate_encoding enc field_vals_flags_only in
+            let l = list_of_enc_tree t in
+
+            List.iter (fun (fields, op) ->
+                Printf.printf "%s: %s" (hex_of_int op) (pp_enc_fields fields);
+                let result = op_test_opcode cpu.env iset op in
+                Printf.printf " --> %s\n" (pp_opresult (fun _ -> "OK") result);
+            ) l
+        ) encs'
     | [":compare"; iset; file] ->
         let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
         let inchan = open_in file in

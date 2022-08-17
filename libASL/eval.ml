@@ -126,6 +126,7 @@ module Env : sig
 
     val getInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list)
     val addInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list) -> unit
+    val listInstructions    : t -> (encoding * (stmt list) option * bool * stmt list) list
 
     val getDecoder          : t -> ident -> decode_case
     val addDecoder          : t -> ident -> decode_case -> unit
@@ -424,6 +425,9 @@ end = struct
     let addInstruction (loc: AST.l) (env: t) (x: ident) (instr: encoding * (stmt list) option * bool * stmt list): unit =
         assertNotFrozen env;
         env.instructions <- Bindings.add x instr env.instructions
+
+    let listInstructions (env: t) =
+        List.map snd (Bindings.bindings env.instructions)
 
     let getDecoder (env: t) (x: ident): decode_case =
         Bindings.find x env.decoders
@@ -868,7 +872,7 @@ and eval_stmts (env: Env.t) (xs: AST.stmt list): unit =
 and eval_stmt (env: Env.t) (x: AST.stmt): unit =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
-            List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs
+            List.iter (fun v -> Env.addLocalVar loc env v (eval_uninit_to_defaults (mk_uninitialized loc env ty))) vs
     | Stmt_VarDecl(ty, v, i, loc) ->
             let i' = eval_expr loc env i in
             Env.addLocalVar loc env v i'

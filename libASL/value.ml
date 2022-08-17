@@ -458,7 +458,8 @@ let rec eval_uninit_to_defaults (v: value): value =
         | Type_Constructor (Ident "integer") -> VInt Z.zero
         | Type_Constructor (Ident "real") -> VReal Q.zero
         | Type_Constructor (Ident "string") -> VString "<UNKNOWN string>"
-        | _ -> failwith ("unsupported case: " ^ pp_type t))
+        | Type_Constructor (Ident "boolean") -> VBool false
+        | _ -> failwith ("eval_uninit_to_defaults: unsupported type " ^ pp_type t))
     | VRecord bs -> VRecord (Bindings.map eval_uninit_to_defaults bs)
     | VTuple vs -> VTuple (List.map eval_uninit_to_defaults vs)
     | VArray (arr, d) -> VArray (arr, eval_uninit_to_defaults d)
