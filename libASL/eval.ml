@@ -94,9 +94,6 @@ module Env : sig
     val compare             : t -> t -> bool
     val compareLocals       : t -> t -> bool
 
-    val initializeGlobals   : t -> unit
-    val initializeRegisters : t -> bigint list -> unit
-
     val addLocalVar         : AST.l -> t -> ident -> value -> unit
     val addLocalConst       : AST.l -> t -> ident -> value -> unit
 
@@ -502,9 +499,11 @@ end = struct
         env.locals <- xs
 
     let getLocals (env: t): scope list =
+        assertNotFrozen env;
         env.locals
 
     let getGlobals (env: t): scope =
+        assertNotFrozen env;
         env.globals
 
     let removeGlobals (env: t): unit =
@@ -516,22 +515,41 @@ end = struct
     let readGlobals (env: t): value Bindings.t =
         env.globals.bs
 
-    let initializeGlobals (env: t): unit =
-        assertNotFrozen env;
-        env.globals.bs <- Bindings.map eval_uninit_to_defaults env.globals.bs
-
-    let initializeRegisters (env: t) (xs: bigint list): unit =
-        assertNotFrozen env;
-        let d = VBits {n=64; v=Z.zero} in
-        let vals = List.mapi (fun i v -> (i, VBits {n=64; v})) xs in
-        let arr = List.fold_left
-            (fun a (k,v) -> ImmutableArray.add k v a)
-            ImmutableArray.empty
-            vals
-        in
-        setVar Unknown env (Ident "_R") (VArray (arr, d))
-
 end
+
+let rec eval_uninitialized  (env: Env.t) (v: value): value =
+    match v with
+    | VUninitialized t ->
+        (match t with
+        | Type_Bits (Expr_LitInt wd) -> VBits (Primops.mkBits (int_of_string wd) Z.zero)
+        | Type_Constructor (Ident "__RAM") -> VRAM (Primops.init_ram (char_of_int 0))
+        | Type_Constructor (Ident "integer") -> VInt Z.zero
+        | Type_Constructor (Ident "real") -> VReal Q.zero
+        | Type_Constructor (Ident "string") -> VString "<UNKNOWN string>"
+        | Type_Constructor (Ident "boolean") -> VBool false
+        | Type_Constructor id ->
+            (match Env.getEnum env id with
+            | Some (enumval::_) -> enumval
+            | _ -> failwith ("eval_uninitialized: unsupported type constructor: " ^ pprint_ident id))
+        | _ -> failwith ("eval_uninitialized: unsupported type " ^ pp_type t))
+    | VRecord bs -> VRecord (Bindings.map (eval_uninitialized env) bs)
+    | VTuple vs -> VTuple (List.map (eval_uninitialized env) vs)
+    | VArray (arr, d) -> VArray (arr, (eval_uninitialized env) d)
+    | _ -> v
+
+let initializeGlobals (env: Env.t): unit =
+    let g = Env.getGlobals env in
+    g.bs <- Bindings.map (eval_uninitialized env) g.bs
+
+let initializeRegisters (env: Env.t) (xs: bigint list): unit =
+    let d = VBits {n=64; v=Z.zero} in
+    let vals = List.mapi (fun i v -> (i, VBits {n=64; v})) xs in
+    let arr = List.fold_left
+        (fun a (k,v) -> ImmutableArray.add k v a)
+        ImmutableArray.empty
+        vals
+    in
+    Env.setVar Unknown env (Ident "_R") (VArray (arr, d))
 
 
 let isGlobalConst (env: Env.t) (id: AST.ident): bool =
@@ -872,7 +890,7 @@ and eval_stmts (env: Env.t) (xs: AST.stmt list): unit =
 and eval_stmt (env: Env.t) (x: AST.stmt): unit =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
-            List.iter (fun v -> Env.addLocalVar loc env v (eval_uninit_to_defaults (mk_uninitialized loc env ty))) vs
+            List.iter (fun v -> Env.addLocalVar loc env v (eval_uninitialized env (mk_uninitialized loc env ty))) vs
     | Stmt_VarDecl(ty, v, i, loc) ->
             let i' = eval_expr loc env i in
             Env.addLocalVar loc env v i'

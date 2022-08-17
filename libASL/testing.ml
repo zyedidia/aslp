@@ -259,9 +259,11 @@ let int_of_opcode: opcode_value -> int =
 
 let field_vals_flags_only (name: string) (wd: int): int list =
   match name with
+  | "cond" -> [1]
   | _ when Utils.startswith name "R" && name <> "R" -> [1]
   | _ when Utils.startswith name "X" && name <> "R" -> [1]
   | _ when Utils.startswith name "imm" -> [1]
+  | _ when Utils.startswith name "uimm" -> [1]
   | _ -> List.init (Int.shift_left 1 wd) (fun x -> x)
 
 let enumerate_encoding (enc: encoding) (field_vals: string -> int -> int list): encoding_tree =
@@ -287,6 +289,7 @@ type operror =
 
 let pp_operror: operror -> string =
   function
+  | Op_EvalFail (Throw (_, Exc_Undefined)) -> "UNDEFINED"
   | Op_EvalFail e -> "[1] Evaluation failure: " ^ Printexc.to_string e
   | Op_DisFail e -> "[2] Disassembly failure: " ^ Printexc.to_string e
   | Op_DisEvalFail e -> "[3] Dissassembled evaluation failure: " ^ Printexc.to_string e
@@ -334,8 +337,8 @@ let op_test_opcode (env: Env.t) (iset: string) (op: int): Env.t opresult =
   let initenv = Env.copy env in
   Random.self_init ();
   let vals = (List.init 64 (fun _ -> Z.of_int64 (Random.int64 Int64.max_int))) in
-  Eval.Env.initializeRegisters initenv vals;
-  Env.initializeGlobals initenv;
+  Eval.initializeRegisters initenv vals;
+  Eval.initializeGlobals initenv;
 
   let initenv = Env.freeze initenv in
 

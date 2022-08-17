@@ -345,6 +345,24 @@ let eval_prim (f: string) (tvs: value list) (vs: value list): value option =
 
     | ("program_end",        _,       [                          ]) -> Some (raise (Throw (Unknown, Exc_ExceptionTaken)))
 
+    (* | ("eq_enum" | "ne_enum" | "eq_bool" | "ne_bool" | "equiv_bool" | "not_bool"
+    | "eq_int" | "ne_int" | "le_int" | "lt_int" | "ge_int" | "gt_int" | "is_pow2_int" | "neg_int" | "add_int" | "sub_int"
+    | "shl_int" | "shr_int" | "mul_int" | "zdiv_int" | "zrem_int" | "fdiv_int" | "frem_int" | "mod_pow2_int" | "align_int" | "pow2_int" | "pow_int_int"
+    | "cvt_int_real" | "eq_real" | "ne_real" | "le_real" | "lt_real" | "ge_real" | "gt_real" | "add_real" | "neg_real" | "sub_real" | "mul_real" | "divide_real"
+    | "pow2_real" | "round_tozero_real" | "round_down_real" | "round_up_real" | "sqrt_real"
+    | "cvt_int_bits" | "cvt_bits_sint" | "cvt_bits_uint" | "in_mask" | "notin_mask"
+    | "eq_bits" | "ne_bits" | "add_bits" | "sub_bits" | "mul_bits" | "and_bits" | "or_bits" | "eor_bits" | "not_bits"
+    | "zeros_bits" | "ones_bits" | "replicate_bits" | "append_bits"
+    | "eq_str" | "ne_str" | "append_str_str"
+    | "cvt_int_hexstr" | "cvt_int_decstr" | "cvt_bool_str" | "cvt_bits_str" | "cvt_real_str"
+    | "is_cunpred_exc" | "is_exctaken_exc" | "is_impdef_exc" | "is_see_exc" | "is_undefined_exc" | "is_unpred_exc"
+
+    | "ram_init" | "ram_read" | "ram_write"
+    | "trace_memory_read" | "trace_memory_write" | "trace_event"
+    | "asl_file_open" | "asl_file_write" | "asl_file_getc"
+    | "print_str" | "print_char" | "program_end") , _, _ ->
+        Some (raise (EvalError (Unknown, "eval_prim: failed to invoke " ^ f ^ " {{ " ^ Utils.pp_list pp_value tvs ^ " }} ( " ^ Utils.pp_list pp_value vs ^ " )"))) *)
+
     (* No function matches *)
     | _ -> None
     )
@@ -447,23 +465,6 @@ let eval_unknown_ram (a: Primops.bigint): value =
 let eval_unknown_integer (_: unit): value = VUninitialized (type_builtin "integer") (*VInt Z.zero*)
 let eval_unknown_real    (_: unit): value = VUninitialized (type_builtin "real") (*VReal Q.zero*)
 let eval_unknown_string  (_: unit): value = VUninitialized (type_builtin "string") (*VString "<UNKNOWN string>"*)
-
-
-let rec eval_uninit_to_defaults (v: value): value =
-    match v with
-    | VUninitialized t ->
-        (match t with
-        | Type_Bits (Expr_LitInt wd) -> VBits (Primops.mkBits (int_of_string wd) Z.zero)
-        | Type_Constructor (Ident "__RAM") -> VRAM (Primops.init_ram (char_of_int 0))
-        | Type_Constructor (Ident "integer") -> VInt Z.zero
-        | Type_Constructor (Ident "real") -> VReal Q.zero
-        | Type_Constructor (Ident "string") -> VString "<UNKNOWN string>"
-        | Type_Constructor (Ident "boolean") -> VBool false
-        | _ -> failwith ("eval_uninit_to_defaults: unsupported type " ^ pp_type t))
-    | VRecord bs -> VRecord (Bindings.map eval_uninit_to_defaults bs)
-    | VTuple vs -> VTuple (List.map eval_uninit_to_defaults vs)
-    | VArray (arr, d) -> VArray (arr, eval_uninit_to_defaults d)
-    | _ -> v
 
 
 (****************************************************************

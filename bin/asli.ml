@@ -67,10 +67,10 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
     | [""] ->
         ()
     | [":init"; "globals"] ->
-        Eval.Env.initializeGlobals cpu.env;
+        Eval.initializeGlobals cpu.env;
     | [":init"; "regs"] ->
         let vals = (List.init 64 (fun _ -> Z.of_int64 (Random.int64 Int64.max_int))) in
-        Eval.Env.initializeRegisters cpu.env vals;
+        Eval.initializeRegisters cpu.env vals;
     | ":enumerate" :: iset :: tail ->
         let (start,stop,fname) = (match tail with
         | [start;stop;fname] -> (int_of_string start, int_of_string stop, fname)
@@ -113,9 +113,9 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
                 let initEnv = Eval.Env.copy cpu.env in
                 (* Obtain and set random initial values for _R registers. *)
                 let vals = (List.init 64 (fun _ -> Z.of_int64 (Random.int64 Int64.max_int))) in
-                Eval.Env.initializeRegisters initEnv vals;
+                Eval.initializeRegisters initEnv vals;
                 (* Replace remaining VUninitialized with default zero values. *)
-                Eval.Env.initializeGlobals initEnv;
+                Eval.initializeGlobals initEnv;
 
                 (* Disassembly uses original uninitialised environment.
                    Others use the randomly initialised environment for full evaluation. *)
