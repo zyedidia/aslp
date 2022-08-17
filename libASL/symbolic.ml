@@ -166,12 +166,29 @@ let prim_binop (f: string) (loc: AST.l) (x: sym) (y: sym) : sym  =
 let sym_true     = Val (from_bool true)
 let sym_false    = Val (from_bool false)
 let sym_eq_int   = prim_binop "eq_int"
-let sym_eq_bits  = prim_binop "eq_bits"
-let sym_leq      = prim_binop "leq"
-let sym_bool_and = prim_binop "bool_and"
-let sym_inmask   = prim_binop "in_mask"
 let sym_add_int  = prim_binop "add_int"
 let sym_sub_int  = prim_binop "sub_int"
+let sym_le_int   = prim_binop "le_int"
+
+let sym_eq_bits  = prim_binop "eq_bits" (* needs size *)
+let sym_inmask   = prim_binop "in_mask" (* needs size *)
+
+let sym_and_bool loc (x: sym) (y: sym) =
+  match (x,y) with
+  | (Val x', Val y') -> Val (VBool (to_bool loc x' && to_bool loc y'))
+  | (_, Val x') when not (to_bool loc x') -> Val (VBool false)
+  | (Val x', _) when not (to_bool loc x') -> Val (VBool false)
+  | _ -> Exp (Expr_TApply(FIdent("and_bool",0), [], [sym_expr x;sym_expr y]))
+
+let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
+  (match (x,y) with
+  | (Val x,Val y) -> Val (from_bool (eval_eq loc x y))
+  | (Exp _,Val v) | (Val v, Exp _) ->
+      (match v with
+      | VBits _ -> sym_eq_bits loc x y
+      | VInt _ -> sym_eq_int loc x y
+      | _ -> failwith "sym_eq: unknown value type")
+  | (_,_) -> failwith "sym_eq: insufficient info to resolve type")
 
 (*** Symbolic Bitvector Operations ***)
 
@@ -186,13 +203,6 @@ let sym_append_bits (loc: l) (xw: int) (yw: int) (x: sym) (y: sym): sym =
 (* WARNING: incorrect type arguments passed to append_bits but sufficient for evaluation
    of primitive with eval_prim. *)
 let sym_append_bits_unsafe loc x y = sym_append_bits loc (-1) (-1) x y
-
-
-(* TODO: There is no eval_eq, we need to find the types of x & y *)
-let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
-  (match (x,y) with
-  | (Val x,Val y) -> Val (from_bool (eval_eq loc x y))
-  | (_,_) -> prim_binop "eval_eq" loc x y)
 
 (** Extract a slice from a symbolic bitvector given known bounds.
     Applies optimisations to collapse consecutive slice operations and

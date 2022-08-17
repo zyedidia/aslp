@@ -494,7 +494,7 @@ and dis_pattern (loc: l) (v: sym) (x: AST.pattern): sym rws =
     | Pat_Range(lo, hi) ->
             let+ lo' = dis_expr loc lo
             and+ hi' = dis_expr loc hi in
-            sym_bool_and loc (sym_leq loc lo' v) (sym_leq loc v hi')
+            sym_and_bool loc (sym_le_int loc lo' v) (sym_le_int loc v hi')
     )
 
 (** Disassemble bitslice bounds, mirrors eval_slice *)
