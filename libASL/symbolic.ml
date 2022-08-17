@@ -183,8 +183,8 @@ let sym_append_bits loc x y =
    of primitive with eval_prim. *)
 
 let sym_insert_bits loc old i w v =
-  match (old, v, i, w) with
-  | (Val old', Val v', Val i', Val w') -> Val (insert_bits loc old' i' w' v')
+  match (old, i, w, v) with
+  | (Val old', Val i', Val w', Val v') -> Val (insert_bits loc old' i' w' v')
   | _ -> failwith "sym_insert_bits" (* difficult because we need to know widths of each expression. *)
 
 let sym_extract_bits loc v i w =
