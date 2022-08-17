@@ -677,7 +677,16 @@ and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
     DisEnv.scope loc "dis_call"
         (pp_expr (Expr_TApply (f, List.map sym_expr tes, List.map sym_expr es)))
         pp_sym
-        (dis_call' loc f tes es)
+        (dis_call_intercept loc f tes es)
+
+and dis_call_intercept (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
+  (match (name_of_FIdent f, es) with
+  | ("AArch64.BranchAddr", [e]) ->
+      if !debug_level >= 2 then begin
+        Printf.printf "Intercepted call to AArch64.BranchAddr: Assuming no modification to destination address\n";
+      end;
+      DisEnv.pure e
+  | _ -> dis_call' loc f tes es)
 
 and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
     let@ fn = DisEnv.getFun loc f in
