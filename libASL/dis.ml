@@ -918,7 +918,7 @@ and dis_stmt' (x: AST.stmt): unit rws =
         declare_const loc ty' v e'
     | Stmt_Assign(l, r, loc) ->
         let@ r' = dis_expr loc r in
-        dis_lexpr loc l r' (* TODO: double check that both statements are added *)
+        dis_lexpr loc l r'
     | Stmt_If(c, t, els, e, loc) ->
         let rec eval_if xs d : unit rws = match xs with
         | [] -> dis_stmts d
@@ -1180,6 +1180,7 @@ and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
                 then emit stmt
                 else pass
         | Stmt_Assign(LExpr_Var(v), r, loc) ->
+            (* TODO: Don't pass if v is global *)
             if IdentSet.mem v used
                 then emit stmt
                 else pass
