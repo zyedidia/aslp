@@ -582,14 +582,9 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     | Expr_Slices(e, ss) ->
             let@ e' = dis_expr loc e
             and@ ss' = DisEnv.traverse (dis_slice loc) ss in
-            (match (e',List.exists sym_pair_has_exp ss') with
-            | (Val v, false) ->
-                let vs = List.map (fun (l,w) -> extract_bits loc v (sym_val_or_uninit l) (sym_val_or_uninit w)) ss' in
-                DisEnv.pure @@ Val (eval_concat loc vs)
-            | _ ->
-                let vs = List.map (fun (l,w) ->
-                    Slice_LoWd(sym_expr l, sym_expr w)) ss' in
-                DisEnv.pure @@ Exp (Expr_Slices(sym_expr e', vs)))
+            let vs = List.map (fun (i,w) -> sym_extract_bits loc e' i w) ss' in
+            let v' = List.fold_left (sym_append_bits loc) (Val (from_bitsLit "")) vs in
+            DisEnv.pure v'
     | Expr_In(e, p) ->
             let@ e' = dis_expr loc e in
             let@ p' = dis_pattern loc e' p in

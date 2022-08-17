@@ -175,8 +175,12 @@ let sym_sub_int  = prim_binop "sub_int"
 
 let sym_append_bits loc x y =
   (match (x,y) with
+  | (Val (VBits {n=0; _}), y) -> y
+  | (x, Val (VBits {n=0; _})) -> x
   | (Val (VBits x),Val (VBits y)) -> Val (VBits (prim_append_bits x y))
-  | (x,y) -> Exp (Expr_TApply(FIdent("append_bits",0), [], (sym_expr x)::[sym_expr y])))
+  | (x,y) -> Exp (Expr_TApply(FIdent("append_bits",0), [Expr_LitInt "-1"; Expr_LitInt "-1"], (sym_expr x)::[sym_expr y])))
+(* WARNING: incorrect type arguments passed to append_bits but sufficient for evaluation
+   of primitive with eval_prim. *)
 
 let sym_insert_bits loc old i w v =
   match (old, v, i, w) with
@@ -185,7 +189,7 @@ let sym_insert_bits loc old i w v =
 
 let sym_extract_bits loc v i w =
   match (v, i, w) with
-  | (Val v', Val i', Val w') -> Val (extract_bits loc v' i' w')
+  | (Val v', Val i', Val w') -> Val (extract_bits'' loc v' i' w')
   | _ -> Exp (Expr_Slices (sym_expr v, [Slice_LoWd (sym_expr i, sym_expr w)]))
 
 (* TODO: There is no eval_eq, we need to find the types of x & y *)
