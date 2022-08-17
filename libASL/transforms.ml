@@ -114,12 +114,14 @@ module Bits = struct
     method to_bits_fun f tes =
       match (f, tes) with
       | (FIdent ("add_int", 0), []) -> (FIdent ("add_bits", 0), [Expr_LitInt width])
+      | (FIdent ("sub_int", 0), []) -> (FIdent ("sub_bits", 0), [Expr_LitInt width])
       | (FIdent ("mul_int", 0), []) -> (FIdent ("mul_bits", 0), [Expr_LitInt width])
       | _ -> (f, tes)
 
     method! vexpr e = match e with
     | Expr_LitBits (s) when String.length s = int_of_string width -> SkipChildren
 
+    | Expr_TApply (FIdent ("cvt_int_real", _), _, _) -> raise (Non_bits_atomic e)
 
     | Expr_TApply (FIdent ("cvt_bits_uint", 0), [Expr_LitInt w], [e]) ->
       let w = int_of_string w in

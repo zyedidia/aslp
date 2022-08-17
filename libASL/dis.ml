@@ -342,7 +342,7 @@ let assign_var (loc: l) (i: ident) (x: sym): unit rws =
   let@ i' = DisEnv.getLocalName i in
   (* Attempt to set local variable. If it fails, we assume
      the variable is in an outer scope.  *)
-  DisEnv.modify (LocalEnv.trySetLocalVar loc i x) >>
+  DisEnv.modify (LocalEnv.setLocalVar loc i x) >>
   DisEnv.write [Stmt_Assign(LExpr_Var(i'), sym_expr x, loc)]
 
 let declare_const (loc: l) (t: ty) (i: ident) (x: sym): unit rws =
@@ -911,7 +911,6 @@ and dis_stmt' (x: AST.stmt): unit rws =
         let@ es' = dis_exprs loc es in
         dis_proccall loc f tes' es'
     | Stmt_FunReturn(e, loc) ->
-        (* let@ e' = dis_expr loc e in *)
         let@ rv = DisEnv.gets (LocalEnv.getReturnSymbol loc) in
         let@ e' = dis_expr loc e in
         dis_lexpr loc (expr_to_lexpr rv) e'
@@ -966,30 +965,31 @@ and dis_stmt' (x: AST.stmt): unit rws =
                 Stmt_Case(e'', alts', odefault, loc)
             ]
         )
-    | Stmt_For(v, start, dir, stop, body, loc) ->
+    | Stmt_For(var, start, dir, stop, body, loc) ->
         let@ start' = dis_expr loc start in
         let@ stop' = dis_expr loc stop in
 
         (match (start', stop') with
         | Val startval, Val stopval ->
-            let rec dis_for (i: value): unit rws =
+            let rec dis_for (i: value): stmt list =
                 let c = (match dir with
                 | Direction_Up -> eval_leq loc i stopval
                 | Direction_Down -> eval_leq loc stopval i
                 ) in
                 if c then
-                    assign_var loc v (Val i) >>
-                    dis_stmts body >>
                     let i' = (match dir with
                     | Direction_Up   -> eval_add_int loc i (VInt Z.one)
                     | Direction_Down -> eval_sub_int loc i (VInt Z.one)
                     ) in
-                    dis_for i'
+                    let rest = dis_for i' in
+                    [Stmt_Assign (LExpr_Var var, val_expr i, loc)]
+                        @ body
+                        @ rest
                 else
-                    DisEnv.unit
+                    []
             in
-            declare_var loc type_integer v >>
-            dis_for startval
+            declare_var loc type_integer var >>
+            dis_stmts (dis_for startval)
         | _, _ ->
             raise (DisUnsupported (loc, "for loop bounds not statically known: " ^ pp_stmt x)))
     | Stmt_Unpred _
