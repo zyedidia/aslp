@@ -1156,7 +1156,7 @@ and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: 
     else
         DisEnv.pure false
 
-and remove_unused xs = (remove_unused' IdentSet.empty xs)
+let rec remove_unused (globals: IdentSet.t) xs = (remove_unused' globals xs)
 
 and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
     fst @@ List.fold_right (fun stmt (acc, used) ->
@@ -1198,9 +1198,10 @@ let dis_decode_entry (env: Env.t) (decode: decode_case) (op: value): stmt list =
     let DecoderCase_Case (_,_,loc) = decode in
 
     let env = Env.freeze env in
+    let globals = IdentSet.of_list @@ List.map fst @@ Bindings.bindings (Env.readGlobals env) in
     let lenv = LocalEnv.empty () in
     let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
-    let stmts' = Transforms.Bits.bitvec_conversion @@ remove_unused @@ stmts in
+    let stmts' = Transforms.Bits.bitvec_conversion @@ remove_unused globals @@ stmts in
     if !debug_level >= 2 then begin
         Printf.printf "===========\n";
         List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts';
