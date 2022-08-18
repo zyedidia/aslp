@@ -97,9 +97,9 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
             Printf.printf "ENCODING: %s\n" (pprint_ident nm);
             let t = enumerate_encoding enc field_vals_flags_only in
             let l = list_of_enc_tree t in
-
             List.iter (fun (fields, op) ->
                 Printf.printf "%s: %s" (hex_of_int op) (pp_enc_fields fields);
+                flush stdout;
                 let result = op_test_opcode cpu.env iset op in
                 Printf.printf " --> %s\n" (pp_opresult (fun _ -> "OK") result);
             ) l
