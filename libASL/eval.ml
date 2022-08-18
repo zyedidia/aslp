@@ -625,6 +625,7 @@ and eval_unknown (loc: l) (env: Env.t) (x: AST.ty): value =
     | Type_Constructor(Ident "integer") -> eval_unknown_integer ()
     | Type_Constructor(Ident "real")    -> eval_unknown_real ()
     | Type_Constructor(Ident "string")  -> eval_unknown_string ()
+    | Type_Constructor(Ident "boolean")  -> VUninitialized x
     | Type_Constructor(tc) ->
         (match Env.getEnum env tc with
         | Some (e::_) -> e

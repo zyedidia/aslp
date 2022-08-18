@@ -166,69 +166,116 @@ let prim_binop (f: string) (loc: AST.l) (x: sym) (y: sym) : sym  =
 let sym_true     = Val (from_bool true)
 let sym_false    = Val (from_bool false)
 let sym_eq_int   = prim_binop "eq_int"
-let sym_eq_bits  = prim_binop "eq_bits"
-let sym_leq      = prim_binop "leq"
-let sym_bool_and = prim_binop "bool_and"
-let sym_inmask   = prim_binop "in_mask"
 let sym_add_int  = prim_binop "add_int"
 let sym_sub_int  = prim_binop "sub_int"
+let sym_le_int   = prim_binop "le_int"
 
-let sym_append_bits loc x y =
+let sym_eq_bits  = prim_binop "eq_bits" (* needs size *)
+let sym_inmask   = prim_binop "in_mask" (* needs size *)
+
+let sym_and_bool loc (x: sym) (y: sym) =
+  match (x,y) with
+  | (Val x', Val y') -> Val (VBool (to_bool loc x' && to_bool loc y'))
+  | (_, Val x') when not (to_bool loc x') -> Val (VBool false)
+  | (Val x', _) when not (to_bool loc x') -> Val (VBool false)
+  | _ -> Exp (Expr_TApply(FIdent("and_bool",0), [], [sym_expr x;sym_expr y]))
+
+let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
+  (match (x,y) with
+  | (Val x,Val y) -> Val (from_bool (eval_eq loc x y))
+  | (Exp _,Val v) | (Val v, Exp _) ->
+      (match v with
+      | VBits _ -> sym_eq_bits loc x y
+      | VInt _ -> sym_eq_int loc x y
+      | _ -> failwith "sym_eq: unknown value type")
+  | (_,_) -> failwith "sym_eq: insufficient info to resolve type")
+
+(*** Symbolic Bitvector Operations ***)
+
+(** Append two bitvector symbols and explicitly provide their widths *)
+let sym_append_bits (loc: l) (xw: int) (yw: int) (x: sym) (y: sym): sym =
   (match (x,y) with
   | (Val (VBits {n=0; _}), y) -> y
   | (x, Val (VBits {n=0; _})) -> x
   | (Val (VBits x),Val (VBits y)) -> Val (VBits (prim_append_bits x y))
-  | (x,y) -> Exp (Expr_TApply(FIdent("append_bits",0), [Expr_LitInt "-1"; Expr_LitInt "-1"], (sym_expr x)::[sym_expr y])))
+  | (x,y) -> Exp (Expr_TApply(FIdent("append_bits",0), [Expr_LitInt (string_of_int xw); Expr_LitInt (string_of_int yw)], [sym_expr x;sym_expr y])))
+
 (* WARNING: incorrect type arguments passed to append_bits but sufficient for evaluation
    of primitive with eval_prim. *)
+let sym_append_bits_unsafe loc x y = sym_append_bits loc (-1) (-1) x y
 
-let sym_insert_bits loc old i w v =
-  match (old, i, w, v) with
-  | (Val old', Val i', Val w', Val v') -> Val (insert_bits loc old' i' w' v')
-  | _ -> failwith "sym_insert_bits" (* difficult because we need to know widths of each expression. *)
-
-let sym_extract_bits loc v i w =
-  match (v, i, w) with
-  | (Val v', Val i', Val w') -> Val (extract_bits'' loc v' i' w')
-  | _ -> Exp (Expr_Slices (sym_expr v, [Slice_LoWd (sym_expr i, sym_expr w)]))
-
-(* TODO: There is no eval_eq, we need to find the types of x & y *)
-let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
-  (match (x,y) with
-  | (Val x,Val y) -> Val (from_bool (eval_eq loc x y))
-  | (_,_) -> prim_binop "eval_eq" loc x y)
-
+(** Extract a slice from a symbolic bitvector given known bounds.
+    Applies optimisations to collapse consecutive slice operations and
+    distributes slices across bitvector append operations.
+  *)
 let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
   let int_expr i = Expr_LitInt (string_of_int i) in
   match x with
-  | Val v -> Val (extract_bits' loc v lo wd)
+  | Val v -> Val (extract_bits'' loc v (VInt (Z.of_int lo)) (VInt (Z.of_int wd)))
   | Exp e ->
+    if wd = 0 then Val (VBits empty_bits) else
     let slice_expr =
       (Expr_Slices (e, [Slice_LoWd (int_expr lo, int_expr wd)])) in
     (match e with
+    | (Expr_Slices (e', [Slice_LoWd (Expr_LitInt l',_)])) ->
+        let l2 = int_of_string l' in
+        sym_slice loc (Exp e') (l2 + lo) wd
     | (Expr_TApply (FIdent ("append_bits", 0), [Expr_LitInt t1; Expr_LitInt t2], [x1; x2])) ->
       let t2 = int_of_string t2 in
-      if (lo >= t2) then
+      if t2 < 0 then
+        (* don't statically know the widths of append, don't optimise *)
+        Exp slice_expr
+      else if (lo >= t2) then
         (* slice is entirely within upper part (i.e. significant bits). *)
         sym_slice loc (Exp x1) (lo - t2) wd
       else if (lo + wd <= t2) then
         (* entirely within lower part. *)
         sym_slice loc (Exp x2) lo wd
       else
-        Exp slice_expr
+        (* getting bits from both *)
+        let w2 = t2 - lo in
+        let w1 = wd - w2 in
+        let x2' = sym_slice loc (Exp x2) lo w2 in
+        let x1' = sym_slice loc (Exp x1) 0 w1 in
+        sym_append_bits loc  w1 w2 x1' x2'
     | _ -> Exp slice_expr)
 
+(** Wrapper around sym_slice to handle cases of symbolic slice bounds *)
+let sym_extract_bits loc v i w =
+  match ( i, w) with
+  | (Val i', Val w') ->
+      let i' = to_int loc i' in
+      let w' = to_int loc w' in
+      sym_slice loc v i' w'
+  | _ -> Exp (Expr_Slices (sym_expr v, [Slice_LoWd (sym_expr i, sym_expr w)]))
+
+(** Overwrite bits from position lo up to (lo+wd) exclusive of old with the value v.
+    Needs to know the widths of both old and v to perform the operation.
+    Assumes width of v is equal to wd.
+  *)
+let sym_insert_bits loc (old_width: int) (old: sym) (lo: sym) (wd: sym) (v: sym): sym =
+  match (old, lo, wd, v) with
+  | (Val old', Val i', Val w', Val v') -> Val (insert_bits loc old' i' w' v')
+  | (_, Val lo', Val wd', _) ->
+      let lo = to_int loc lo' in
+      let wd = to_int loc wd' in
+      let up = lo + wd in
+      if old_width <= up then
+        (* Overwriting the top bits of old *)
+        sym_append_bits loc wd lo v (sym_slice loc old 0 lo)
+      else
+        sym_append_bits loc (old_width - up) up (sym_slice loc old up (old_width - up))
+          (sym_append_bits loc wd lo v (sym_slice loc old 0 lo))
+  | _ ->
+      failwith "sym_insert_bits" (* difficult because we need to know widths of each expression. *)
+
+(** Append a list of bitvectors together
+    TODO: Will inject invalid widths due to unsafe sym_append_bits call.
+ *)
 let sym_concat (loc: AST.l) (xs: sym list): sym =
   match xs with
   | [] -> Val (VBits empty_bits)
-  | x::xs -> List.fold_left (sym_append_bits loc) x xs
-
-let rec contains_uninit (v: value): bool =
-  match v with
-  | VUninitialized _ -> true
-  | VTuple vs -> List.exists contains_uninit vs
-  | VRecord r -> Bindings.exists (fun _ -> contains_uninit) r
-  | _ -> false
+  | x::xs -> List.fold_left (sym_append_bits_unsafe loc) x xs
 
 let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option =
 

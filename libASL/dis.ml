@@ -416,32 +416,42 @@ let rec sym_exists p = function
   | a::l -> sym_if Unknown (type_bool) (p a) (DisEnv.pure sym_true) (sym_exists p l)
 
 (** Determine the type of memory access expression (Var, Array, Field) *)
-let rec type_of_load (loc: l) (x: expr): ty =
+let rec type_of_load (loc: l) (x: expr): ty rws =
   let env = Tcheck.env0 in
   (match x with
   | Expr_Var(id) ->
-      (match Tcheck.GlobalEnv.getGlobalVar env id with
-      | Some t -> t
-      | None -> raise (EvalError (loc, "Unknown type for variable: " ^ pprint_ident id)))
+      let+ local = DisEnv.gets (LocalEnv.getLocalVar loc id) in
+      (match local with
+      | Some (t,_) -> t
+      | _ ->
+          (match Tcheck.GlobalEnv.getGlobalVar env id with
+          | Some t -> t
+          | None -> raise (EvalError (loc, "Unknown type for variable: " ^ pprint_ident id))))
   | Expr_Field(e,f) ->
-      (match Tcheck.typeFields env loc (type_of_load loc e) with
+      let+ t = type_of_load loc e in
+      (match Tcheck.typeFields env loc t with
       | FT_Record rfs -> Tcheck.get_recordfield loc rfs f
       | FT_Register rfs -> let (_,t) = Tcheck.get_regfield loc rfs f in t)
   | Expr_Array(a,i) ->
-      (match Tcheck.derefType env (type_of_load loc a) with
+      let+ t = type_of_load loc a in
+      (match Tcheck.derefType env t with
       | Type_Array(ixty, elty) -> elty
       | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr a)))
   | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr x)))
 
+let width_of_type (loc: l) (t: ty): int =
+  match t with
+  | Type_Bits (Expr_LitInt wd) -> int_of_string wd
+  | _ -> unsupported loc @@ "Can't get bit width of type: " ^ pp_type t
+
 let width_of_field (loc: l) (t: ty) (f: ident): int =
   let env = Tcheck.env0 in
-  let ft = (match Tcheck.typeFields env loc t with
-  | FT_Record rfs -> Tcheck.get_recordfield loc rfs f
-  | FT_Register rfs -> let (_,t) = Tcheck.get_regfield loc rfs f in t)
+  let ft =
+    (match Tcheck.typeFields env loc t with
+    | FT_Record rfs -> Tcheck.get_recordfield loc rfs f
+    | FT_Register rfs -> let (_,t) = Tcheck.get_regfield loc rfs f in t)
   in
-  (match ft with
-  | Type_Bits (Expr_LitInt wd) -> int_of_string  wd
-  | _ -> raise (EvalError (loc, "Can't get bit width of type: " ^ pp_type ft)))
+  width_of_type loc ft
 
 (** Disassembly Functions *)
 
@@ -484,7 +494,7 @@ and dis_pattern (loc: l) (v: sym) (x: AST.pattern): sym rws =
     | Pat_Range(lo, hi) ->
             let+ lo' = dis_expr loc lo
             and+ hi' = dis_expr loc hi in
-            sym_bool_and loc (sym_leq loc lo' v) (sym_leq loc v hi')
+            sym_and_bool loc (sym_le_int loc lo' v) (sym_le_int loc v hi')
     )
 
 (** Disassemble bitslice bounds, mirrors eval_slice *)
@@ -543,7 +553,8 @@ and dis_load_chain (loc: l) (x: expr) (ref: access_chain list): sym rws =
           match get_access_chain loc v ref with
           | VUninitialized _ ->
               let e = expr_access_chain (Expr_Var id) ref in
-              capture_expr loc (type_of_load loc e) e
+              let@ t = type_of_load loc e in
+              capture_expr loc t e
           | v' -> DisEnv.pure @@ Val v')
   | Expr_Field(e,f) -> dis_load_chain loc e (Field f::ref)
   | Expr_Array(a,i) ->
@@ -583,8 +594,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             let@ e' = dis_expr loc e
             and@ ss' = DisEnv.traverse (dis_slice loc) ss in
             let vs = List.map (fun (i,w) -> sym_extract_bits loc e' i w) ss' in
-            let v' = List.fold_left (sym_append_bits loc) (Val (from_bitsLit "")) vs in
-            DisEnv.pure v'
+            DisEnv.pure (sym_concat loc vs)
     | Expr_In(e, p) ->
             let@ e' = dis_expr loc e in
             let@ p' = dis_pattern loc e' p in
@@ -667,7 +677,16 @@ and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
     DisEnv.scope loc "dis_call"
         (pp_expr (Expr_TApply (f, List.map sym_expr tes, List.map sym_expr es)))
         pp_sym
-        (dis_call' loc f tes es)
+        (dis_call_intercept loc f tes es)
+
+and dis_call_intercept (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
+  (match (name_of_FIdent f, es) with
+  | ("AArch64.BranchAddr", [e]) ->
+      if !debug_level >= 2 then begin
+        Printf.printf "Intercepted call to AArch64.BranchAddr: Assuming no modification to destination address\n";
+      end;
+      DisEnv.pure e
+  | _ -> dis_call' loc f tes es)
 
 and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
     let@ fn = DisEnv.getFun loc f in
@@ -797,7 +816,7 @@ and dis_lexpr' (loc: l) (x: lexpr) (r: sym): unit rws =
         dis_lexpr_chain loc x [] r
     | LExpr_Fields(l,fs) ->
         let@ l = resolve_lexpr loc l in
-        let ty = type_of_load loc (lexpr_to_expr loc l) in
+        let@ ty = type_of_load loc (lexpr_to_expr loc l) in
         let rec set_fields (i: int) (fs: ident list): unit rws =
             (match fs with
             | [] -> DisEnv.unit
@@ -811,18 +830,22 @@ and dis_lexpr' (loc: l) (x: lexpr) (r: sym): unit rws =
         set_fields 0 fs
     | LExpr_Slices(l, ss) ->
         let e = lexpr_to_expr loc l in
+        let@ ty = type_of_load loc e in
+        let prev_width = (match ty with
+        | Type_Bits (Expr_LitInt wd) -> int_of_string  wd
+        | _ -> unsupported loc "Slice LExpr to type other than bitvector") in
         let rec eval (o: sym) (ss': AST.slice list) (prev: sym): sym rws =
             (match ss' with
             | [] -> DisEnv.pure prev
             | (s :: ss) ->
                 let@ (i, w) = dis_slice loc s in
                 let v       = sym_extract_bits loc r o w in
-                eval (sym_add_int loc o w) ss (sym_insert_bits loc prev i w v)
+                eval (sym_add_int loc o w) ss (sym_insert_bits loc prev_width prev i w v)
             )
         in
         let@ old = dis_expr loc e in
         let@ rhs = eval (Val (VInt Z.zero)) ss old in
-        dis_lexpr_chain loc x [] rhs
+        dis_lexpr_chain loc l [] rhs
     | LExpr_Tuple(ls) ->
         let rs = sym_of_tuple loc r in
         assert (List.length ls = List.length rs);
@@ -895,7 +918,7 @@ and dis_stmt' (x: AST.stmt): unit rws =
         declare_const loc ty' v e'
     | Stmt_Assign(l, r, loc) ->
         let@ r' = dis_expr loc r in
-        dis_lexpr loc l r' (* TODO: double check that both statements are added *)
+        dis_lexpr loc l r'
     | Stmt_If(c, t, els, e, loc) ->
         let rec eval_if xs d : unit rws = match xs with
         | [] -> dis_stmts d
@@ -1157,6 +1180,7 @@ and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
                 then emit stmt
                 else pass
         | Stmt_Assign(LExpr_Var(v), r, loc) ->
+            (* TODO: Don't pass if v is global *)
             if IdentSet.mem v used
                 then emit stmt
                 else pass
