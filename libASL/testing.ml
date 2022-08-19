@@ -104,13 +104,18 @@ let pair_list_cons i: pair_list -> pair_list =
 let pp_pair_list =
   Utils.pp_list (fun (x,y) -> string_of_int x ^ "," ^ string_of_int y)
 
+(* assumes intervals in list are in increasing order. *)
 let rec pair_list_mem (xs: pair_list) (x: int): bool =
   match xs with
   | [] -> false
   | (l,r)::rest ->
-    if l <= x && x <= r
-      then true
-      else pair_list_mem rest x
+    if x < l then
+      false
+    else
+      if l <= x && x <= r then
+        true
+      else
+        pair_list_mem rest x
 
 
 (****************************************************************
@@ -172,8 +177,31 @@ let enumerate_opcodes (env: Env.t) (case: decode_case) start stop fname: unit =
     end;
     j := succ !j;
     i := succ !i;
-  done;
+  done
 
+let load_opcode_file (p: string): pair_list =
+  let f = open_in p in
+  let ops = ref [] in
+  (try
+    while true do
+      let line = input_line f in
+      match String.split_on_char ',' line with
+      | [l;r ] ->
+        let l = int_of_string l
+        and r = int_of_string r in
+        ops := (l,r) :: !ops
+      | _ -> assert false
+    done
+  with End_of_file -> ());
+  close_in_noerr f;
+  List.rev !ops
+
+let load_opcodes (directory: string): pair_list Bindings.t =
+  let files = Array.to_list @@ Sys.readdir directory in
+  mk_bindings
+    (List.map
+      (fun f -> (Ident f, load_opcode_file (Filename.concat directory f)))
+      files)
 
 
 (****************************************************************
@@ -257,11 +285,13 @@ let int_of_opcode: opcode_value -> int =
 
 (* Functions for enumerating encodings with encoding_tree. *)
 
-let field_vals_flags_only (name: string) (wd: int): int list =
-  match name with
-  | "Rn" -> [0;1]
-  | "cond" -> [1]
-  | _ when Utils.startswith name "R" && name <> "R" -> [1]
+let field_vals_flags_only (enc: encoding) (name: string) (wd: int): int list =
+  let Encoding_Block (instr, _, _, _, _, _, _, _) = enc in
+  match (instr, name) with
+  | Ident "aarch64_branch_unconditional_eret", "Rn" -> [0b11111]
+  | Ident "aarch64_branch_unconditional_register", "Rn" -> [0; 1; 0b11111]
+  | _, "cond" -> [1]
+  | _ when Utils.startswith name "R" && name <> "R" -> [0;1]
   | _ when Utils.startswith name "X" && name <> "R" -> [1]
   | _ when Utils.startswith name "imm" -> [1]
   | _ when Utils.startswith name "uimm" -> [1]
@@ -290,7 +320,7 @@ type operror =
 
 let pp_operror: operror -> string =
   function
-  | Op_EvalFail (Throw (_, Exc_Undefined)) -> "UNDEFINED"
+  | Op_EvalFail (Throw (loc, Exc_Undefined)) -> "UNDEFINED (" ^ pp_loc loc ^ ")"
   | Op_EvalFail e -> "[1] Evaluation failure: " ^ Printexc.to_string e
   | Op_DisFail e -> "[2] Disassembly failure: " ^ Printexc.to_string e
   | Op_DisEvalFail e -> "[3] Dissassembled evaluation failure: " ^ Printexc.to_string e

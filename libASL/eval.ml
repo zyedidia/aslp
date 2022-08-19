@@ -703,11 +703,13 @@ and eval_slice (loc: l) (env: Env.t) (x: AST.slice): (value * value) =
 (** Evaluate expression *)
 and eval_expr (loc: l) (env: Env.t) (x: AST.expr): value =
     (match x with
-    | Expr_If(_, c, t, els, e) ->
+    | Expr_If(ty, c, t, els, e) ->
             let rec eval_if xs d = match xs with
                 | [] -> eval_expr loc env d
                 | AST.E_Elsif_Cond (cond, b)::xs' ->
-                    if to_bool loc (eval_expr loc env cond) then
+                    match eval_expr loc env cond with
+                    | VUninitialized _ -> VUninitialized ty
+                    | v -> if to_bool loc v then
                         eval_expr loc env b
                     else
                         eval_if xs' d

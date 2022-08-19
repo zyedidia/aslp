@@ -92,17 +92,25 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         let encs = List.map (fun (x,_,_,_) -> x) (Env.listInstructions cpu.env) in
         let encs' = List.filter encoding_matches encs in
 
+        let opcodes = load_opcodes "encodings" in
+
         List.iter (fun enc ->
             let Encoding_Block (nm, _,_,_,_,_,_,_) = enc in
             Printf.printf "ENCODING: %s\n" (pprint_ident nm);
-            let t = enumerate_encoding enc field_vals_flags_only in
+            let t = enumerate_encoding enc (field_vals_flags_only enc) in
             let l = list_of_enc_tree t in
-            List.iter (fun (fields, op) ->
-                Printf.printf "%s: %s" (hex_of_int op) (pp_enc_fields fields);
-                flush stdout;
-                let result = op_test_opcode cpu.env iset op in
-                Printf.printf " --> %s\n" (pp_opresult (fun _ -> "OK") result);
-            ) l
+            match Bindings.find_opt nm opcodes with
+            | Some ops ->
+                List.iter (fun (fields, op) ->
+                    Printf.printf "%s: %s --> " (hex_of_int op) (pp_enc_fields fields);
+                    flush stdout;
+                    if pair_list_mem ops op then
+                        let result = op_test_opcode cpu.env iset op in
+                        Printf.printf "%s\n" (pp_opresult (fun _ -> "OK") result)
+                    else
+                        Printf.printf "(invalid)\n";
+                ) l
+            | None -> Printf.printf "(encoding unused)\n";
         ) encs'
     | [":compare"; iset; file] ->
         let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
