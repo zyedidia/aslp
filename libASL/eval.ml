@@ -452,7 +452,7 @@ end = struct
 
 end
 
-let rec eval_uninitialized  (env: Env.t) (v: value): value =
+let rec eval_uninitialized_to_defaults  (env: Env.t) (v: value): value =
     match v with
     | VUninitialized t ->
         (match t with
@@ -467,14 +467,14 @@ let rec eval_uninitialized  (env: Env.t) (v: value): value =
             | Some (enumval::_) -> enumval
             | _ -> failwith ("eval_uninitialized: unsupported type constructor: " ^ pprint_ident id))
         | _ -> failwith ("eval_uninitialized: unsupported type " ^ pp_type t))
-    | VRecord bs -> VRecord (Bindings.map (eval_uninitialized env) bs)
-    | VTuple vs -> VTuple (List.map (eval_uninitialized env) vs)
-    | VArray (arr, d) -> VArray (arr, (eval_uninitialized env) d)
+    | VRecord bs -> VRecord (Bindings.map (eval_uninitialized_to_defaults env) bs)
+    | VTuple vs -> VTuple (List.map (eval_uninitialized_to_defaults env) vs)
+    | VArray (arr, d) -> VArray (arr, (eval_uninitialized_to_defaults env) d)
     | _ -> v
 
 let initializeGlobals (env: Env.t): unit =
     let g = Env.getGlobals env in
-    g.bs <- Bindings.map (eval_uninitialized env) g.bs
+    g.bs <- Bindings.map (eval_uninitialized_to_defaults env) g.bs
 
 let initializeRegisters (env: Env.t) (xs: bigint list): unit =
     let d = VBits {n=64; v=Z.zero} in
@@ -548,8 +548,15 @@ and mk_uninitialized (loc: l) (env: Env.t) (x: AST.ty): value =
     | Type_Tuple(tys) ->
             VTuple (List.map (mk_uninitialized loc env) tys)
     (* bitvectors and registers should really track whether a bit is initialized individually *)
+    (*
     | Type_Bits(n) -> eval_unknown_bits (to_integer loc (eval_expr loc env n))
     | Type_Register(wd, _) -> eval_unknown_bits (Z.of_string wd)
+    *)
+
+    (* full evaluation requires bits to be set to a modifiable value.
+       until we can initialize bits individually, this will have to do. *)
+    | Type_Bits n -> VBits (prim_cvt_int_bits (to_integer loc (eval_expr loc env n)) Z.zero)
+    | Type_Register (n,_) -> VBits (mkBits (int_of_string n) Z.zero)
     | _ ->
             VUninitialized x (* should only be used for scalar types *)
     )
@@ -828,7 +835,7 @@ and eval_stmts (env: Env.t) (xs: AST.stmt list): unit =
 and eval_stmt (env: Env.t) (x: AST.stmt): unit =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
-            List.iter (fun v -> Env.addLocalVar loc env v (eval_uninitialized env (mk_uninitialized loc env ty))) vs
+            List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs
     | Stmt_VarDecl(ty, v, i, loc) ->
             let i' = eval_expr loc env i in
             Env.addLocalVar loc env v i'
