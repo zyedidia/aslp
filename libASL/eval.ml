@@ -131,20 +131,6 @@ module Env : sig
     val setImpdef           : t -> string -> value -> unit
     val getImpdef           : AST.l -> t -> string -> value
 
-    val getReturnSymbol     : AST.l -> t -> AST.expr
-    val addReturnSymbol     : t -> AST.expr -> unit
-    val removeReturnSymbol  : t -> unit
-
-    val getNumSymbols       : t -> int
-
-    val getLocalPrefix      : AST.l -> t -> string
-    val addLocalPrefix      : t -> string -> unit
-    val removeLocalPrefix   : t -> unit
-
-    val addImplicitValue    : t -> ident -> value -> unit
-    val addImplicitLevel    : t -> unit
-    val getImplicitLevel    : t -> (ident * value) list
-
     val setLocals           : t -> scope list -> unit
     val getLocals           : t -> scope list
     val readLocals          : t -> value Bindings.t list
@@ -443,57 +429,6 @@ end = struct
         | None ->
                 raise (EvalError (loc, "Unknown value for IMPLEMENTATION_DEFINED \""^x^"\""))
         )
-
-    let getReturnSymbol (loc: l) (env: t): AST.expr =
-        match env.returnSymbols with
-        | [] -> raise (EvalError (loc, "Return not in function"))
-        | (e :: rs) -> e
-
-    let addReturnSymbol (env: t) (e: AST.expr): unit =
-        assertNotFrozen env;
-        env.returnSymbols <- e :: env.returnSymbols
-
-    let removeReturnSymbol (env: t): unit =
-        (match env.returnSymbols with
-        | [] -> ()
-        | (s::ss) -> env.returnSymbols <- ss
-        )
-
-    let getNumSymbols (env: t): int =
-        env.numSymbols <- env.numSymbols + 1;
-        env.numSymbols
-
-    let getLocalPrefix (loc: l) (env: t): string =
-        match env.localPrefixes with
-        | [] -> raise (EvalError (loc, "Local not in function"))
-        | (s :: ss) -> s
-
-    let addLocalPrefix (env: t) (s: string): unit =
-        assertNotFrozen env;
-        env.localPrefixes <- s :: env.localPrefixes
-
-    let removeLocalPrefix (env: t): unit =
-        (match env.localPrefixes with
-        | [] -> ()
-        | (s::ss) -> env.localPrefixes <- ss
-        )
-
-    let addImplicitValue (env: t) (arg: ident) (v: value): unit =
-        assertNotFrozen env;
-        match env.implicitLevels with
-        | [] -> raise (EvalError (Unknown, "No levels exist"))
-        | (level::levels) -> (match level with
-            | [] -> env.implicitLevels <- ([(arg, v)]::levels)
-            | values -> env.implicitLevels <- (((arg, v)::values)::levels))
-
-    let addImplicitLevel (env: t): unit =
-        assertNotFrozen env;
-        env.implicitLevels <- ([]::env.implicitLevels)
-
-    let getImplicitLevel (env: t): (ident * value) list =
-        match env.implicitLevels with
-        | [] -> raise (EvalError (Unknown, "No levels exist"))
-        | (level::levels) -> env.implicitLevels <- levels; level
 
     let setLocals (env: t) (xs: scope list): unit =
         env.locals <- xs
