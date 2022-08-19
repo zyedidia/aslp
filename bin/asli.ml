@@ -94,7 +94,9 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
 
         let opcodes = load_opcodes "encodings" in
         (match opcodes with
-        | None -> Printf.printf "WARNING: encodings/ directory missing, assuming all opcodes valid.\n\n"
+        | None ->
+            Printf.printf "WARNING: encodings/ directory missing, assuming all opcodes are valid.\n";
+            Printf.printf "         If encodings_*.tar.gz files exist, they should be extracted.\n\n"
         | Some x -> Printf.printf "Loaded opcodes for %d encodings\n" (Bindings.cardinal x)
         );
         let get_opcodes nm =
