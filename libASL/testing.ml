@@ -104,21 +104,33 @@ let pair_list_cons i: pair_list -> pair_list =
 let pp_pair_list =
   Utils.pp_list (fun (x,y) -> string_of_int x ^ "," ^ string_of_int y)
 
-(* assumes intervals in list are in increasing order. *)
 let rec pair_list_mem (xs: pair_list) (x: int): bool =
   match xs with
   | [] -> false
   | (l,r)::rest ->
-    if x < l then
-      false
+    if l <= x && x <= r then
+      true
     else
-      if l <= x && x <= r then
-        true
-      else
-        pair_list_mem rest x
+      pair_list_mem rest x
 
+type pair_array = (int * int) array
 
-(****************************************************************
+(** Searches for value in given interval array.
+    Assumes array's intervals are in *increasing* order.  *)
+let pair_array_mem (xs: pair_array) (x: int): bool =
+  let l = ref 0
+  and r = ref (Array.length xs - 1) in
+  while !l < !r do
+    let m = (!l + !r) / 2 in
+    if x > snd (Array.get xs m) then
+      l := m + 1
+    else
+      r := m
+  done;
+  let (lo,hi) = Array.get xs !l in
+  lo <= x && x <= hi
+
+  (****************************************************************
  * Opcode enumeration functions.
  ****************************************************************)
 
@@ -179,7 +191,7 @@ let enumerate_opcodes (env: Env.t) (case: decode_case) start stop fname: unit =
     i := succ !i;
   done
 
-let load_opcode_file (p: string): pair_list =
+let load_opcode_file (p: string): (int * int) array =
   let f = open_in p in
   let ops = ref [] in
   (try
@@ -194,15 +206,16 @@ let load_opcode_file (p: string): pair_list =
     done
   with End_of_file -> ());
   close_in_noerr f;
-  List.rev !ops
+  let a = Array.of_list !ops in
+  Array.fast_sort compare a;
+  a
 
-let load_opcodes (directory: string): pair_list Bindings.t =
+let load_opcodes (directory: string): (int*int) array Bindings.t =
   let files = Array.to_list @@ Sys.readdir directory in
   mk_bindings
     (List.map
       (fun f -> (Ident f, load_opcode_file (Filename.concat directory f)))
       files)
-
 
 (****************************************************************
  * Opcode coverage testing.
@@ -240,18 +253,14 @@ let rec pp_enc_tree =
 
 type fields = (instr_field * int) list
 
-let rec list_of_enc_tree (t: encoding_tree): (fields * int) list =
-  (* add_field (f, i) prepends the field "f" with value "i" to the given
-     (fields, opcode) pair. *)
-  let add_field (f: instr_field * int) ((fs,op): fields * int) = (f::fs, op) in
+let rec list_of_enc_tree (t: encoding_tree): int list =
   match t with
-  | Op x -> [[], x]
+  | Op x -> [x]
   | Field (f, t') ->
-    let x = List.map (fun (k,v) ->
-      let rest = list_of_enc_tree v in
-      List.map (add_field (f, k)) rest
-    ) (IntMap.bindings t') in
-    List.concat x
+    List.concat
+      (List.map (fun (_,v) ->
+        list_of_enc_tree v)
+        (IntMap.bindings t'))
 
 let pp_enc_fields (f: fields): string =
   Utils.pp_list (fun (f,i) -> pp_instr_field f ^ "=" ^ string_of_int i) f
@@ -262,6 +271,13 @@ let pp_enc_list (encs: (fields * int) list): string =
     (List.map (Utils.pp_pair pp_enc_fields hex_of_int) encs)
 
 (* Functions for manipulating opcodes as integers. *)
+
+let fields_of_opcode (fields: instr_field list) (op: int): fields =
+  List.map (fun f ->
+    let IField_Field(_,lo,wd) = f in
+    let mask = Int.shift_left 1 wd - 1 in
+    (f, Int.logand mask (Int.shift_right_logical op lo))
+  ) fields
 
 let set_field (IField_Field(_,lo,wd): instr_field) (op: int) (v: int) =
   (* assert that value is within bounds for given width. *)

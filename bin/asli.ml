@@ -95,16 +95,17 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         let opcodes = load_opcodes "encodings" in
 
         List.iter (fun enc ->
-            let Encoding_Block (nm, _,_,_,_,_,_,_) = enc in
+            let Encoding_Block (nm, _,fields,_,_,_,_,_) = enc in
             Printf.printf "ENCODING: %s\n" (pprint_ident nm);
             let t = enumerate_encoding enc (field_vals_flags_only enc) in
             let l = list_of_enc_tree t in
             match Bindings.find_opt nm opcodes with
             | Some ops ->
-                List.iter (fun (fields, op) ->
-                    Printf.printf "%s: %s --> " (hex_of_int op) (pp_enc_fields fields);
+                List.iter (fun op ->
+                    let fs = fields_of_opcode fields op in
+                    Printf.printf "%s: %s --> " (hex_of_int op) (pp_enc_fields fs);
                     flush stdout;
-                    if pair_list_mem ops op then
+                    if pair_array_mem ops op then
                         let result = op_test_opcode cpu.env iset op in
                         Printf.printf "%s\n" (pp_opresult (fun _ -> "OK") result)
                     else
