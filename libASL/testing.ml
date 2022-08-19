@@ -210,12 +210,15 @@ let load_opcode_file (p: string): (int * int) array =
   Array.fast_sort compare a;
   a
 
-let load_opcodes (directory: string): (int*int) array Bindings.t =
-  let files = Array.to_list @@ Sys.readdir directory in
-  mk_bindings
-    (List.map
-      (fun f -> (Ident f, load_opcode_file (Filename.concat directory f)))
-      files)
+let load_opcodes (directory: string): (int*int) array Bindings.t option =
+  try
+    let files = Array.to_list @@ Sys.readdir directory in
+    Some (mk_bindings
+      (List.map
+        (fun f -> (Ident f, load_opcode_file (Filename.concat directory f)))
+        files))
+  with
+    Sys_error _ -> None
 
 (****************************************************************
  * Opcode coverage testing.

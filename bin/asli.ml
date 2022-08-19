@@ -93,25 +93,34 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         let encs' = List.filter encoding_matches encs in
 
         let opcodes = load_opcodes "encodings" in
+        (match opcodes with
+        | None -> Printf.printf "WARNING: encodings/ directory missing, assuming all opcodes valid.\n\n"
+        | Some x -> Printf.printf "Loaded opcodes for %d encodings\n" (Bindings.cardinal x)
+        );
+        let get_opcodes nm =
+            (match opcodes with
+            | Some opcodes' -> Option.value (Bindings.find_opt nm opcodes') ~default:[||]
+            | None -> [| (0, Int.max_int) |]
+        ) in
 
         List.iter (fun enc ->
-            let Encoding_Block (nm, _,fields,_,_,_,_,_) = enc in
-            Printf.printf "ENCODING: %s\n" (pprint_ident nm);
+            let Encoding_Block (nm,_,fields,_,_,_,_,_) = enc in
+            Printf.printf "\nENCODING: %s\n" (pprint_ident nm);
             let t = enumerate_encoding enc (field_vals_flags_only enc) in
             let l = list_of_enc_tree t in
-            match Bindings.find_opt nm opcodes with
-            | Some ops ->
+            match get_opcodes nm with
+            | [||] -> Printf.printf "(encoding unused)\n";
+            | ops ->
                 List.iter (fun op ->
                     let fs = fields_of_opcode fields op in
                     Printf.printf "%s: %s --> " (hex_of_int op) (pp_enc_fields fs);
-                    flush stdout;
+                    (* flush stdout; *)
                     if pair_array_mem ops op then
                         let result = op_test_opcode cpu.env iset op in
                         Printf.printf "%s\n" (pp_opresult (fun _ -> "OK") result)
                     else
                         Printf.printf "(invalid)\n";
                 ) l
-            | None -> Printf.printf "(encoding unused)\n";
         ) encs'
     | [":compare"; iset; file] ->
         let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
