@@ -215,7 +215,7 @@ module DisEnv = struct
             | None -> None
             | Some _ -> Some id)
 
-    let getFun (loc: l) (x: ident): (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) option rws =
+    let getFun (loc: l) (x: ident): fun_sig option rws =
         reads (catch (fun env -> Env.getFun loc env x))
 
     let nextVarName (prefix: string): ident rws =
@@ -1118,7 +1118,7 @@ and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: 
                     (* todo: should evaluate ConditionHolds to decide whether to execute body *)
                     let@ env = DisEnv.read in
 
-                    if !debug_level >= 2 then begin
+                    if !debug_level >= 1 then begin
                         Printf.printf "Dissasm: %s\n" (pprint_ident inst);
                         Printf.printf "\n\nENV LOCALS: %s\n" (LocalEnv.pp_value_bindings (Env.readLocals env));
                     end;

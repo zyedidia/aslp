@@ -81,6 +81,8 @@ let set_scope (k: ident) (v: value) (s: scope): unit =
 (** {2 Mutable bindings}                                        *)
 (****************************************************************)
 
+type fun_sig = (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list)
+
 (** Environment representing both global and local state of the system *)
 module Env : sig
     type t
@@ -373,7 +375,7 @@ end = struct
         | None    -> raise (EvalError (loc, "setVar " ^ pprint_ident x))
         )
 
-    let getFun (loc: l) (env: t) (x: ident): (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) =
+    let getFun (loc: l) (env: t) (x: ident): fun_sig =
         (match Bindings.find_opt x env.functions with
         | Some def -> def
         | None     -> raise (EvalError (loc, "getFun " ^ pprint_ident x))
@@ -387,7 +389,7 @@ end = struct
             loc                 - declaration location
             stmt list           - function body
         *)
-    let addFun (loc: l) (env: t) (x: ident) (def: (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list)): unit =
+    let addFun (loc: l) (env: t) (x: ident) (def: fun_sig): unit =
         if false then Printf.printf "Adding function %s\n" (pprint_ident x);
         if Bindings.mem x env.functions then begin
             if true then begin
@@ -1164,6 +1166,9 @@ let eval_uninitialized (loc: l) (env: Env.t) (x: AST.ty): value = eval_unknown l
 (** Construct environment from global declarations *)
 let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
     if false then Printf.printf "Building environment from %d declarations\n" (List.length ds);
+
+    let ds = Transforms.RefParams.ref_param_conversion ds in
+
     let env = Env.empty in
     (* todo?: first pull out the constants/configs and evaluate all of them
      * lazily?

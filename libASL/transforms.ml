@@ -1,6 +1,7 @@
 open Asl_utils
 
 open AST
+open Visitor
 
 (* module unused. *)
 module RemoveUnused = struct
@@ -180,3 +181,88 @@ module Bits = struct
 end
 
 
+module RefParams = struct
+
+  let has_ref_param (xs: sformal list) =
+    List.exists
+      (function
+      | Formal_InOut _ -> true
+      | _ -> false)
+      xs
+
+  let get_ref_params (xs: sformal list): (int * ty * ident) list =
+    let xs = List.mapi (fun i x -> (i,x)) xs in
+    List.filter_map
+      (fun (n,f) ->
+      match f with
+      | Formal_InOut (t,i) -> Some (n,t,i)
+      | _ -> None)
+      xs
+
+  let replace_returns ss s =
+    let visit = object
+      inherit Asl_visitor.nopAslVisitor
+      method! vstmt =
+        function
+        | Stmt_ProcReturn _ -> ChangeTo s
+        | Stmt_FunReturn _ -> failwith "unexpected function return in ref param conversion."
+        | _ -> DoChildren
+    end
+    in
+    Asl_visitor.visit_stmts visit ss
+
+  class visit_decls = object
+    inherit Asl_visitor.nopAslVisitor
+
+    (* mapping of function identifiers to the index of their
+       reference parameter. *)
+    val mutable ref_params : int Bindings.t = Bindings.empty
+
+    method ref_params = ref_params
+
+    method! vdecl (d: declaration): declaration visitAction =
+      match d with
+      | Decl_ArraySetterDefn (nm, args, vty, vnm, body, loc)->
+        (match get_ref_params args with
+        | [] -> DoChildren
+        | [(n,t,i)] ->
+          ref_params <- Bindings.add nm n ref_params;
+          (* Printf.printf "ref: %s\n" (pp_bindings string_of_int ref_params); *)
+
+          let args' = List.map Tcheck.formal_of_sformal args @ [vty, vnm] in
+          let ret = Stmt_FunReturn (Expr_Var i, loc) in
+
+          let body' = replace_returns body ret in
+          ChangeTo (Decl_FunDefn (t, nm, args', body', loc))
+        | _ -> failwith "multiple reference (in/out) parameters are unsupported"
+        )
+      | _ -> DoChildren
+  end
+
+  class visit_writes ref_params = object
+    inherit Asl_visitor.nopAslVisitor
+
+    method! vstmt (s: stmt): stmt visitAction =
+      match s with
+      | Stmt_Assign (LExpr_Write (setter, targs, args), r, loc) ->
+        (* Printf.printf " %s\n" (pp_stmt s); *)
+        (match Bindings.find_opt setter ref_params with
+        | None -> DoChildren
+        | Some n ->
+          let a = (List.nth args n) in
+          (* Printf.printf "ref param: %s\n" (pp_expr a); *)
+
+          let le = Symbolic.expr_to_lexpr a in
+          let call = Expr_TApply (setter, targs, args @ [r]) in
+          ChangeTo (Stmt_Assign (le, call, loc))
+        )
+      | _ -> DoChildren
+  end
+
+  let ref_param_conversion (ds: declaration list) =
+    let v1 = new visit_decls in
+    let ds = List.map (Asl_visitor.visit_decl (v1 :> Asl_visitor.aslVisitor)) ds in
+    let v2 = new visit_writes (v1#ref_params) in
+    let ds = List.map (Asl_visitor.visit_decl v2) ds in
+    ds
+end

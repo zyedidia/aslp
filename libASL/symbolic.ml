@@ -77,10 +77,18 @@ let rec val_initialised (v: value): bool =
   | VArray (vs, _) -> Primops.ImmutableArray.for_all (fun _ -> val_initialised) vs
   | _ -> true
 
-let [@warning "-32"] rec expr_to_lexpr (e: expr): lexpr =
+let rec expr_to_lexpr (e: expr): lexpr =
   match e with
-  | Expr_Var v -> LExpr_Var v
+  | Expr_Var x -> LExpr_Var x
+  | Expr_Field (e,f) -> LExpr_Field (expr_to_lexpr e, f)
+  | Expr_Fields (e,fs) -> LExpr_Fields (expr_to_lexpr e, fs)
+  | Expr_Slices (e,ss) -> LExpr_Slices (expr_to_lexpr e, ss)
   | Expr_Tuple es -> LExpr_Tuple (List.map expr_to_lexpr es)
+  | Expr_Array (e,i) -> LExpr_Array (expr_to_lexpr e, i)
+  | Expr_TApply (FIdent (nm, n), tes, es) when Utils.endswith nm ".read" ->
+    (match String.split_on_char '.' nm with
+    | [nm'; "read"] -> LExpr_Write (FIdent (nm' ^ ".write", n), tes, es)
+    | _ -> raise (EvalError (Unknown, "expr_to_lexpr: cannot derive lexpr for " ^ pp_expr e)))
   | _ -> raise (EvalError (Unknown, "unexpected expression in expr_to_lexpr coercion: " ^ pp_expr e))
 
 let rec lexpr_to_expr (loc: l) (x: lexpr): expr =
