@@ -415,30 +415,6 @@ let rec sym_exists p = function
   | [] -> DisEnv.pure sym_false
   | a::l -> sym_if Unknown (type_bool) (p a) (DisEnv.pure sym_true) (sym_exists p l)
 
-(** Determine the type of memory access expression (Var, Array, Field) *)
-let rec type_of_load (loc: l) (x: expr): ty rws =
-  let env = Tcheck.env0 in
-  (match x with
-  | Expr_Var(id) ->
-      let+ local = DisEnv.gets (LocalEnv.getLocalVar loc id) in
-      (match local with
-      | Some (t,_) -> t
-      | _ ->
-          (match Tcheck.GlobalEnv.getGlobalVar env id with
-          | Some t -> t
-          | None -> raise (EvalError (loc, "Unknown type for variable: " ^ pprint_ident id))))
-  | Expr_Field(e,f) ->
-      let+ t = type_of_load loc e in
-      (match Tcheck.typeFields env loc t with
-      | FT_Record rfs -> Tcheck.get_recordfield loc rfs f
-      | FT_Register rfs -> let (_,t) = Tcheck.get_regfield loc rfs f in t)
-  | Expr_Array(a,i) ->
-      let+ t = type_of_load loc a in
-      (match Tcheck.derefType env t with
-      | Type_Array(ixty, elty) -> elty
-      | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr a)))
-  | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr x)))
-
 let width_of_type (loc: l) (t: ty): int =
   match t with
   | Type_Bits (Expr_LitInt wd) -> int_of_string wd
@@ -455,8 +431,34 @@ let width_of_field (loc: l) (t: ty) (f: ident): int =
 
 (** Disassembly Functions *)
 
+(** Determine the type of memory access expression (Var, Array, Field) *)
+let rec type_of_load (loc: l) (x: expr): ty rws =
+  let env = Tcheck.env0 in
+  (match x with
+  | Expr_Var(id) ->
+      let@ local = DisEnv.gets (LocalEnv.getLocalVar loc id) in
+      (match local with
+      | Some (t,_) -> DisEnv.pure t
+      | _ ->
+          (match Tcheck.GlobalEnv.getGlobalVar env id with
+          | Some t -> dis_type loc t (* visit types to resolve global constants. *)
+          | None -> raise (EvalError (loc, "Unknown type for variable: " ^ pprint_ident id))))
+  | Expr_Field(e,f) ->
+      let@ t = type_of_load loc e in
+      (match Tcheck.typeFields env loc t with
+      | FT_Record rfs -> dis_type loc @@ Tcheck.get_recordfield loc rfs f
+      | FT_Register rfs ->
+        let (_,t) = Tcheck.get_regfield loc rfs f in
+        dis_type loc t)
+  | Expr_Array(a,i) ->
+      let@ t = type_of_load loc a in
+      (match Tcheck.derefType env t with
+      | Type_Array(ixty, elty) -> dis_type loc elty
+      | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr a)))
+  | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr x)))
+
 (** Disassemble type *)
-let rec dis_type (loc: l) (t: ty): ty rws =
+and dis_type (loc: l) (t: ty): ty rws =
     match t with
     | Type_Bits ex ->
         let+ ex' = dis_expr loc ex in
