@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<mime-info xmlns='http://www.freedesktop.org/standards/shared-mime-info'>
+  <mime-type type="text/x-asl">
+    <acronym>ASL</acronym>
+    <expanded-acronym>ARM Specification Language</expanded-acronym>
+    <sub-class-of type="text/plain"/>
+    <generic-icon name="text-x-generic"/>
+    <magic priority="50">
+      <match type="string" offset="0" value="            _____  _       _    ___________________________________"/>
+    </magic>
+    <glob pattern="*.asl"/>
+  </mime-type>
+</mime-info>
