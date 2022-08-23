@@ -190,6 +190,8 @@ module RefParams = struct
       | _ -> false)
       xs
 
+  (** Filters the given list of sformal, returning a list of
+      (argument index, type, argument name) with only the ref params. *)
   let get_ref_params (xs: sformal list): (int * ty * ident) list =
     let xs = List.mapi (fun i x -> (i,x)) xs in
     List.filter_map
@@ -214,9 +216,9 @@ module RefParams = struct
   class visit_decls = object
     inherit Asl_visitor.nopAslVisitor
 
-    (* mapping of function identifiers to the index of their
-       reference parameter. *)
-    val mutable ref_params : int Bindings.t = Bindings.empty
+    (* mapping of function identifiers to the indices of their
+       reference parameters. *)
+    val mutable ref_params : int list Bindings.t = Bindings.empty
 
     method ref_params = ref_params
 
@@ -225,16 +227,23 @@ module RefParams = struct
       | Decl_ArraySetterDefn (nm, args, vty, vnm, body, loc)->
         (match get_ref_params args with
         | [] -> DoChildren
-        | [(n,t,i)] ->
-          ref_params <- Bindings.add nm n ref_params;
-          (* Printf.printf "ref: %s\n" (pp_bindings string_of_int ref_params); *)
+        | refs ->
+          let ns = List.map (fun (n,_,_) -> n) refs in
+          let ts = List.map (fun (_,t,_) -> t) refs in
+          let is = List.map (fun (_,_,i) -> i) refs in
 
+          ref_params <- Bindings.add nm ns ref_params;
+
+          (* append setter value argument to formal argument list. *)
           let args' = List.map Tcheck.formal_of_sformal args @ [vty, vnm] in
-          let ret = Stmt_FunReturn (Expr_Var i, loc) in
 
+          (* construct return expression to return modified ref vars. *)
+          let vars = List.map (fun x -> Expr_Var x) is in
+          let ret = Stmt_FunReturn (Expr_Tuple vars, loc) in
           let body' = replace_returns body ret in
-          ChangeTo (Decl_FunDefn (t, nm, args', body', loc))
-        | _ -> failwith "multiple reference (in/out) parameters are unsupported"
+
+          let rty = Type_Tuple ts in
+          ChangeTo (Decl_FunDefn (rty, nm, args', body', loc))
         )
       | _ -> DoChildren
   end
@@ -248,13 +257,13 @@ module RefParams = struct
         (* Printf.printf " %s\n" (pp_stmt s); *)
         (match Bindings.find_opt setter ref_params with
         | None -> DoChildren
-        | Some n ->
-          let a = (List.nth args n) in
+        | Some ns ->
+          let refs = List.map (List.nth args) ns in
           (* Printf.printf "ref param: %s\n" (pp_expr a); *)
 
-          let le = Symbolic.expr_to_lexpr a in
+          let les = List.map Symbolic.expr_to_lexpr refs in
           let call = Expr_TApply (setter, targs, args @ [r]) in
-          ChangeTo (Stmt_Assign (le, call, loc))
+          ChangeTo (Stmt_Assign (LExpr_Tuple les, call, loc))
         )
       | _ -> DoChildren
   end
