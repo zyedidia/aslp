@@ -514,11 +514,7 @@ let pp_expr  (x: expr):  string = Utils.to_string (PP.pp_expr  x)
 let pp_lexpr (x: lexpr): string = Utils.to_string (PP.pp_lexpr x)
 let pp_stmt  (x: stmt):  string = Utils.to_string (PP.pp_stmt  x)
 
-let pp_decode_pattern (x: decode_pattern) =
-    let s = Utils.to_string (PP.pp_decode_pattern x) in
-    match x with
-    | DecoderPattern_Bits _ | DecoderPattern_Mask _ -> "'" ^ s ^ "'"
-    | _ -> s
+let pp_decode_pattern (x: decode_pattern) = Utils.to_string (PP.pp_decode_pattern x)
 
 let pp_decode_slice (x: decode_slice) = Utils.to_string (PP.pp_decode_slice x)
 
