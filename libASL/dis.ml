@@ -32,6 +32,9 @@ exception DisInternalError of l * string
 let unsupported (loc: l) (msg: string) =
   raise (DisUnsupported (loc, msg))
 
+let internal_error (loc: l) (msg: string) =
+  raise (DisInternalError (loc, msg))
+
 let print_dis_trace (trace: dis_trace) =
     String.concat "\n" @@ List.map (fun (f, e, l) ->
         Printf.sprintf "... at %s: %s --> %s" (pp_loc l) f e)
@@ -48,23 +51,51 @@ let () = Printexc.register_printer
         Some (Printexc.to_string exn ^ "\n" ^ trace')
     | DisUnsupported (loc, s) ->
         Some ("DisUnsupported: " ^ pp_loc loc ^ ": " ^ s)
+    | DisInternalError (loc, s) ->
+        Some ("DisInternalError: " ^ pp_loc loc ^ ": " ^ s)
     | Value.Throw (loc, e) ->
         Some ("LibASL.Value.Throw(" ^ Primops.pp_exc e ^ ") at " ^ pp_loc loc)
     | _ -> None)
 
 
+(** A variable's stack level and original identifier name.
+    The "stack level" is how many scopes deep it is.
+    For example, globals are level 0 and this increases
+    by 1 for each nested function call.  *)
+type var = Var of int * ident
+let pp_var (Var (i,id)) = Printf.sprintf "Var(%d,%s)" i (pprint_ident id)
+let var_ident (Var (i,id)) =
+  match id with
+  | Ident s -> Ident (s ^ "__" ^ string_of_int i)
+  | _ -> internal_error Unknown "unexpected resolved variable to function identifier"
+
+let var_expr v = Expr_Var (var_ident v)
+
 module LocalEnv = struct
     type t = {
         locals          : (ty * sym) Bindings.t list;
-        returnSymbols   : expr list;
+        returnSymbols   : expr option list;
         numSymbols      : int;
         indent          : int;
         trace           : dis_trace;
     }
 
-    let empty () =
+    let init (env: Env.t) =
+        let eval e = val_expr (eval_expr Unknown env e) in
+        let tenv = Tcheck.env0 in
+
+        let globals = Bindings.mapi
+          (fun id v ->
+            (match Tcheck.GlobalEnv.getGlobalVar tenv id with
+            | Some (Type_Bits e) ->
+                (Type_Bits (eval e), Val v)
+            | Some (Type_App (i, es)) ->
+                (Type_App (i, List.map eval es), Val v)
+            | Some t -> (t, Val v)
+            | _ -> internal_error Unknown @@ "cannot find type for global: " ^ pprint_ident id))
+          (Env.readGlobals env) in
         {
-            locals = [Bindings.empty];
+            locals = [Bindings.empty ; globals];
             returnSymbols = [];
             numSymbols = 0;
             indent = 0;
@@ -108,15 +139,16 @@ module LocalEnv = struct
 
     let getReturnSymbol (loc: l) (env: t): expr =
         match env.returnSymbols with
-        | [] -> raise (EvalError (loc, "Return not in function"))
-        | (e :: rs) -> e
+        | [] -> internal_error loc "attempt to return from outside a function"
+        | None :: _ -> internal_error loc "attempt to return a value from inside a procedure"
+        | Some e :: rs -> e
 
-    let addReturnSymbol (e: expr) (env: t): t =
+    let addReturnSymbol (e: expr option) (env: t): t =
         {env with returnSymbols = e :: env.returnSymbols}
 
     let removeReturnSymbol (env: t): t =
         match env.returnSymbols with
-        | [] -> env
+        | [] -> internal_error Unknown "attempt to remove return symbol but no return symbols exist"
         | (s::ss) -> {env with returnSymbols = ss}
 
     let getNumSymbols (env: t): int =
@@ -126,7 +158,6 @@ module LocalEnv = struct
         let env' = {env with numSymbols = env.numSymbols + 1} in
         (env'.numSymbols, env')
 
-    (* TODO: 0 should not map to "" *)
     let getLocalPrefix (env: t): string =
         string_of_int (List.length env.locals)
 
@@ -138,8 +169,23 @@ module LocalEnv = struct
 
     let popLevel (env: t): t =
         match env.locals with
-        | [] -> raise (EvalError (Unknown, "No levels exist"))
+        | [] -> internal_error Unknown "attempt to pop local scope level but none exist"
         | (_::ls) -> {env with locals = ls}
+
+    (** Generalised search through a list, with the option to update the
+        first matching element and return a supplementary 'b value. *)
+    let rec searchList (f: 'a -> ('b * 'a) option) (xs: 'a list): ('b * 'a list) option =
+      let cons x = function
+      | None -> None
+      | Some (b,xs) -> Some (b,x::xs)
+      in
+      match (xs) with
+      | [] -> None
+      | x::rest ->
+        (match f x with
+        | None -> cons x (searchList f rest)
+        | Some (b,x') -> Some (b, x'::rest))
+
 
     let rec search (x: ident) (bss : 'a Bindings.t list): 'a Bindings.t option =
         match bss with
@@ -147,31 +193,41 @@ module LocalEnv = struct
             if Bindings.mem x bs then Some bs else search x bss'
         | [] -> None
 
-    let addLocalVar (loc: l) (k: ident) (v: sym) (t: ty) (env: t): t =
+    let addLocalVar (loc: l) (k: ident) (v: sym) (t: ty) (env: t): var * t =
         if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident k) (pp_sym v);
+        let var = Var (List.length env.locals - 1, k) in
         match env.locals with
-        | (bs :: rest) -> {env with locals = (Bindings.add k (t,v) bs :: rest)}
-        | []        -> raise (EvalError (loc, "LocalEnv::addLocalVar bindings empty"))
+        | (bs :: rest) -> var, {env with locals = (Bindings.add k (t,v) bs :: rest)}
+        | []        -> internal_error Unknown "attempt to add local var but no local scopes exist"
 
     let addLocalConst = addLocalVar
 
-    let getLocalVar (loc: l) (x: ident) (env: t): (ty * sym) option =
-        (match (search x env.locals) with
-        | Some bs -> Some (Bindings.find x bs)
-        | None -> None)
+    let resolveVar (loc: l) (x: ident) (env: t): var =
+        let rec go (bs: (ty * sym) Bindings.t list) =
+          match bs with
+          | [] -> internal_error loc @@ "cannot resolve undeclared variable: " ^ pprint_ident x
+          | b::rest when Bindings.mem x b -> Var (List.length rest,x)
+          | _::rest -> go rest
+        in
+        go (env.locals)
 
-    let setLocalVar (loc: l) (x: ident) (v: sym) (env: t): t =
-        if !trace_write then Printf.printf "TRACE: write %s = %s\n" (pprint_ident x) (pp_sym v);
-        let locals' = Utils.replace_in_list (fun b ->
-          match Bindings.find_opt x b with
-          | Some (t,_) -> Some (Bindings.add x (t,v) b)
-          | None -> None
-        ) env.locals in
-        { env with locals = locals' }
+    let getVar (loc: l) (x: var) (env: t): (ty * sym) option =
+        let Var (i,id) = x in
+        let n = List.length env.locals - i - 1 in
+        match Bindings.find_opt id (List.nth env.locals n) with
+        | Some x -> Some x
+        | None -> internal_error loc @@ "failed to get resolved variable: " ^ pp_var x
 
-    let trySetLocalVar (loc: l) (x: ident) (v: sym) (env: t): t =
-        try setLocalVar loc x v env
-        with Not_found -> env
+    let setVar (loc: l) (x: var) (v: sym) (env: t): t =
+        if !trace_write then Printf.printf "TRACE: write %s = %s\n" (pp_var x) (pp_sym v);
+        let Var (i,id) = x in
+        let n = List.length env.locals - i - 1 in
+        match Bindings.find_opt id (List.nth env.locals n) with
+        | Some (t,_) ->
+          let locals = Utils.nth_modify (Bindings.add id (t,v)) n env.locals in
+          { env with locals }
+        | None -> internal_error loc @@ "failed to set resolved variable: " ^ pp_var x
+
 end
 
 module DisEnv = struct
@@ -190,21 +246,20 @@ module DisEnv = struct
         with EvalError _ -> None
 
     let getVar (loc: l) (x: ident): sym rws =
-        let* v = gets (LocalEnv.getLocalVar loc x) in
+        let* x = gets (LocalEnv.resolveVar loc x) in
+        let* v = gets (LocalEnv.getVar loc x) in
         match (v) with
             | Some (_,v) -> pure (v)
-            | None -> reads (fun env -> Val (Env.getVar loc env x))
+            | None -> internal_error loc "attempt to read undeclared variable"
+            (* | None -> reads (fun env -> Val (Env.getVar loc env x)) *)
 
-    let getVarOpt (loc: l) (x: ident): sym option rws =
-        let* v = gets (LocalEnv.getLocalVar loc x) in
+    (* let getVarOpt (loc: l) (x: var): sym option rws =
+        let* v = gets (LocalEnv.getVar loc x) in
         match (v) with
             | Some (_,v) -> pure (Some v)
-            | None -> reads (catch (fun env -> Val (Env.getVar loc env x)))
+            | None -> pure None *)
 
-    let getLocalName (x: ident): ident rws =
-        gets (LocalEnv.getLocalName x)
-
-    let findVar (loc: l) (id: ident): ident option rws =
+    (* let findVar (loc: l) (id: ident): ident option rws =
         let* localid = gets (LocalEnv.getLocalName id) in
         let* v = getVarOpt loc localid in
         match v with
@@ -213,7 +268,7 @@ module DisEnv = struct
             let+ v = getVarOpt loc id in
             (match v with
             | None -> None
-            | Some _ -> Some id)
+            | Some _ -> Some id) *)
 
     let getFun (loc: l) (x: ident): fun_sig option rws =
         reads (catch (fun env -> Env.getFun loc env x))
@@ -312,55 +367,49 @@ let contains_expr (xs: sym list): bool =
 let getGlobalConst(c: ident): sym rws =
   DisEnv.reads (fun env -> Val (Env.getGlobalConst env c))
 
-let check_var_shadowing (loc: l) (i: ident): unit rws =
+(* let check_var_shadowing (loc: l) (i: ident): unit rws =
     let@ old = DisEnv.gets (LocalEnv.getLocalVar loc i) in
     (match old with
     | Some _ -> (*DisEnv.warn ("shadowing local variable: " ^ pprint_ident i)*)
         DisEnv.unit
-    | None -> DisEnv.unit)
+    | None -> DisEnv.unit) *)
 
-let declare_var (loc: l) (t: ty) (i: ident): unit rws =
-  let@ i' = DisEnv.getLocalName i in
-  check_var_shadowing loc i >>
-  DisEnv.modify
-    (LocalEnv.addLocalVar loc i (Val (VUninitialized t)) t) >>
-  DisEnv.write [Stmt_VarDeclsNoInit(t, [i'], loc)]
+let declare_var (loc: l) (t: ty) (i: ident): var rws =
+  let@ var = DisEnv.stateful
+    (LocalEnv.addLocalVar loc i (Val (VUninitialized t)) t) in
+  let+ () = DisEnv.write [Stmt_VarDeclsNoInit(t, [var_ident var], loc)] in
+  var
 
-let declare_assign_var (loc: l) (t: ty) (i: ident) (x: sym): unit rws =
-  let@ i' = DisEnv.getLocalName i in
-  check_var_shadowing loc i >>
-  DisEnv.modify
-    (LocalEnv.addLocalVar loc i x t) >>
-  DisEnv.write [Stmt_VarDecl(t, i', sym_expr x, loc)]
+let declare_assign_var (loc: l) (t: ty) (i: ident) (x: sym): var rws =
+  let@ var = DisEnv.stateful
+    (LocalEnv.addLocalVar loc i x t) in
+  let+ () = DisEnv.write [Stmt_VarDecl(t, var_ident var, sym_expr x, loc)] in
+  var
 
-let declare_fresh_named_var (loc: l) (name: string)  (t: ty): ident rws =
+let declare_fresh_named_var (loc: l) (name: string) (t: ty): var rws =
   let@ res = DisEnv.nextVarName name in
-  let+ () = declare_var loc t res in
-  res
+  declare_var loc t res
 
-let assign_var (loc: l) (i: ident) (x: sym): unit rws =
-  let@ i' = DisEnv.getLocalName i in
+let assign_var (loc: l) (i: var) (x: sym): unit rws =
   (* Attempt to set local variable. If it fails, we assume
      the variable is in an outer scope.  *)
-  DisEnv.modify (LocalEnv.setLocalVar loc i x) >>
-  DisEnv.write [Stmt_Assign(LExpr_Var(i'), sym_expr x, loc)]
+  DisEnv.modify (LocalEnv.setVar loc i x) >>
+  DisEnv.write [Stmt_Assign(LExpr_Var(var_ident i), sym_expr x, loc)]
 
-let declare_const (loc: l) (t: ty) (i: ident) (x: sym): unit rws =
-  let@ i' = DisEnv.getLocalName i in
-  check_var_shadowing loc i >>
-  DisEnv.modify (LocalEnv.addLocalConst loc i x t) >>
-  DisEnv.write [Stmt_ConstDecl(t, i', sym_expr x, loc)]
+let declare_const (loc: l) (t: ty) (i: ident) (x: sym): var rws =
+  let@ var = DisEnv.stateful
+    (LocalEnv.addLocalConst loc i x t) in
+  let+ () = DisEnv.write [Stmt_ConstDecl(t, var_ident var, sym_expr x, loc)] in
+  var
 
-let declare_fresh_const (loc: l) (t: ty) (name: string) (x: expr): ident rws =
+let declare_fresh_const (loc: l) (t: ty) (name: string) (x: expr): var rws =
   let@ i = DisEnv.nextVarName name in
-  let+ () = declare_const loc t i (Exp x) in
-  i
+  declare_const loc t i (Exp x)
 
 let capture_expr loc (t: ty) (x: expr): sym rws =
   let@ v = declare_fresh_const loc t "Exp" x in
-  let@ i = DisEnv.getLocalName v in
-  let+ () = DisEnv.modify (LocalEnv.setLocalVar loc v (Val (VUninitialized t))) in
-  Exp (Expr_Var i)
+  let+ () = DisEnv.modify (LocalEnv.setVar loc v (Val (VUninitialized t))) in
+  Exp (Expr_Var (var_ident v))
 
 (** Monadic Utilities *)
 
@@ -374,7 +423,6 @@ let sym_if (loc: l) (t: ty) (test: sym rws) (tcase: sym rws) (fcase: sym rws): s
   | Val _ -> failwith ("Split on non-boolean value")
   | Exp e ->
       let@ tmp = declare_fresh_named_var loc "If" t in
-      let@ i' = DisEnv.getLocalName tmp in
       (* Evaluate true branch statements. *)
       let@ (tenv,tstmts) = DisEnv.locally_
           (tcase >>= assign_var loc tmp) in
@@ -385,7 +433,7 @@ let sym_if (loc: l) (t: ty) (test: sym rws) (tcase: sym rws) (fcase: sym rws): s
           (DisEnv.put env' >> fcase >>= assign_var loc tmp) in
       let@ () = DisEnv.put (LocalEnv.join_merge tenv fenv) in
       let+ () = DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)] in
-      Exp (Expr_Var (i')))
+      Exp (var_expr tmp))
 
 (** Symbolic implementation of an if statement with no return *)
 let unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit rws =
@@ -437,13 +485,15 @@ let rec type_of_load (loc: l) (x: expr): ty rws =
   let env = Tcheck.env0 in
   (match x with
   | Expr_Var(id) ->
-      let@ local = DisEnv.gets (LocalEnv.getLocalVar loc id) in
+      let@ v = DisEnv.gets (LocalEnv.resolveVar loc id) in
+      let@ local = DisEnv.gets (LocalEnv.getVar loc v) in
       (match local with
       | Some (t,_) -> DisEnv.pure t
       | _ ->
-          (match Tcheck.GlobalEnv.getGlobalVar env id with
+          assert false)
+          (* (match Tcheck.GlobalEnv.getGlobalVar env id with
           | Some t -> dis_type loc t (* visit types to resolve global constants. *)
-          | None -> raise (EvalError (loc, "Unknown type for variable: " ^ pprint_ident id))))
+          | None -> raise (EvalError (loc, "Unknown type for variable: " ^ pprint_ident id)))) *)
   | Expr_Field(e,f) ->
       let@ t = type_of_load loc e in
       (match Tcheck.typeFields env loc t with
@@ -669,29 +719,23 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
 
 (** Disassemble call to function *)
 and dis_funcall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): sym rws =
-    dis_call loc f tvs vs
+    let+ ret = dis_call loc f tvs vs in
+    match ret with
+    | None -> internal_error loc "function call finished without returning a value"
+    | Some x -> x
 
 (** Evaluate call to procedure *)
 and dis_proccall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): unit rws =
     let+ _ = dis_call loc f tvs vs in ()
 
 (** Disassemble a function call *)
-and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
+and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws =
     DisEnv.scope loc "dis_call"
         (pp_expr (Expr_TApply (f, List.map sym_expr tes, List.map sym_expr es)))
-        pp_sym
-        (dis_call_intercept loc f tes es)
+        (Option.fold ~none:"(no return)" ~some:pp_sym)
+        (dis_call' loc f tes es)
 
-and dis_call_intercept (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
-  (match (name_of_FIdent f, es) with
-  | ("AArch64.BranchAddr", [e]) ->
-      if !debug_level >= 2 then begin
-        Printf.printf "Intercepted call to AArch64.BranchAddr: Assuming no modification to destination address\n";
-      end;
-      DisEnv.pure e
-  | _ -> dis_call' loc f tes es)
-
-and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
+and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws =
     let@ fn = DisEnv.getFun loc f in
     (match fn with
     | Some (rty, atys, targs, args, loc, b) ->
@@ -722,30 +766,37 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym rws =
         | Some (Type_Tuple ts) ->
             let@ ts' = DisEnv.traverse (dis_type loc) ts in
             let+ names = DisEnv.traverse (declare_fresh_named_var loc fname) ts' in
-            Expr_Tuple (List.map (fun n -> Expr_Var n) names)
+            Some (Expr_Tuple (List.map var_expr names))
         | Some t ->
             let@ t' = dis_type loc t in
             let+ name = declare_fresh_named_var loc fname t' in
-            Expr_Var name
+            Some (var_expr name)
         | None ->
-            DisEnv.pure (Expr_Unknown type_unknown)) in
+            DisEnv.pure None) in
 
         let@ env = DisEnv.get in
         let@ () = DisEnv.if_ (!debug_level >= 2)
             (DisEnv.log (LocalEnv.pp_locals env ^ "\n")) in
 
         (* Evaluate body with new return symbol *)
-        let@ _ = DisEnv.modify (LocalEnv.addReturnSymbol rv) in
+        let@ () = DisEnv.modify (LocalEnv.addReturnSymbol rv) in
         let@ () = dis_stmts b in
         let@ () = DisEnv.modify (LocalEnv.removeReturnSymbol) in
 
         (* Disassemble return variable expression and propagate its symbolic value
             into the containing scope. *)
-        let@ result = dis_expr loc rv in
+        let@ result = (match rv with
+        | Some rv ->
+            let+ result = dis_expr loc rv in
+            Some result
+        | None ->
+            DisEnv.pure None) in
         (* Pop enviroment. *)
         let@ () = DisEnv.modify LocalEnv.popLevel in
         DisEnv.pure result
-    | None -> dis_prim f tes es
+    | None ->
+        let+ result = (dis_prim f tes es) in
+        Some result
     )
 
 and dis_prim (f: ident) (tes: sym list) (es: sym list): sym rws =
@@ -911,12 +962,14 @@ and dis_stmt' (x: AST.stmt): unit rws =
         (* Add the variable *)
         let@ ty' = dis_type loc ty in
         let@ e' = dis_expr loc e in
-        declare_assign_var loc ty' v e'
+        let@ _ = declare_assign_var loc ty' v e' in
+        DisEnv.unit
     | Stmt_ConstDecl(ty, v, e, loc) ->
         (* If a local prefix exists, add it *)
         let@ ty' = dis_type loc ty in
         let@ e' = dis_expr loc e in
-        declare_const loc ty' v e'
+        let@ _ = declare_const loc ty' v e' in
+        DisEnv.unit
     | Stmt_Assign(l, r, loc) ->
         let@ r' = dis_expr loc r in
         dis_lexpr loc l r'
@@ -1200,7 +1253,7 @@ let dis_decode_entry (env: Env.t) (decode: decode_case) (op: value): stmt list =
 
     let env = Env.freeze env in
     let globals = IdentSet.of_list @@ List.map fst @@ Bindings.bindings (Env.readGlobals env) in
-    let lenv = LocalEnv.empty () in
+    let lenv = LocalEnv.init env in
     let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
     let stmts' = Transforms.Bits.bitvec_conversion @@ remove_unused globals @@ stmts in
     if !debug_level >= 2 then begin

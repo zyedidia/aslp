@@ -57,6 +57,13 @@ let rec map3 (f: 'a -> 'b -> 'c -> 'd) (xs: 'a list) (ys: 'b list) (zs: 'c list)
     | ((x::xs), (y::ys), (z::zs)) -> (f x y z) :: (map3 f xs ys zs)
     | _, _, _ -> invalid_arg "Utils.map3: list lengths differ."
 
+let rec nth_modify (f: 'a -> 'a) (n: int) (xs: 'a list): 'a list =
+    match n, xs with
+    | n, _ when n < 0 -> invalid_arg "nth_modify: negative index"
+    | _, [] -> raise Not_found
+    | 0, x::rest -> f x :: rest
+    | n, x::rest -> x :: nth_modify f (n-1) rest
+
 (****************************************************************
  * Option related
  ****************************************************************)
