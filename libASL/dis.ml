@@ -418,6 +418,7 @@ let rec sym_exists p = function
 let width_of_type (loc: l) (t: ty): int =
   match t with
   | Type_Bits (Expr_LitInt wd) -> int_of_string wd
+  | Type_Register (wd, _) -> int_of_string wd
   | _ -> unsupported loc @@ "Can't get bit width of type: " ^ pp_type t
 
 let width_of_field (loc: l) (t: ty) (f: ident): int =
@@ -833,9 +834,7 @@ and dis_lexpr' (loc: l) (x: lexpr) (r: sym): unit rws =
     | LExpr_Slices(l, ss) ->
         let e = lexpr_to_expr loc l in
         let@ ty = type_of_load loc e in
-        let prev_width = (match ty with
-        | Type_Bits (Expr_LitInt wd) -> int_of_string  wd
-        | _ -> unsupported loc "Slice LExpr to type other than bitvector") in
+        let prev_width = width_of_type loc ty in
         let rec eval (o: sym) (ss': AST.slice list) (prev: sym): sym rws =
             (match ss' with
             | [] -> DisEnv.pure prev
