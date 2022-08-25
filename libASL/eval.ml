@@ -101,6 +101,7 @@ module Env : sig
 
     val addGlobalConst      : t -> ident -> value -> unit
     val getGlobalConst      : t -> ident -> value
+    val readGlobalConsts    : t -> value Bindings.t
 
     (* to support generation of unknown values, we need to remember the structure
      * of user-defined types such as enumerations and records
@@ -319,6 +320,9 @@ end = struct
 
     let getGlobalConst (env: t) (x: ident): value =
         get_scope x env.constants
+
+    let readGlobalConsts (env: t) =
+        env.constants.bs
 
     let addEnum (env: t) (x: ident) (vs: value list): unit =
         assertNotFrozen env;
@@ -550,15 +554,15 @@ and mk_uninitialized (loc: l) (env: Env.t) (x: AST.ty): value =
     | Type_Tuple(tys) ->
             VTuple (List.map (mk_uninitialized loc env) tys)
     (* bitvectors and registers should really track whether a bit is initialized individually *)
-    (*
     | Type_Bits(n) -> eval_unknown_bits (to_integer loc (eval_expr loc env n))
     | Type_Register(wd, _) -> eval_unknown_bits (Z.of_string wd)
-    *)
 
     (* full evaluation requires bits to be set to a modifiable value.
        until we can initialize bits individually, this will have to do. *)
+    (*
     | Type_Bits n -> VBits (prim_cvt_int_bits (to_integer loc (eval_expr loc env n)) Z.zero)
     | Type_Register (n,_) -> VBits (mkBits (int_of_string n) Z.zero)
+    *)
     | _ ->
             VUninitialized x (* should only be used for scalar types *)
     )

@@ -108,11 +108,6 @@ let sym_value_unsafe (x: sym): value =
   | Val v -> v
   | Exp e -> failwith ("sym_value_unsafe: required value but got " ^ pp_expr e)
 
-let sym_val_or_uninit (x: sym): value =
-  match x with
-  | Val v -> v
-  | Exp e -> VUninitialized (Type_OfExpr e)
-
 let sym_expr (x: sym): expr =
   match x with
     | Val v -> val_expr v
@@ -363,11 +358,31 @@ type access_chain =
   | Field of ident
   | Index of value
 
+let pp_access_chain =
+  function
+  | Field id -> "Field " ^ pprint_ident id
+  | Index v -> "Index " ^ pp_value v
+
+let pp_access_chain_list = Utils.pp_list pp_access_chain
+
+(* note: for all access_chain lists below, they are ordered with the first
+   elements being the inner-most accessor.
+
+   for example:
+   a[0][1][2] --> [Index 0; Index 1; Index 2]
+   *)
+
 let rec get_access_chain (loc: l) (v: value) (a: access_chain list) : value =
   (match a with
-  | (Field f)::a -> get_field loc (get_access_chain loc v a) f
-  | (Index i)::a -> get_array loc (get_access_chain loc v a) i
+  | (Field f)::a -> (get_access_chain loc (get_field loc v f) a)
+  | (Index i)::a -> (get_access_chain loc (get_array loc v i) a)
   | [] -> v)
+
+let rec set_access_chain (loc: l) (v: value) (a: access_chain list) (r: value): value =
+  (match a with
+  | (Field f)::a -> set_field loc v f (set_access_chain loc (get_field loc v f) a r)
+  | (Index i)::a -> set_array loc v i (set_access_chain loc (get_array loc v i) a r)
+  | [] -> r)
 
 let rec lexpr_access_chain (x: lexpr) (a: access_chain list): lexpr =
   (match a with
