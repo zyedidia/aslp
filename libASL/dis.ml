@@ -70,6 +70,7 @@ let var_ident (Var (i,id)) =
   | _,Ident s -> Ident (s ^ "__" ^ string_of_int i)
   | _ -> internal_error Unknown "unexpected resolved variable to function identifier"
 
+let var_expr_no_suffix (Var(_,id)) = Expr_Var id
 let var_expr v = Expr_Var (var_ident v)
 let var_lexpr v = LExpr_Var (var_ident v)
 let var_sym v = Exp (var_expr v)
@@ -822,11 +823,11 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws
         | Some (Type_Tuple ts) ->
             let@ ts' = DisEnv.traverse (dis_type loc) ts in
             let+ names = DisEnv.traverse (declare_fresh_named_var loc fname) ts' in
-            Some (Expr_Tuple (List.map var_expr names))
+            Some (Expr_Tuple (List.map var_expr_no_suffix names))
         | Some t ->
             let@ t' = dis_type loc t in
             let+ name = declare_fresh_named_var loc fname t' in
-            Some (var_expr name)
+            Some (var_expr_no_suffix name)
         | None ->
             DisEnv.pure None) in
 
@@ -921,7 +922,10 @@ and dis_lexpr_chain (loc: l) (x: lexpr) (ref: access_chain list) (r: sym): unit 
           let@ r' = (sym_val_or_uninit t' r) in
           let vv' = set_access_chain loc v ref r' in
           Printf.printf "new: %s\n" (pp_value vv');
-          let@ () = DisEnv.modify (LocalEnv.setVar loc var (Val vv')) in
+          let@ () = (match ref with
+          | _::_ -> DisEnv.modify (LocalEnv.setVar loc var (Val vv'))
+          | [] -> DisEnv.modify (LocalEnv.setVar loc var r)
+          ) in
           (* possible failure if "r" is a record or array since those
              cannot be converted to expressions. *)
           DisEnv.write [Stmt_Assign(
