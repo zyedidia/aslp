@@ -72,6 +72,7 @@ let var_ident (Var (i,id)) =
 
 let var_expr v = Expr_Var (var_ident v)
 let var_lexpr v = LExpr_Var (var_ident v)
+let var_sym v = Exp (var_expr v)
 
 module LocalEnv = struct
     type t = {
@@ -409,8 +410,6 @@ let declare_fresh_named_var (loc: l) (name: string) (t: ty): var rws =
   declare_var loc t res
 
 let assign_var (loc: l) (i: var) (x: sym): unit rws =
-  (* Attempt to set local variable. If it fails, we assume
-     the variable is in an outer scope.  *)
   DisEnv.modify (LocalEnv.setVar loc i x) >>
   DisEnv.write [Stmt_Assign(LExpr_Var(var_ident i), sym_expr x, loc)]
 
@@ -424,15 +423,18 @@ let declare_fresh_const (loc: l) (t: ty) (name: string) (x: expr): var rws =
   let@ i = DisEnv.nextVarName name in
   declare_const loc t i (Exp x)
 
-let capture_expr_var loc t x: var rws =
+let capture_expr loc t x: var rws =
   let@ v = declare_fresh_const loc t "Exp" x in
   let@ uninit = DisEnv.mkUninit t in
   let+ () = DisEnv.modify (LocalEnv.setVar loc v (Val uninit)) in
   v
 
-let capture_expr loc (t: ty) (x: expr): sym rws =
-  let+ v = capture_expr_var loc t x in
-  Exp (Expr_Var (var_ident v))
+let capture_expr_mutable loc (t: ty) (x: expr): var rws =
+  let@ i = DisEnv.nextVarName "Temp" in
+  let@ v = declare_assign_var loc t i (Exp x) in
+  let@ uninit = DisEnv.mkUninit t in
+  let+ () = DisEnv.modify (LocalEnv.setVar loc v (Val uninit)) in
+  v
 
 (** Monadic Utilities *)
 
@@ -543,6 +545,10 @@ let rec type_of_load (loc: l) (x: expr): ty rws =
       | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr a)))
   | _ -> raise (EvalError (loc, "Can't type expression: " ^ pp_expr x)))
 
+and type_access_chain (loc: l) (var: var) (ref: access_chain list): ty rws =
+    let Var (_,id) = var in
+    type_of_load loc (expr_access_chain (Expr_Var id) ref)
+
 (** Disassemble type *)
 and dis_type (loc: l) (t: ty): ty rws =
     match t with
@@ -635,10 +641,14 @@ and dis_load_chain (loc: l) (x: expr) (ref: access_chain list): sym rws =
           (match (get_access_chain loc v ref) with
           | VUninitialized _ ->
               let expr = expr_access_chain (var_expr var) ref in
-              let@ t' = type_of_load loc (expr_access_chain (Expr_Var id) ref) in
+              let@ t' = type_access_chain loc var ref in
 
               let@ var' = capture_expr loc t' expr in
-              DisEnv.pure var'
+              (* if we are accessing a bare variable, update it to refer
+                 to the captured expression (minor optimisation). *)
+              let@ () = DisEnv.if_ (ref = [])
+                (DisEnv.modify (LocalEnv.setVar loc var (var_sym var'))) in
+              DisEnv.pure (var_sym var')
           | v' -> DisEnv.pure (Val v')
           )
       (* Variable is local with a symbolic value, should not expect a structure *)
@@ -699,7 +709,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             let@ p' = dis_pattern loc e' p in
             (match p' with
             | Val v -> DisEnv.pure (Val v)
-            | Exp e -> capture_expr loc type_bool e)
+            | Exp e -> let+ var = capture_expr loc type_bool e in var_sym var)
     | Expr_Var(_) -> dis_load loc x
     | Expr_Parens(e) ->
             dis_expr loc e
@@ -859,7 +869,7 @@ and dis_prim (f: ident) (tes: sym list) (es: sym list): sym rws =
         | None -> let f' = Expr_TApply(f, List.map sym_expr tes, List.map sym_expr es) in
             if List.mem name Value.prims_pure
                 then DisEnv.pure (Exp f')
-                else capture_expr Unknown type_unknown f'
+                else let+ var = capture_expr Unknown type_unknown f' in var_sym var
 
 and dis_lexpr loc x r: unit rws =
     DisEnv.scope loc
@@ -898,20 +908,30 @@ and dis_lexpr_chain (loc: l) (x: lexpr) (ref: access_chain list) (r: sym): unit 
       let@ var,local = DisEnv.gets (LocalEnv.resolveGetVar loc id) in
       (match local with
       (* Base variable is local, can update as long as its primitive *)
-      | (t,Val (VUninitialized _)) ->
-          if ref = [] then assign_var loc var r
-          else unsupported loc @@ "Local variable as base of LExpr chain"
+      | (t,Val (VUninitialized _)) when ref <> [] ->
+          (* if we reach here, the assumption that all structures are stored
+             fully expanded has failed. that is, we incorrectly have a
+             VUnitialized of a structure instead of a structure of uninitialised. *)
+          internal_error loc @@
+            "attempt to access field/index within invalid uninitialised structure."
       | (t,Val v) ->
           let vv = get_access_chain loc v ref in
-          let@ t' = type_of_load loc (expr_access_chain (Expr_Var id) ref) in
+          let@ t' = type_access_chain loc var ref in
           Printf.printf "base: %s\n" (pp_value vv);
-          let@ v' = (sym_val_or_uninit t' r) in
-          let vv' = set_access_chain loc v ref v' in
+          let@ r' = (sym_val_or_uninit t' r) in
+          let vv' = set_access_chain loc v ref r' in
           Printf.printf "new: %s\n" (pp_value vv');
           let@ () = DisEnv.modify (LocalEnv.setVar loc var (Val vv')) in
+          (* possible failure if "r" is a record or array since those
+             cannot be converted to expressions. *)
           DisEnv.write [Stmt_Assign(
             lexpr_access_chain (var_lexpr var) ref, sym_expr r, loc)]
-      | _ -> assert false
+      | (t,Exp e) ->
+          (* variable contains a symbolic expression. read, modify, then write. *)
+          let@ Var(_,tmp) = capture_expr_mutable loc t e in
+          let@ () = dis_lexpr_chain loc (LExpr_Var tmp) ref r in
+          let@ e' = dis_expr loc (Expr_Var tmp) in
+          assign_var loc var e'
       )
   | _ -> unsupported loc @@ "Unknown LExpr modify constructor: " ^ pp_lexpr x)
 
