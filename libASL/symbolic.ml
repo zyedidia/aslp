@@ -372,24 +372,30 @@ let pp_access_chain_list = Utils.pp_list pp_access_chain
    a[0][1][2] --> [Index 0; Index 1; Index 2]
    *)
 
+(** "get_access_chain loc v a" returns the reference defined by "a"
+    inside the structure "v".  *)
 let rec get_access_chain (loc: l) (v: value) (a: access_chain list) : value =
   (match a with
   | (Field f)::a -> (get_access_chain loc (get_field loc v f) a)
   | (Index i)::a -> (get_access_chain loc (get_array loc v i) a)
   | [] -> v)
 
+(** "set_access_chain loc v a r" sets the reference defined by "a"
+    in the structure "v" to be "r". *)
 let rec set_access_chain (loc: l) (v: value) (a: access_chain list) (r: value): value =
   (match a with
   | (Field f)::a -> set_field loc v f (set_access_chain loc (get_field loc v f) a r)
   | (Index i)::a -> set_array loc v i (set_access_chain loc (get_array loc v i) a r)
   | [] -> r)
 
+(** Returns an lexpr for accessing the given reference within the given lexpr. *)
 let rec lexpr_access_chain (x: lexpr) (a: access_chain list): lexpr =
   (match a with
   | (Field f)::a -> lexpr_access_chain (LExpr_Field(x,f)) a
   | (Index i)::a -> lexpr_access_chain (LExpr_Array(x,val_expr i)) a
   | [] -> x)
 
+(** Returns an expr for accessing the given reference within the given expr. *)
 let rec expr_access_chain (x: expr) (a: access_chain list): expr =
   (match a with
   | (Field f)::a -> expr_access_chain (Expr_Field(x,f)) a
