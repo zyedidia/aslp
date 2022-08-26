@@ -14,7 +14,6 @@ module TC   = Tcheck
 open AST
 open Asl_utils
 open Value
-open Eval
 
 open Symbolic
 
@@ -114,8 +113,8 @@ module LocalEnv = struct
     let pp_sym_bindings (bss: (ty * sym) Bindings.t list) =
         Utils.pp_list (pp_bindings (fun (_,e) -> pp_sym e)) bss
 
-    let init (env: Env.t) =
-        let eval e = val_expr (eval_expr Unknown env e) in
+    let init (env: Eval.Env.t) =
+        let eval e = val_expr (Eval.eval_expr Unknown env e) in
         let tenv = Tcheck.env0 in
         let get_global_type id =
             (match Tcheck.GlobalEnv.getGlobalVar tenv id with
@@ -127,8 +126,8 @@ module LocalEnv = struct
             | _ -> internal_error Unknown @@ "cannot find type for global: " ^ pprint_ident id)
         in
 
-        let globals = Env.readGlobals env in
-        let consts = Env.readGlobalConsts env in
+        let globals = Eval.Env.readGlobals env in
+        let consts = Eval.Env.readGlobalConsts env in
 
         let merge_left k l r = Some l in
         let globalsAndConsts = Bindings.union merge_left globals consts
@@ -155,6 +154,7 @@ module LocalEnv = struct
         let withoutGlobals = List.mapi
             (fun i x -> if i = last then Bindings.empty else x) env.locals in
         Printf.sprintf "locals = %s" (pp_sym_bindings withoutGlobals)
+        (* Printf.sprintf "locals = %s" (pp_sym_bindings env.locals) *)
 
     let getReturnSymbol (loc: l) (env: t): expr =
         match env.returnSymbols with
@@ -195,7 +195,7 @@ module LocalEnv = struct
 
     (** Adds a new local variable to the innermost scope. *)
     let addLocalVar (loc: l) (k: ident) (v: sym) (t: ty) (env: t): var * t =
-        if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident k) (pp_sym v);
+        if !Eval.trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident k) (pp_sym v);
         let var = Var (List.length env.locals - 1, k) in
         match env.locals with
         | (bs :: rest) -> var, {env with locals = (Bindings.add k (t,v) bs :: rest)}
@@ -231,7 +231,7 @@ module LocalEnv = struct
 
     (** Sets a resolved variable to the given value. *)
     let setVar (loc: l) (x: var) (v: sym) (env: t): t =
-        if !trace_write then Printf.printf "TRACE: write %s = %s\n" (pp_var x) (pp_sym v);
+        if !Eval.trace_write then Printf.printf "TRACE: write %s = %s\n" (pp_var x) (pp_sym v);
         let Var (i,id) = x in
         let n = List.length env.locals - i - 1 in
         match Bindings.find_opt id (List.nth env.locals n) with
@@ -244,7 +244,7 @@ end
 
 module DisEnv = struct
     include Rws.Make(struct
-        type r = Env.t
+        type r = Eval.Env.t
         type w = stmt list
         type s = LocalEnv.t
         let mempty = []
@@ -262,7 +262,13 @@ module DisEnv = struct
         gets (LocalEnv.getVar loc x)
 
     let mkUninit (t: ty): value rws =
-        reads (fun env -> mk_uninitialized Unknown env t)
+        let+ env = read in
+        try
+            Eval.mk_uninitialized Unknown env t
+        with
+            e -> unsupported Unknown @@
+                "mkUninit: failed to evaluate type " ^ pp_type t ^ " due to " ^
+                Printexc.to_string e
 
     let join_locals (l: LocalEnv.t) (r: LocalEnv.t): unit rws =
         assert (l.returnSymbols = r.returnSymbols);
@@ -298,8 +304,8 @@ module DisEnv = struct
         put lenv'
 
 
-    let getFun (loc: l) (x: ident): fun_sig option rws =
-        reads (catch (fun env -> Env.getFun loc env x))
+    let getFun (loc: l) (x: ident): Eval.fun_sig option rws =
+        reads (catch (fun env -> Eval.Env.getFun loc env x))
 
     let nextVarName (prefix: string): ident rws =
         let+ num = stateful LocalEnv.incNumSymbols in
@@ -388,12 +394,6 @@ let is_expr (v: sym): bool =
     match v with
     | Val _ -> false
     | Exp _ -> true
-
-let contains_expr (xs: sym list): bool =
-    List.exists is_expr xs
-
-let getGlobalConst(c: ident): sym rws =
-  DisEnv.reads (fun env -> Val (Env.getGlobalConst env c))
 
 let declare_var (loc: l) (t: ty) (i: ident): var rws =
   let@ env = DisEnv.read in
@@ -505,6 +505,9 @@ let unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit r
       let@ () = DisEnv.join_locals tenv fenv in
       DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)])
 
+let sym_and (loc: l) (x: sym rws) (y: sym rws): sym rws =
+    sym_if loc type_bool x y (DisEnv.pure sym_false)
+
 (** Symbolic implementation of List.for_all2 *)
 let rec sym_for_all2 p l1 l2 =
   match (l1, l2) with
@@ -584,7 +587,9 @@ and dis_pattern (loc: l) (v: sym) (x: AST.pattern): sym rws =
     | Pat_LitHex(l)  -> DisEnv.pure (sym_eq_int  loc v (Val (from_hexLit l)))
     | Pat_LitBits(l) -> DisEnv.pure (sym_eq_bits loc v (Val (from_bitsLit l)))
     | Pat_LitMask(l) -> DisEnv.pure (sym_inmask  loc v (Val (from_maskLit l)))
-    | Pat_Const(c)   -> let+ c' = getGlobalConst c in sym_eq loc v c'
+    | Pat_Const(c)   ->
+            let+ c' = dis_load loc (Expr_Var c) in
+            sym_eq loc v c'
     | Pat_Wildcard   -> DisEnv.pure sym_true
     | Pat_Tuple(ps) ->
             let vs = sym_of_tuple loc v in
@@ -754,7 +759,7 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             let+ t' = dis_type loc t in
             Exp (Expr_Unknown(t'))
     | Expr_ImpDef(t, Some(s)) ->
-            DisEnv.reads (fun env -> Val (Env.getImpdef loc env s))
+            DisEnv.reads (fun env -> Val (Eval.Env.getImpdef loc env s))
     | Expr_ImpDef(t, None) ->
             raise (EvalError (loc, "unnamed IMPLEMENTATION_DEFINED behavior"))
     | Expr_Array(a,i) ->   dis_load loc x
@@ -1074,7 +1079,7 @@ and dis_stmt' (x: AST.stmt): unit rws =
             DisEnv.write [Stmt_Assert(e'', loc)]
         )
     | Stmt_Case(e, alts, odefault, loc) ->
-        let rec dis_alts_val (alts: alt list) (d: stmt list option) (v: value): unit rws = (
+        let rec dis_alts (alts: alt list) (d: stmt list option) (v: sym): unit rws = (
             match alts with
             | [] -> (match d with
                 | None -> raise (EvalError (loc, "unmatched case"))
@@ -1083,35 +1088,16 @@ and dis_stmt' (x: AST.stmt): unit rws =
                 let cond = (match oc with
                 | Some c -> c
                 | None -> val_expr (VBool true)) in
-                (* FIXME: unnchecked use of global environment in eval_pattern and eval_expr. *)
-                let@ env = DisEnv.read in
-                (* FIXME: should use dis_expr to partially evaluate condition as well. *)
-                if List.exists (eval_pattern loc env v) ps && to_bool loc (eval_expr loc env cond) then
-                    dis_stmts s
-                else
-                    dis_alts_val alts' d v
-        ) in
-        let rec dis_alts_exp (alts: alt list) (e: expr): alt list rws = (
-            match alts with
-            | [] -> DisEnv.pure []
-            | Alt_Alt(ps, oc, s) :: alts' ->
-                let@ (_,caseenv,casestmts) = DisEnv.locally (dis_stmts s) in
-                let@ (restalts,restenv,reststmts) = DisEnv.locally (dis_alts_exp alts' e) in
-                let@ () = DisEnv.join_locals caseenv restenv in
-                (* FIXME: needs to merge resulting localenv states. *)
-                (* NOTE: guard condition "oc" is not visited by disassembly. *)
-                DisEnv.pure (Alt_Alt(ps, oc, casestmts) :: restalts)
+
+                let pat_and_guard = (sym_and loc
+                    (sym_exists (dis_pattern loc v) ps)
+                    (dis_expr loc cond)) in
+                (unit_if loc pat_and_guard
+                    (dis_stmts s)
+                    (dis_alts alts' d v))
         ) in
         let@ e' = dis_expr loc e in
-        (match e' with
-        | Val v -> dis_alts_val alts odefault v
-        | Exp e'' ->
-            let@ alts' = dis_alts_exp alts e'' in
-            (* NOTE: default case "odefault" is not visited. *)
-            DisEnv.write [
-                Stmt_Case(e'', alts', odefault, loc)
-            ]
-        )
+        dis_alts alts odefault e'
     | Stmt_For(var, start, dir, stop, body, loc) ->
         let@ start' = dis_expr loc start in
         let@ stop' = dis_expr loc stop in
@@ -1166,11 +1152,11 @@ let dis_encoding (x: encoding) (op: value): bool rws =
     | Opcode_Mask m -> eval_inmask loc op (from_maskLit m)
     ) in
     if ok then begin
-        if !trace_instruction then Printf.printf "TRACE: instruction %s\n" (pprint_ident nm);
+        if !Eval.trace_instruction then Printf.printf "TRACE: instruction %s\n" (pprint_ident nm);
 
         let@ () = DisEnv.traverse_ (function (IField_Field (f, lo, wd)) ->
             let v = extract_bits' loc op lo wd in
-            if !trace_instruction then Printf.printf "      %s = %s\n" (pprint_ident f) (pp_value v);
+            if !Eval.trace_instruction then Printf.printf "      %s = %s\n" (pprint_ident f) (pp_value v);
             declare_assign_var Unknown (val_type v) f (Val v)
         ) fields in
 
@@ -1230,13 +1216,13 @@ and dis_decode_alt (loc: l) (x: decode_alt) (vs: value list) (op: value): bool r
     DisEnv.scope loc "dis_decode_alt" (pp_decode_alt x) string_of_bool
         (dis_decode_alt' loc x vs op)
 and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): bool rws =
-    if List.for_all2 (eval_decode_pattern loc) ps vs then
+    if List.for_all2 (Eval.eval_decode_pattern loc) ps vs then
         (match b with
         | DecoderBody_UNPRED loc -> raise (Throw (loc, Exc_Unpredictable))
         | DecoderBody_UNALLOC loc -> raise (Throw (loc, Exc_Undefined))
         | DecoderBody_NOP loc -> DisEnv.pure true
         | DecoderBody_Encoding (inst, l) ->
-                let@ (enc, opost, cond, exec) = DisEnv.reads (fun env -> Env.getInstruction loc env inst) in
+                let@ (enc, opost, cond, exec) = DisEnv.reads (fun env -> Eval.Env.getInstruction loc env inst) in
                 let@ enc_match = dis_encoding enc op in
                 if enc_match then begin
                     (* todo: should evaluate ConditionHolds to decide whether to execute body *)
@@ -1244,7 +1230,6 @@ and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: 
 
                     if !debug_level >= 1 then begin
                         Printf.printf "Dissasm: %s\n" (pprint_ident inst);
-                        Printf.printf "\n\nENV LOCALS: %s\n" (LocalEnv.pp_value_bindings (Env.readLocals env));
                     end;
 
                     let opost' = (match opost with
@@ -1323,11 +1308,11 @@ and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
         | x -> emit x
     ) xs ([], used)
 
-let dis_decode_entry (env: Env.t) (decode: decode_case) (op: value): stmt list =
+let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt list =
     let DecoderCase_Case (_,_,loc) = decode in
 
-    let env = Env.freeze env in
-    let globals = IdentSet.of_list @@ List.map fst @@ Bindings.bindings (Env.readGlobals env) in
+    let env = Eval.Env.freeze env in
+    let globals = IdentSet.of_list @@ List.map fst @@ Bindings.bindings (Eval.Env.readGlobals env) in
     let lenv = LocalEnv.init env in
     let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
     let stmts' = Transforms.Bits.bitvec_conversion @@ remove_unused globals @@ stmts in
@@ -1339,7 +1324,7 @@ let dis_decode_entry (env: Env.t) (decode: decode_case) (op: value): stmt list =
     stmts'
 
 
-let retrieveDisassembly (env: Env.t) (opcode: string): stmt list =
+let retrieveDisassembly (env: Eval.Env.t) (opcode: string): stmt list =
     let decoder = Eval.Env.getDecoder env (Ident "A64") in
     let DecoderCase_Case (_,_,loc) = decoder in
     (* List.iter (fun (ident, _) -> Eval.Env.setVar Unknown env ident VUninitialized) (Bindings.bindings (Eval.Env.getGlobals env).bs); *)

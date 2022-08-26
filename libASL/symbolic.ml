@@ -178,9 +178,8 @@ let sym_inmask   = prim_binop "in_mask" (* needs size *)
 
 let sym_and_bool loc (x: sym) (y: sym) =
   match (x,y) with
-  | (Val x', Val y') -> Val (VBool (to_bool loc x' && to_bool loc y'))
-  | (_, Val x') when not (to_bool loc x') -> Val (VBool false)
-  | (Val x', _) when not (to_bool loc x') -> Val (VBool false)
+  | (Val x', y') -> if to_bool loc x' then y' else sym_false
+  | (x', Val y') -> if to_bool loc y' then x' else sym_false
   | _ -> Exp (Expr_TApply(FIdent("and_bool",0), [], [sym_expr x;sym_expr y]))
 
 let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
@@ -296,6 +295,10 @@ let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option 
   (match (name, tes, es) with
   | ("add_int",     _,                [Val x1; x2])       when is_zero x1 -> Some x2
   | ("add_int",     _,                [x1; Val x2])       when is_zero x2 -> Some x1
+  | ("sub_int",     _,                [x1; Val x2])       when is_zero x2 -> Some x1
+  | ("mul_int",     _,                [Val x1; x2])       when is_one x1 -> Some x2
+  | ("mul_int",     _,                [x1; Val x2])       when is_one x2 -> Some x1
+
   | ("append_bits", [Val t1; _],      [_; x2])            when is_zero t1 -> Some x2
   | ("append_bits", [_; Val t2],      [x1; _])            when is_zero t2 -> Some x1
   | ("or_bits",     _,                [Val x1; x2])       when is_zero_bits x1 -> Some x2
