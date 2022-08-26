@@ -518,6 +518,7 @@ let rec sym_for_all2 p l1 l2 =
 (** Symbolic implementation of List.exists *)
 let rec sym_exists p = function
   | [] -> DisEnv.pure sym_false
+  | [a] -> p a
   | a::l -> sym_if Unknown (type_bool) (p a) (DisEnv.pure sym_true) (sym_exists p l)
 
 let width_of_type (loc: l) (t: ty): int =
@@ -930,11 +931,16 @@ and dis_lexpr_chain (loc: l) (x: lexpr) (ref: access_chain list) (r: sym): unit 
           DisEnv.write [Stmt_Assign(
             lexpr_access_chain (var_lexpr var) ref, sym_expr r, loc)]
       | (t,Exp e) ->
-          (* variable contains a symbolic expression. read, modify, then write. *)
-          let@ Var(_,tmp) = capture_expr_mutable loc t e in
-          let@ () = dis_lexpr_chain loc (LExpr_Var tmp) ref r in
-          let@ e' = dis_expr loc (Expr_Var tmp) in
-          assign_var loc var e'
+          (match ref with
+          | _::_ ->
+            (* variable contains a symbolic expression. read, modify, then write. *)
+            let@ Var(_,tmp) = capture_expr_mutable loc t e in
+            let@ () = dis_lexpr_chain loc (LExpr_Var tmp) ref r in
+            let@ e' = dis_expr loc (Expr_Var tmp) in
+            assign_var loc var e'
+          | [] ->
+            assign_var loc var r
+          )
       )
   | _ -> unsupported loc @@ "Unknown LExpr modify constructor: " ^ pp_lexpr x)
 
@@ -1085,13 +1091,12 @@ and dis_stmt' (x: AST.stmt): unit rws =
                 | None -> raise (EvalError (loc, "unmatched case"))
                 | Some s -> dis_stmts s)
             | Alt_Alt(ps, oc, s) :: alts' ->
-                let cond = (match oc with
-                | Some c -> c
-                | None -> val_expr (VBool true)) in
-
-                let pat_and_guard = (sym_and loc
-                    (sym_exists (dis_pattern loc v) ps)
-                    (dis_expr loc cond)) in
+                let pat = (sym_exists (dis_pattern loc v) ps) in
+                let pat_and_guard =
+                    (match oc with
+                    | Some c -> sym_and loc pat (dis_expr loc c)
+                    | None -> pat)
+                in
                 (unit_if loc pat_and_guard
                     (dis_stmts s)
                     (dis_alts alts' d v))
