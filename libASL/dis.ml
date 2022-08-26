@@ -1259,7 +1259,11 @@ and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: 
                         post
                     | None -> []
                     ) in
-                    let@ (lenv',stmts) = DisEnv.locally_ (dis_stmts (opost' @ exec)) in
+                    let@ (lenv',stmts) = DisEnv.locally_ (
+                        let@ () = DisEnv.modify (LocalEnv.addLevel) in
+                        let@ () = dis_stmts (opost' @ exec) in
+                        DisEnv.modify (LocalEnv.popLevel)
+                    ) in
 
                     if !debug_level >= 2 then begin
                         Printf.printf "-----------\n";
