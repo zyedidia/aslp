@@ -508,6 +508,9 @@ let unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit r
 let sym_and (loc: l) (x: sym rws) (y: sym rws): sym rws =
     sym_if loc type_bool x y (DisEnv.pure sym_false)
 
+let sym_or (loc: l) (x: sym rws) (y: sym rws): sym rws =
+    sym_if loc type_bool x (DisEnv.pure sym_true) y
+
 (** Symbolic implementation of List.for_all2 *)
 let rec sym_for_all2 p l1 l2 =
   match (l1, l2) with
@@ -519,7 +522,7 @@ let rec sym_for_all2 p l1 l2 =
 let rec sym_exists p = function
   | [] -> DisEnv.pure sym_false
   | [a] -> p a
-  | a::l -> sym_if Unknown (type_bool) (p a) (DisEnv.pure sym_true) (sym_exists p l)
+  | a::l -> sym_or Unknown (p a) (sym_exists p l)
 
 let width_of_type (loc: l) (t: ty): int =
   match t with
@@ -716,24 +719,18 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
             if name_of_FIdent f = "and_bool" then begin
                 (match (tes, es) with
                 | ([], [x; y]) ->
-                    sym_if loc (type_bool) (dis_expr loc x) (* then *)
-                      (dis_expr loc y)
-                    (* else *)
-                      (DisEnv.pure sym_false)
+                    sym_and loc (dis_expr loc x) (dis_expr loc y)
                 | _ ->
-                    raise (EvalError (loc, "malformed and_bool expression "
-                       ^ Utils.to_string (PP.pp_expr x)))
+                    internal_error loc @@ "malformed and_bool expression "
+                       ^ Utils.to_string (PP.pp_expr x)
                 )
             end else if name_of_FIdent f = "or_bool" then begin
                 (match (tes, es) with
                 | ([], [x; y]) ->
-                    sym_if loc (type_bool) (dis_expr loc x) (* then *)
-                      (DisEnv.pure sym_true)
-                    (* else *)
-                      (dis_expr loc y)
+                    sym_or loc (dis_expr loc x) (dis_expr loc y)
                 | _ ->
-                    raise (EvalError (loc, "malformed or_bool expression "
-                       ^ Utils.to_string (PP.pp_expr x)))
+                    internal_error loc @@ "malformed or_bool expression "
+                       ^ Utils.to_string (PP.pp_expr x)
                 )
             end else if name_of_FIdent f = "implies_bool" then begin
                 (match (tes, es) with
@@ -743,8 +740,8 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
                     (* else *)
                       (DisEnv.pure sym_true)
                 | _ ->
-                    raise (EvalError (loc, "malformed implies_bool expression "
-                       ^ Utils.to_string (PP.pp_expr x)))
+                    internal_error loc @@ "malformed implies_bool expression "
+                       ^ Utils.to_string (PP.pp_expr x)
                 )
             end else begin
                 let@ tvs = dis_exprs loc tes in
@@ -1086,6 +1083,7 @@ and dis_stmt' (x: AST.stmt): unit rws =
         )
     | Stmt_Case(e, alts, odefault, loc) ->
         let rec dis_alts (alts: alt list) (d: stmt list option) (v: sym): unit rws = (
+            let@ () = DisEnv.unit in (* force function to be lazily evaluated when rws is computed. *)
             match alts with
             | [] -> (match d with
                 | None -> raise (EvalError (loc, "unmatched case"))

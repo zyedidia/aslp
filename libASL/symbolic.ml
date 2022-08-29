@@ -152,19 +152,40 @@ let sym_of_tuple (loc: AST.l) (v: sym): sym list  =
 let type_bool = Type_Constructor(Ident "boolean")
 let type_unknown = Type_Constructor(Ident "unknown")
 
-(* Primatives *)
+(* Primitives *)
+
+let prim_binop_targs (f: string) (loc: l) (x: sym) (y: sym): value list =
+  let fail () = raise (EvalError (loc,
+    "cannot infer type arguments for primitive binop: " ^
+    f ^ " " ^ pp_sym x ^ ", " ^ pp_sym y))
+  in
+  match f with
+  | "eq_bits" ->
+    (match x,y with
+    | Val (VBits {n=n; _}), _
+    | _, Val (VBits {n=n; _}) -> [VInt (Z.of_int n)]
+    | _ -> fail())
+  | "in_mask" ->
+    (match x,y with
+    | Val (VBits {n=n; _}), _
+    | _, Val (VMask {n=n; _}) -> [VInt (Z.of_int n)]
+    | _ -> fail ())
+  | _ -> [] (* assume other binops have no type arguments. *)
+
 
 (** Apply a primitive operation to two arguments
-    TODO: This will fail to evaluate if the primitive requires a type argument.
-          Need to derive this from the arguments somehow.
   *)
 let prim_binop (f: string) (loc: AST.l) (x: sym) (y: sym) : sym  =
+  let targs = prim_binop_targs f loc x y in
   (match (x,y) with
   | (Val x,Val y) ->
-      (match eval_prim f [] (x::[y]) with
+      (match eval_prim f targs [x;y] with
       | Some v -> Val v
       | None -> raise (EvalError (loc, "Unknown primitive operation: "^ f)))
-  | (x,y) -> Exp (Expr_TApply(FIdent(f,0), [], (sym_expr x)::[sym_expr y])))
+  | (x,y) -> Exp (Expr_TApply(
+      FIdent(f,0),
+      List.map val_expr targs,
+      [sym_expr x; sym_expr y])))
 
 let sym_true     = Val (from_bool true)
 let sym_false    = Val (from_bool false)
@@ -173,8 +194,8 @@ let sym_add_int  = prim_binop "add_int"
 let sym_sub_int  = prim_binop "sub_int"
 let sym_le_int   = prim_binop "le_int"
 
-let sym_eq_bits  = prim_binop "eq_bits" (* needs size *)
-let sym_inmask   = prim_binop "in_mask" (* needs size *)
+let sym_eq_bits  = prim_binop "eq_bits"
+let sym_inmask   = prim_binop "in_mask"
 
 let sym_and_bool loc (x: sym) (y: sym) =
   match (x,y) with
