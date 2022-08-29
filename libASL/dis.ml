@@ -1086,7 +1086,10 @@ and dis_stmt' (x: AST.stmt): unit rws =
             let@ () = DisEnv.unit in (* force function to be lazily evaluated when rws is computed. *)
             match alts with
             | [] -> (match d with
-                | None -> raise (EvalError (loc, "unmatched case"))
+                (* cannot throw here because this may be reached by disassembling a
+                   case with unknown expressions.
+                   should only throw an exception at runtime if does not match. *)
+                | None -> DisEnv.write [Stmt_See (Expr_LitString "unmatched case", loc)]
                 | Some s -> dis_stmts s)
             | Alt_Alt(ps, oc, s) :: alts' ->
                 let pat = (sym_exists (dis_pattern loc v) ps) in

@@ -112,7 +112,7 @@ let rec visit_exprs (vis: aslVisitor) (xs: expr list): expr list =
     and visit_patterns (vis: aslVisitor) (xs: pattern list): pattern list =
         mapNoCopy (visit_pattern vis) xs
 
-    and visit_pattern (vis: aslVisitor) (x: pattern): pattern = 
+    and visit_pattern (vis: aslVisitor) (x: pattern): pattern =
         let aux (vis: aslVisitor) (x: pattern): pattern =
             ( match x with
             | Pat_LitInt(_)  -> x
@@ -142,6 +142,7 @@ let rec visit_exprs (vis: aslVisitor) (xs: expr list): expr list =
         let aux (vis: aslVisitor) (x: expr): expr =
             (match x with
             | Expr_If(ty, c, t, els, e) ->
+                    let ty   = visit_type vis ty in
                     let c'   = visit_expr vis c in
                     let t'   = visit_expr vis t in
                     let els' = mapNoCopy (visit_e_elsif vis) els in
