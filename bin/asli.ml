@@ -93,17 +93,25 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         let encs' = List.filter encoding_matches encs in
 
         let opcodes = load_opcodes "encodings" in
-        (match opcodes with
-        | None ->
-            Printf.printf "WARNING: encodings/ directory missing, assuming all opcodes are valid.\n";
-            Printf.printf "         If encodings_*.tar.gz files exist, they should be extracted.\n\n"
-        | Some x -> Printf.printf "Loaded opcodes for %d encodings\n" (Bindings.cardinal x)
-        );
         let get_opcodes nm =
             (match opcodes with
             | Some opcodes' -> Option.value (Bindings.find_opt nm opcodes') ~default:[||]
             | None -> [| (0, Int.max_int) |]
         ) in
+
+        (match opcodes with
+        | None ->
+            Printf.printf "WARNING: encodings/ directory missing, assuming all opcodes are valid.\n";
+            Printf.printf "         If encodings.tar.gz exists, it should be extracted.\n\n"
+        | Some x ->
+            let add_opcodes = Array.to_list (get_opcodes (Ident "ADD_Z_ZI__")) in
+            let expected = [(0x2520c000, 0x2520ffff); (0x2560c000,0x2560ffff); (0x25a0c000,0x25a0ffff); (0x25e0c000,0x25e0ffff)] in
+            (* check that encodings file has been parsed to correct values.
+               if this fails, it is likely your encodings/ directory has the
+               incorrect format. *)
+            assert (add_opcodes = expected);
+            Printf.printf "Loaded opcodes for %d encodings\n" (Bindings.cardinal x)
+        );
 
         List.iter (fun enc ->
             let Encoding_Block (nm,_,fields,_,_,_,_,_) = enc in

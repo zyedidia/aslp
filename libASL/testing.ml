@@ -191,17 +191,34 @@ let enumerate_opcodes (env: Env.t) (case: decode_case) start stop fname: unit =
     i := succ !i;
   done
 
+(* load opcodes interval file stored as lines of pairs,
+   where each line is the difference from the previous line.
+
+   for example:
+   0x1,0x2
+   0x4,0x6
+   0x5,0x7
+
+   is stored as:
+   0x1,0x2
+   0x3,0x4
+   0x1,0x1
+   *)
 let load_opcode_file (p: string): (int * int) array =
   let f = open_in p in
+  let l = ref 0
+  and r = ref 0 in
   let ops = ref [] in
   (try
     while true do
       let line = input_line f in
       match String.split_on_char ',' line with
-      | [l;r ] ->
-        let l = int_of_string l
-        and r = int_of_string r in
-        ops := (l,r) :: !ops
+      | [l';r' ] ->
+        let l' = int_of_string l'
+        and r' = int_of_string r' in
+        l := !l + l';
+        r := !r + r';
+        ops := (!l, !r) :: !ops
       | _ -> assert false
     done
   with End_of_file -> ());
