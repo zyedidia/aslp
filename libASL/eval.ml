@@ -837,11 +837,19 @@ and eval_lexpr_modify (loc: l) (env: Env.t) (x: AST.lexpr) (modify: value -> val
 and eval_stmts (env: Env.t) (xs: AST.stmt list): unit =
     Env.nest (fun env' -> List.iter (eval_stmt env') xs) env
 
+(** For evaluation only, we need to set uninitialized bits to zeros in order to
+    perform operations on parts of them. *)
+and mk_uninitialized' (loc: l) (env: Env.t) (ty: ty): value =
+    match ty with
+    | Type_Bits n -> let n = to_int loc (eval_expr loc env n) in
+        VBits (mkBits n Z.zero)
+    | _ -> mk_uninitialized loc env ty
+
 (** Evaluate statement *)
 and eval_stmt (env: Env.t) (x: AST.stmt): unit =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
-            List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs
+            List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized' loc env ty)) vs
     | Stmt_VarDecl(ty, v, i, loc) ->
             let i' = eval_expr loc env i in
             Env.addLocalVar loc env v i'
