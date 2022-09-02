@@ -275,3 +275,217 @@ module RefParams = struct
     let ds = List.map (Asl_visitor.visit_decl v2) ds in
     ds
 end
+
+module Bits2 = struct
+  type interval = (Z.t * Z.t)
+  let empty_interval = (Z.zero, Z.minus_one)
+
+  let type_bits n = Type_Bits (Expr_LitInt (string_of_int n))
+  let type_bits_var i = Type_Bits (Expr_Var i)
+
+  let num_bits_unsigned n =
+    assert (Z.geq n Z.zero);
+    if Z.equal n Z.zero then
+      0
+    else
+      Z.log2 n + 1
+
+  let num_bits_signed n =
+    if Z.geq n Z.zero then
+      num_bits_unsigned n + 1
+    else
+      num_bits_unsigned (Z.sub (Z.abs n) Z.one) + 1
+
+  let size_of_interval (lo,hi) =
+    assert (Z.leq lo hi);
+    max (max (num_bits_signed lo) (num_bits_signed hi)) 1
+
+  let type_interval x =
+    type_bits (size_of_interval x)
+
+  let is_empty (x,y) = Z.equal x Z.zero && Z.equal y Z.minus_one
+
+  let interval_join (x: interval) (y: interval) =
+    match x,y with
+    | _,_ when is_empty x || is_empty y -> assert false
+    | (x1,x2),(y1,y2) -> Z.min x1 y1, Z.max x2 y2
+
+  let interval_fold (xs: interval list) =
+    match xs with
+    | [] -> assert false
+    | x::xs -> List.fold_left interval_join x xs
+
+  let interval_of_size (n: int): interval =
+    assert (n >= 1);
+    let magnitude = Z.shift_left Z.one (n - 1) in
+    (Z.neg magnitude, Z.sub magnitude Z.one)
+
+
+
+  (* interpret a bit literal as a SIGNED integer. *)
+  let sint_of_bits x =
+    let x = Value.drop_chars x ' ' in
+    let len = String.length x in
+    Z.signed_extract (Z.of_string_base 2 x) 0 len
+
+  let expr_num n = Expr_LitInt (string_of_int n)
+
+  let prim_funcall f tes es = Expr_TApply (FIdent (f, 0), tes, es)
+
+  let prim_zeros n =
+    Expr_LitBits (String.init n (fun _ -> '0'))
+
+  let prim_zero_extend num_zeros old_width e =
+    prim_funcall "append_bits" [expr_num num_zeros; old_width] [prim_zeros num_zeros; e]
+
+  let prim_replicate_bits num width e =
+    prim_funcall "replicate_bits" [expr_num width; expr_num num] [e; expr_num num]
+
+  let prim_sign_extend num_zeros old_width e =
+    let sign = Expr_Slices (e, [Slice_LoWd (expr_num (old_width - 1), expr_num 1)]) in
+    prim_funcall "append_bits"
+      [expr_num num_zeros; expr_num old_width]
+      [prim_replicate_bits num_zeros 1 sign; e]
+
+
+  (* returns the interval of an expression. expression must evaluate to an integer. *)
+  let rec interval_of_expr (vars: interval Bindings.t) (e: expr): interval =
+    match e with
+    | Expr_Binop _ -> assert false
+    | Expr_Unop _ -> assert false
+    | Expr_Field (expr, ident) -> assert false
+    | Expr_Fields (expr, ident_list) -> assert false
+    | Expr_Slices (expr, slice_list) ->
+      let wds = List.map (function | Slice_LoWd (_,Expr_LitInt n) -> int_of_string n | _ -> assert false) slice_list in
+      let wd = List.fold_left (+) 0 wds in
+      interval_of_size wd
+    | Expr_In (expr, pattern) -> assert false
+    | Expr_Var (ident) -> (Bindings.find ident vars)
+    | Expr_Parens (expr) -> interval_of_expr vars expr
+    | Expr_Tuple (expr_list) -> assert false
+    | Expr_Unknown (ty) -> assert false
+    | Expr_ImpDef (ty, str_option) -> assert false
+    | Expr_TApply (ident, expr_list, expr_list2) -> assert false (* TODO *)
+    | Expr_If (ty, cond, t, e_elsif_list, f) -> assert false
+    | Expr_Array (expr, expr2) -> assert false
+    | Expr_LitInt (s)
+    | Expr_LitHex (s) -> let n = Z.of_string s in (n,n)
+    | Expr_LitReal (str) -> assert false
+    | Expr_LitBits (str) -> let n = sint_of_bits str in (n,n)
+    | Expr_LitMask (str) -> assert false
+    | Expr_LitString (str) -> assert false
+
+  let bits_size_of_expr (vars: interval Bindings.t) (e: expr): int =
+    match e with
+    | Expr_TApply (fn, tes, es) ->
+      (match (fn, tes, es) with
+      | FIdent ("add_bits", 0), [Expr_LitInt n], _
+      | FIdent ("sub_bits", 0), [Expr_LitInt n], _
+      | FIdent ("mul_bits", 0), [Expr_LitInt n], _
+      | FIdent ("and_bits", 0), [Expr_LitInt n], _
+      | FIdent ("or_bits", 0), [Expr_LitInt n], _
+      | FIdent ("eor_bits", 0), [Expr_LitInt n], _
+      | FIdent ("not_bits", 0), [Expr_LitInt n], _
+      | FIdent ("zeros_bits", 0), [Expr_LitInt n], _
+      | FIdent ("ones_bits", 0), [Expr_LitInt n], _ -> int_of_string n
+      | FIdent ("append_bits", 0), [Expr_LitInt n; Expr_LitInt m], _ -> int_of_string n + int_of_string m
+      | _ -> failwith @@ "bits_size_of_expr: unhandled " ^ pp_expr e
+      )
+    | Expr_Slices (_, slice_list) ->
+      let wds = List.map (function | Slice_LoWd (_,Expr_LitInt n) -> int_of_string n | _ -> assert false) slice_list in
+      let wd = List.fold_left (+) 0 wds in
+      wd
+    | _ -> size_of_interval (interval_of_expr vars e)
+
+  let expr_sign_extend (vars: interval Bindings.t) (size: int) (e: expr) =
+    let old = bits_size_of_expr vars e in
+    assert (old <= size);
+    if old = size then
+      e
+    else
+      prim_sign_extend (size - old) old e
+
+  class bits_traverse_coerce = object (self)
+    inherit Asl_visitor.nopAslVisitor
+
+    val mutable count = 0;
+
+    val mutable vars : ident Bindings.t = Bindings.empty
+    val mutable intervals : interval Bindings.t = Bindings.empty
+
+
+    method make_var nm =
+      count <- count + 1;
+      let var = Ident (pprint_ident nm ^ "_size__" ^ string_of_int count) in
+      vars <- Bindings.add nm var vars;
+      type_bits_var var
+
+    method! vstmt s =
+      ChangeDoChildrenPost (s, fun s ->
+        match s with
+        | Stmt_VarDecl (Type_Constructor (Ident "integer"), nm, r, l) ->
+          let interval = interval_of_expr intervals r in
+          intervals <- Bindings.add nm interval intervals;
+          let t = self#make_var nm in
+          Stmt_VarDecl (t, nm, r, l)
+        | _ -> s
+      )
+
+    method! vexpr e =
+      match e with
+      | Expr_LitInt n ->
+        let n' = Z.of_string n in
+        let size = num_bits_signed n' in
+        let a = Z.extract n' 0 size in
+        ChangeTo (Expr_LitBits (Z.format ("%0" ^ string_of_int size ^ "b") a))
+      | Expr_TApply (fn, tes, es) ->
+        (* Printf.printf "going down\n"; *)
+        ChangeDoChildrenPost (e, fun e' ->
+            (* Printf.printf "going up with %s\n" (pp_expr e); *)
+          match e' with
+
+          | Expr_TApply (FIdent ("cvt_bits_uint", 0), [n], [e]) ->
+            prim_zero_extend 1 n e
+          | Expr_TApply (FIdent ("cvt_bits_sint", 0), [_], [e]) ->
+            e
+          | Expr_TApply (FIdent ("add_int", 0), [], [x;y]) ->
+            let xsize = bits_size_of_expr intervals x in
+            let ysize = bits_size_of_expr intervals y in
+            let size = max xsize ysize + 1 in
+            let ex = expr_sign_extend intervals size in
+            Printf.printf "x %s\ny %s\n" (pp_expr x) (pp_expr y) ;
+            prim_funcall "add_bits" [expr_num size] [ex x;ex y]
+
+          | Expr_TApply (FIdent ("eq_int", 0), [], [x;y]) ->
+            let xsize = bits_size_of_expr intervals x in
+            let ysize = bits_size_of_expr intervals y in
+            let size = max xsize ysize in
+            let ex = expr_sign_extend intervals size in
+            prim_funcall "eq_bits" [expr_num size] [ex x;ex y]
+
+          | Expr_TApply (FIdent ("ne_int", 0), [], [x;y]) ->
+            let xsize = bits_size_of_expr intervals x in
+            let ysize = bits_size_of_expr intervals y in
+            let size = max xsize ysize in
+            let ex = expr_sign_extend intervals size in
+            prim_funcall "ne_bits" [expr_num size] [ex x;ex y]
+
+          | Expr_TApply (FIdent (f, 0), _, _) when Utils.endswith f "_int" ->
+            failwith @@ "unsupported integer function: " ^ pp_expr e
+
+          | Expr_TApply (fn', _, es') when fn' = fn ->
+            Expr_TApply (fn', tes, es')
+          | _ -> e'
+        )
+    | Expr_Slices (base, slices) ->
+      ChangeDoChildrenPost (e, function
+        | Expr_Slices (base', slices') -> Expr_Slices (base', slices)
+        | _ -> assert false)
+    | _ -> DoChildren
+
+    method! vtype x = SkipChildren
+    method! vlexpr x = SkipChildren
+
+  end
+
+end

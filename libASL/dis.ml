@@ -1321,7 +1321,9 @@ let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt l
     let globals = IdentSet.of_list @@ List.map fst @@ Bindings.bindings (Eval.Env.readGlobals env) in
     let lenv = LocalEnv.init env in
     let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
-    let stmts' = Transforms.Bits.bitvec_conversion @@ remove_unused globals @@ stmts in
+    let stmts' = remove_unused globals @@ stmts in
+    (* let stmts' = Transforms.Bits.bitvec_conversion stmts' in *)
+    let stmts' = Asl_visitor.visit_stmts (new Transforms.Bits2.bits_traverse_coerce :> Asl_visitor.aslVisitor) stmts' in
     if !debug_level >= 2 then begin
         Printf.printf "===========\n";
         List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts';
