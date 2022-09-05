@@ -237,7 +237,7 @@ module Bits2 = struct
 
 
   (* returns the interval of an expression. expression must evaluate to an integer. *)
-  let rec interval_of_expr (vars: interval Bindings.t) (e: expr): interval =
+  let rec interval_of_expr  (e: expr): interval =
     match e with
     | Expr_Binop _ -> assert false
     | Expr_Unop _ -> assert false
@@ -248,8 +248,8 @@ module Bits2 = struct
       let wd = List.fold_left (+) 0 wds in
       interval_of_size wd
     | Expr_In (expr, pattern) -> assert false
-    | Expr_Var (ident) -> (Bindings.find ident vars)
-    | Expr_Parens (expr) -> interval_of_expr vars expr
+    | Expr_Var (ident) -> assert false
+    | Expr_Parens (expr) -> interval_of_expr expr
     | Expr_Tuple (expr_list) -> assert false
     | Expr_Unknown (ty) -> assert false
     | Expr_ImpDef (ty, str_option) -> assert false
@@ -263,7 +263,7 @@ module Bits2 = struct
     | Expr_LitMask (str) -> assert false
     | Expr_LitString (str) -> assert false
 
-  let bits_size_of_expr (vars: interval Bindings.t) (e: expr): int =
+  let bits_size_of_expr  (e: expr): int =
     match e with
     | Expr_TApply (fn, tes, es) ->
       (match (fn, tes, es) with
@@ -279,31 +279,24 @@ module Bits2 = struct
       | FIdent ("append_bits", 0), [Expr_LitInt n; Expr_LitInt m], _ -> int_of_string n + int_of_string m
       | _ -> failwith @@ "bits_size_of_expr: unhandled " ^ pp_expr e
       )
-    | Expr_Slices (_, slice_list) ->
-      let wds = List.map (function | Slice_LoWd (_,Expr_LitInt n) -> int_of_string n | _ -> assert false) slice_list in
-      let wd = List.fold_left (+) 0 wds in
-      wd
-    | _ -> size_of_interval (interval_of_expr vars e)
+    | _ -> size_of_interval (interval_of_expr e)
 
   let bits_size_of_val (v: value): int =
     match v with
     | VBits {n=n; _} -> n
     | _ -> failwith @@ "bits_size_of_val: unhandled " ^ pp_value v
 
-  let bits_size_of_sym (vars: interval Bindings.t) = function
+  let bits_size_of_sym = function
     | Val v -> bits_size_of_val v
-    | Exp e -> bits_size_of_expr vars e
+    | Exp e -> bits_size_of_expr e
 
   class bits_traverse_coerce = object (self)
     inherit Asl_visitor.nopAslVisitor
 
     val mutable count = 0;
 
-    val mutable vars : ident Bindings.t = Bindings.empty
-    val mutable intervals : interval Bindings.t = Bindings.empty
-
     method bv_sign_extend (size: int) (e: sym) =
-      let old = bits_size_of_sym intervals e in
+      let old = bits_size_of_sym e in
       assert (old <= size);
       if old = size then
         e
@@ -321,25 +314,6 @@ module Bits2 = struct
         | _ -> e
       in
       sym_of_expr e'
-
-
-
-    method make_var nm =
-      count <- count + 1;
-      let var = Ident (pprint_ident nm ^ "_size__" ^ string_of_int count) in
-      vars <- Bindings.add nm var vars;
-      type_bits_var var
-
-    method! vstmt s =
-      ChangeDoChildrenPost (s, fun s ->
-        match s with
-        | Stmt_VarDecl (Type_Constructor (Ident "integer"), nm, r, l) ->
-          let interval = interval_of_expr intervals r in
-          intervals <- Bindings.add nm interval intervals;
-          let t = self#make_var nm in
-          Stmt_VarDecl (t, nm, r, l)
-        | _ -> s
-      )
 
     method! vexpr e =
       match e with
@@ -359,23 +333,23 @@ module Bits2 = struct
           | Expr_TApply (FIdent ("cvt_bits_sint", 0), [_], [e]) ->
             e
           | Expr_TApply (FIdent ("add_int", 0), [], [x;y]) ->
-            let xsize = bits_size_of_expr intervals x in
-            let ysize = bits_size_of_expr intervals y in
+            let xsize = bits_size_of_expr x in
+            let ysize = bits_size_of_expr y in
             let size = max xsize ysize + 1 in
             let ex e = self#bv_sign_extend size (self#bv_sym_of_expr e) in
             (* Printf.printf "x %s\ny %s\n" (pp_expr x) (pp_expr y) ; *)
             sym_expr @@ sym_prim (FIdent ("add_bits", 0)) [sym_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("eq_int", 0), [], [x;y]) ->
-            let xsize = bits_size_of_expr intervals x in
-            let ysize = bits_size_of_expr intervals y in
+            let xsize = bits_size_of_expr x in
+            let ysize = bits_size_of_expr y in
             let size = max xsize ysize in
             let ex e = self#bv_sign_extend size (self#bv_sym_of_expr e) in
             sym_expr @@ sym_prim (FIdent ("eq_bits", 0)) [sym_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("ne_int", 0), [], [x;y]) ->
-            let xsize = bits_size_of_expr intervals x in
-            let ysize = bits_size_of_expr intervals y in
+            let xsize = bits_size_of_expr x in
+            let ysize = bits_size_of_expr y in
             let size = max xsize ysize in
             let ex e = self#bv_sign_extend size (self#bv_sym_of_expr e) in
             sym_expr @@ sym_prim (FIdent ("ne_bits", 0)) [sym_int size] [ex x; ex y]
