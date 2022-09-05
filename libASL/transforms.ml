@@ -2,6 +2,8 @@ open Asl_utils
 
 open AST
 open Visitor
+open Symbolic
+open Value
 
 (* module unused. *)
 module RemoveUnused = struct
@@ -181,101 +183,6 @@ module Bits = struct
 end
 
 
-module RefParams = struct
-
-  let has_ref_param (xs: sformal list) =
-    List.exists
-      (function
-      | Formal_InOut _ -> true
-      | _ -> false)
-      xs
-
-  (** Filters the given list of sformal, returning a list of
-      (argument index, type, argument name) with only the ref params. *)
-  let get_ref_params (xs: sformal list): (int * ty * ident) list =
-    let xs = List.mapi (fun i x -> (i,x)) xs in
-    List.filter_map
-      (fun (n,f) ->
-      match f with
-      | Formal_InOut (t,i) -> Some (n,t,i)
-      | _ -> None)
-      xs
-
-  let replace_returns ss s =
-    let visit = object
-      inherit Asl_visitor.nopAslVisitor
-      method! vstmt =
-        function
-        | Stmt_ProcReturn _ -> ChangeTo s
-        | Stmt_FunReturn _ -> failwith "unexpected function return in ref param conversion."
-        | _ -> DoChildren
-    end
-    in
-    Asl_visitor.visit_stmts visit ss
-
-  class visit_decls = object
-    inherit Asl_visitor.nopAslVisitor
-
-    (* mapping of function identifiers to the indices of their
-       reference parameters. *)
-    val mutable ref_params : int list Bindings.t = Bindings.empty
-
-    method ref_params = ref_params
-
-    method! vdecl (d: declaration): declaration visitAction =
-      match d with
-      | Decl_ArraySetterDefn (nm, args, vty, vnm, body, loc)->
-        (match get_ref_params args with
-        | [] -> DoChildren
-        | refs ->
-          let ns = List.map (fun (n,_,_) -> n) refs in
-          let ts = List.map (fun (_,t,_) -> t) refs in
-          let is = List.map (fun (_,_,i) -> i) refs in
-
-          ref_params <- Bindings.add nm ns ref_params;
-
-          (* append setter value argument to formal argument list. *)
-          let args' = List.map Tcheck.formal_of_sformal args @ [vty, vnm] in
-
-          (* construct return expression to return modified ref vars. *)
-          let vars = List.map (fun x -> Expr_Var x) is in
-          let ret = Stmt_FunReturn (Expr_Tuple vars, loc) in
-          let body' = replace_returns body ret in
-
-          let rty = Type_Tuple ts in
-          ChangeTo (Decl_FunDefn (rty, nm, args', body', loc))
-        )
-      | _ -> DoChildren
-  end
-
-  class visit_writes ref_params = object
-    inherit Asl_visitor.nopAslVisitor
-
-    method! vstmt (s: stmt): stmt visitAction =
-      match s with
-      | Stmt_Assign (LExpr_Write (setter, targs, args), r, loc) ->
-        (* Printf.printf " %s\n" (pp_stmt s); *)
-        (match Bindings.find_opt setter ref_params with
-        | None -> DoChildren
-        | Some ns ->
-          let refs = List.map (List.nth args) ns in
-          (* Printf.printf "ref param: %s\n" (pp_expr a); *)
-
-          let les = List.map Symbolic.expr_to_lexpr refs in
-          let call = Expr_TApply (setter, targs, args @ [r]) in
-          ChangeTo (Stmt_Assign (LExpr_Tuple les, call, loc))
-        )
-      | _ -> DoChildren
-  end
-
-  let ref_param_conversion (ds: declaration list) =
-    let v1 = new visit_decls in
-    let ds = List.map (Asl_visitor.visit_decl (v1 :> Asl_visitor.aslVisitor)) ds in
-    let v2 = new visit_writes (v1#ref_params) in
-    let ds = List.map (Asl_visitor.visit_decl v2) ds in
-    ds
-end
-
 module Bits2 = struct
   type interval = (Z.t * Z.t)
   let empty_interval = (Z.zero, Z.minus_one)
@@ -328,25 +235,6 @@ module Bits2 = struct
     let len = String.length x in
     Z.signed_extract (Z.of_string_base 2 x) 0 len
 
-  let expr_num n = Expr_LitInt (string_of_int n)
-
-  let prim_funcall f tes es = Expr_TApply (FIdent (f, 0), tes, es)
-
-  let prim_zeros n =
-    Expr_LitBits (String.init n (fun _ -> '0'))
-
-  let prim_zero_extend num_zeros old_width e =
-    prim_funcall "append_bits" [expr_num num_zeros; old_width] [prim_zeros num_zeros; e]
-
-  let prim_replicate_bits num width e =
-    prim_funcall "replicate_bits" [expr_num width; expr_num num] [e; expr_num num]
-
-  let prim_sign_extend num_zeros old_width e =
-    let sign = Expr_Slices (e, [Slice_LoWd (expr_num (old_width - 1), expr_num 1)]) in
-    prim_funcall "append_bits"
-      [expr_num num_zeros; expr_num old_width]
-      [prim_replicate_bits num_zeros 1 sign; e]
-
 
   (* returns the interval of an expression. expression must evaluate to an integer. *)
   let rec interval_of_expr (vars: interval Bindings.t) (e: expr): interval =
@@ -397,13 +285,22 @@ module Bits2 = struct
       wd
     | _ -> size_of_interval (interval_of_expr vars e)
 
-  let expr_sign_extend (vars: interval Bindings.t) (size: int) (e: expr) =
-    let old = bits_size_of_expr vars e in
+  let bits_size_of_val (v: value): int =
+    match v with
+    | VBits {n=n; _} -> n
+    | _ -> failwith @@ "bits_size_of_val: unhandled " ^ pp_value v
+
+  let bits_size_of_sym (vars: interval Bindings.t) = function
+    | Val v -> bits_size_of_val v
+    | Exp e -> bits_size_of_expr vars e
+
+  let expr_sign_extend (vars: interval Bindings.t) (size: int) (e: sym) =
+    let old = bits_size_of_sym vars e in
     assert (old <= size);
     if old = size then
       e
     else
-      prim_sign_extend (size - old) old e
+      (sym_sign_extend (size - old) old e)
 
   class bits_traverse_coerce = object (self)
     inherit Asl_visitor.nopAslVisitor
@@ -444,31 +341,31 @@ module Bits2 = struct
             (* Printf.printf "going up with %s\n" (pp_expr e); *)
           match e' with
 
-          | Expr_TApply (FIdent ("cvt_bits_uint", 0), [n], [e]) ->
-            prim_zero_extend 1 n e
+          | Expr_TApply (FIdent ("cvt_bits_uint", 0), [_], [e]) ->
+            sym_expr @@ sym_zero_extend 1 (int_of_expr (List.hd tes)) (sym_of_expr e)
           | Expr_TApply (FIdent ("cvt_bits_sint", 0), [_], [e]) ->
             e
           | Expr_TApply (FIdent ("add_int", 0), [], [x;y]) ->
             let xsize = bits_size_of_expr intervals x in
             let ysize = bits_size_of_expr intervals y in
             let size = max xsize ysize + 1 in
-            let ex = expr_sign_extend intervals size in
-            Printf.printf "x %s\ny %s\n" (pp_expr x) (pp_expr y) ;
-            prim_funcall "add_bits" [expr_num size] [ex x;ex y]
+            let ex e = expr_sign_extend intervals size (sym_of_expr e) in
+            (* Printf.printf "x %s\ny %s\n" (pp_expr x) (pp_expr y) ; *)
+            sym_expr @@ sym_prim (FIdent ("add_bits", 0)) [sym_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("eq_int", 0), [], [x;y]) ->
             let xsize = bits_size_of_expr intervals x in
             let ysize = bits_size_of_expr intervals y in
             let size = max xsize ysize in
-            let ex = expr_sign_extend intervals size in
-            prim_funcall "eq_bits" [expr_num size] [ex x;ex y]
+            let ex e = expr_sign_extend intervals size (sym_of_expr e) in
+            sym_expr @@ sym_prim (FIdent ("eq_bits", 0)) [sym_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("ne_int", 0), [], [x;y]) ->
             let xsize = bits_size_of_expr intervals x in
             let ysize = bits_size_of_expr intervals y in
             let size = max xsize ysize in
-            let ex = expr_sign_extend intervals size in
-            prim_funcall "ne_bits" [expr_num size] [ex x;ex y]
+            let ex e = expr_sign_extend intervals size (sym_of_expr e) in
+            sym_expr @@ sym_prim (FIdent ("ne_bits", 0)) [sym_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent (f, 0), _, _) when Utils.endswith f "_int" ->
             failwith @@ "unsupported integer function: " ^ pp_expr e
@@ -479,7 +376,11 @@ module Bits2 = struct
         )
     | Expr_Slices (base, slices) ->
       ChangeDoChildrenPost (e, function
-        | Expr_Slices (base', slices') -> Expr_Slices (base', slices)
+        | Expr_Slices (base', _) -> Expr_Slices (base', slices)
+        | _ -> assert false)
+    | Expr_Array (base, ind) ->
+      ChangeDoChildrenPost (e, function
+        | Expr_Array (base', _) -> Expr_Array (base', ind)
         | _ -> assert false)
     | _ -> DoChildren
 

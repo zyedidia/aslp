@@ -460,12 +460,6 @@ let sym_val_or_uninit (t: ty) (x: sym): value rws =
   | Exp e -> DisEnv.mkUninit t
 
 
-(** Coerces sym to value but DOES NOT return correct uninitialised
-    structures with types. *)
-let sym_val_or_uninit_unsafe (x: sym): value =
-  match x with
-  | Val v -> v
-  | Exp e -> VUninitialized (Type_OfExpr e)
 
 (** Symbolic implementation of an if statement that returns an expression
  *)
@@ -857,15 +851,13 @@ and dis_prim (f: ident) (tes: sym list) (es: sym list): sym rws =
     match sym_prim_simplify name tes es with
     | Some s -> DisEnv.pure s
     | None ->
-        let tes_vals = List.map sym_val_or_uninit_unsafe tes
-        and es_vals = List.map sym_val_or_uninit_unsafe es in
-
-        match filter_uninit (eval_prim name tes_vals es_vals) with
-        | Some v -> DisEnv.pure (Val v)
-        | None -> let f' = Expr_TApply(f, List.map sym_expr tes, List.map sym_expr es) in
+        match sym_prim f tes es with
+        | Exp f' ->
             if List.mem name Value.prims_pure
                 then DisEnv.pure (Exp f')
+                (* TODO(kl): avoid use of type_unknown by inferring return type of primitive. *)
                 else let+ var = capture_expr Unknown type_unknown f' in var_sym_expr var
+        | Val v -> DisEnv.pure (Val v)
 
 and dis_lexpr loc x r: unit rws =
     DisEnv.scope loc

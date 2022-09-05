@@ -91,6 +91,25 @@ let rec expr_to_lexpr (e: expr): lexpr =
     | _ -> raise (EvalError (Unknown, "expr_to_lexpr: cannot derive lexpr for " ^ pp_expr e)))
   | _ -> raise (EvalError (Unknown, "unexpected expression in expr_to_lexpr coercion: " ^ pp_expr e))
 
+let int_of_expr (e: expr): int =
+  match e with
+  | Expr_LitInt(i) ->    Z.to_int (Z.of_string i)
+  | Expr_LitHex(i) ->    Z.to_int (Z.of_string_base 16 (drop_chars i '_'))
+  | _ -> failwith @@ "int_of_expr: cannot coerce to int " ^ pp_expr e
+
+let sym_int (n: int): sym =
+  Val (VInt (Z.of_int n))
+
+let sym_of_expr (e: expr): sym =
+  match e with
+  | Expr_LitInt(i) ->    (Val (from_intLit i))
+  | Expr_LitHex(i) ->    (Val (from_hexLit i))
+  | Expr_LitReal(r) ->   (Val (from_realLit r))
+  | Expr_LitBits(b) ->   (Val (from_bitsLit b))
+  | Expr_LitMask(b) ->   (Val (from_maskLit b))
+  | Expr_LitString(s) -> (Val (from_stringLit s))
+  | _ -> Exp e
+
 let rec lexpr_to_expr (loc: l) (x: lexpr): expr =
   (match x with
   | LExpr_Var(id) -> Expr_Var(id)
@@ -172,7 +191,6 @@ let prim_binop_targs (f: string) (loc: l) (x: sym) (y: sym): value list =
     | _ -> fail ())
   | _ -> [] (* assume other binops have no type arguments. *)
 
-
 (** Apply a primitive operation to two arguments
   *)
 let prim_binop (f: string) (loc: AST.l) (x: sym) (y: sym) : sym  =
@@ -186,6 +204,20 @@ let prim_binop (f: string) (loc: AST.l) (x: sym) (y: sym) : sym  =
       FIdent(f,0),
       List.map val_expr targs,
       [sym_expr x; sym_expr y])))
+
+(** Coerces sym to value but DOES NOT return correct uninitialised
+    structures with types. *)
+let sym_val_or_uninit_unsafe (x: sym): value =
+  match x with
+  | Val v -> v
+  | Exp e -> VUninitialized (Type_OfExpr e)
+
+let sym_prim (f: ident) (tes: sym list) (es: sym list): sym =
+  let tes_vals = List.map sym_val_or_uninit_unsafe tes
+  and es_vals = List.map sym_val_or_uninit_unsafe es in
+  match eval_prim (name_of_FIdent f) tes_vals es_vals with
+  | None -> Exp (Expr_TApply(f, List.map sym_expr tes, List.map sym_expr es))
+  | Some v -> Val (v)
 
 let sym_true     = Val (from_bool true)
 let sym_false    = Val (from_bool false)
@@ -242,7 +274,7 @@ let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
     (match e with
     | (Expr_Slices (e', [Slice_LoWd (Expr_LitInt l',_)])) ->
         let l2 = int_of_string l' in
-        sym_slice loc (Exp e') (l2 + lo) wd
+        sym_slice loc (sym_of_expr e') (l2 + lo) wd
     | (Expr_TApply (FIdent ("append_bits", 0), [Expr_LitInt t1; Expr_LitInt t2], [x1; x2])) ->
       let t2 = int_of_string t2 in
       if t2 < 0 then
@@ -250,18 +282,34 @@ let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
         Exp slice_expr
       else if (lo >= t2) then
         (* slice is entirely within upper part (i.e. significant bits). *)
-        sym_slice loc (Exp x1) (lo - t2) wd
+        sym_slice loc (sym_of_expr x1) (lo - t2) wd
       else if (lo + wd <= t2) then
         (* entirely within lower part. *)
-        sym_slice loc (Exp x2) lo wd
+        sym_slice loc (sym_of_expr x2) lo wd
       else
         (* getting bits from both *)
         let w2 = t2 - lo in
         let w1 = wd - w2 in
-        let x2' = sym_slice loc (Exp x2) lo w2 in
-        let x1' = sym_slice loc (Exp x1) 0 w1 in
+        let x2' = sym_slice loc (sym_of_expr x2) lo w2 in
+        let x1' = sym_slice loc (sym_of_expr x1) 0 w1 in
         sym_append_bits loc  w1 w2 x1' x2'
     | _ -> Exp slice_expr)
+
+
+let expr_of_int n = Expr_LitInt (string_of_int n)
+
+let sym_replicate (xw: int) (x: sym) (n: int): sym =
+  match n with
+  | 1 -> x
+  | _ ->
+    match x with
+    | Val (VBits b) -> Val (VBits (prim_replicate_bits b (Z.of_int n)))
+    | Val _ -> failwith @@ "sym_replicate: invalid replicate value " ^ pp_sym x
+    | Exp e -> Exp (
+      Expr_TApply (
+        FIdent ("replicate_bits", 0),
+        [expr_of_int xw; expr_of_int n],
+        [e; expr_of_int n]))
 
 (** Wrapper around sym_slice to handle cases of symbolic slice bounds *)
 let sym_extract_bits loc v i w =
@@ -271,6 +319,20 @@ let sym_extract_bits loc v i w =
       let w' = to_int loc w' in
       sym_slice loc v i' w'
   | _ -> Exp (Expr_Slices (sym_expr v, [Slice_LoWd (sym_expr i, sym_expr w)]))
+
+let expr_zeros n =
+  Expr_LitBits (String.init n (fun _ -> '0'))
+
+let val_zeros n =
+  VBits {n=n; v=Z.zero}
+
+let sym_zero_extend num_zeros old_width e =
+  sym_append_bits Unknown num_zeros old_width (Val (val_zeros num_zeros)) e
+
+let sym_sign_extend num_zeros old_width (e: sym): sym =
+  let sign = sym_slice Unknown e (old_width-1) 1 in
+  let rep = sym_replicate 1 sign num_zeros in
+  sym_append_bits Unknown num_zeros old_width rep e
 
 (** Overwrite bits from position lo up to (lo+wd) exclusive of old with the value v.
     Needs to know the widths of both old and v to perform the operation.
