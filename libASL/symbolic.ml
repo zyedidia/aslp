@@ -97,8 +97,11 @@ let int_of_expr (e: expr): int =
   | Expr_LitHex(i) ->    Z.to_int (Z.of_string_base 16 (drop_chars i '_'))
   | _ -> failwith @@ "int_of_expr: cannot coerce to int " ^ pp_expr e
 
-let sym_int (n: int): sym =
+let sym_of_int (n: int): sym =
   Val (VInt (Z.of_int n))
+
+let expr_of_int n =
+  Expr_LitInt (string_of_int n)
 
 let sym_of_expr (e: expr): sym =
   match e with
@@ -212,11 +215,16 @@ let sym_val_or_uninit_unsafe (x: sym): value =
   | Val v -> v
   | Exp e -> VUninitialized (Type_OfExpr e)
 
+let expr_prim f tes es =
+  Expr_TApply (f, tes, es)
+
+let expr_prim' f = expr_prim (FIdent (f, 0))
+
 let sym_prim (f: ident) (tes: sym list) (es: sym list): sym =
   let tes_vals = List.map sym_val_or_uninit_unsafe tes
   and es_vals = List.map sym_val_or_uninit_unsafe es in
   match eval_prim (name_of_FIdent f) tes_vals es_vals with
-  | None -> Exp (Expr_TApply(f, List.map sym_expr tes, List.map sym_expr es))
+  | None -> Exp (expr_prim f (List.map sym_expr tes) (List.map sym_expr es))
   | Some v -> Val (v)
 
 let sym_true     = Val (from_bool true)
@@ -253,7 +261,20 @@ let sym_append_bits (loc: l) (xw: int) (yw: int) (x: sym) (y: sym): sym =
   | (Val (VBits {n=0; _}), y) -> y
   | (x, Val (VBits {n=0; _})) -> x
   | (Val (VBits x),Val (VBits y)) -> Val (VBits (prim_append_bits x y))
-  | (x,y) -> Exp (Expr_TApply(FIdent("append_bits",0), [Expr_LitInt (string_of_int xw); Expr_LitInt (string_of_int yw)], [sym_expr x;sym_expr y])))
+
+  (* special case: if y is already an append operation, fuse x into its y's left argument. *)
+  | (Val (VBits v), Exp (Expr_TApply (FIdent ("append_bits", 0),
+      [Expr_LitInt lw; rw], [Expr_LitBits l;r]))) ->
+
+    let l = (to_bits Unknown (from_bitsLit l)) in
+    let l' = val_expr (VBits (prim_append_bits v l)) in
+    Exp (expr_prim' "append_bits"
+      [expr_of_int (xw + int_of_string lw); rw]
+      [l'; r])
+
+  | (x,y) ->
+    Exp (expr_prim' "append_bits" [expr_of_int xw; expr_of_int yw] [sym_expr x;sym_expr y])
+  )
 
 (* WARNING: incorrect type arguments passed to append_bits but sufficient for evaluation
    of primitive with eval_prim. *)

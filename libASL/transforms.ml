@@ -335,7 +335,7 @@ module Bits2 = struct
             let size = max xsize ysize + 1 in
             let ex = self#extend size in
             (* Printf.printf "x %s\ny %s\n" (pp_expr x) (pp_expr y) ; *)
-            sym_expr @@ sym_prim (FIdent ("add_bits", 0)) [sym_int size] [ex x; ex y]
+            sym_expr @@ sym_prim (FIdent ("add_bits", 0)) [sym_of_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("sub_int", 0), [], [x;y]) ->
             let xsize = bits_size_of_expr x in
@@ -343,28 +343,28 @@ module Bits2 = struct
             let size = max xsize ysize + 1 in
             let ex = self#extend size in
             (* Printf.printf "x %s\ny %s\n" (pp_expr x) (pp_expr y) ; *)
-            sym_expr @@ sym_prim (FIdent ("sub_bits", 0)) [sym_int size] [ex x; ex y]
+            sym_expr @@ sym_prim (FIdent ("sub_bits", 0)) [sym_of_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("eq_int", 0), [], [x;y]) ->
             let xsize = bits_size_of_expr x in
             let ysize = bits_size_of_expr y in
             let size = max xsize ysize in
             let ex = self#extend size in
-            sym_expr @@ sym_prim (FIdent ("eq_bits", 0)) [sym_int size] [ex x; ex y]
+            sym_expr @@ sym_prim (FIdent ("eq_bits", 0)) [sym_of_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("ne_int", 0), [], [x;y]) ->
             let xsize = bits_size_of_expr x in
             let ysize = bits_size_of_expr y in
             let size = max xsize ysize in
             let ex = self#extend size in
-            sym_expr @@ sym_prim (FIdent ("ne_bits", 0)) [sym_int size] [ex x; ex y]
+            sym_expr @@ sym_prim (FIdent ("ne_bits", 0)) [sym_of_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("mul_int", 0), [], [x;y]) ->
             let xsize = bits_size_of_expr x in
             let ysize = bits_size_of_expr y in
             let size = xsize + ysize in
             let ex = self#extend size in
-            sym_expr @@ sym_prim (FIdent ("mul_bits", 0)) [sym_int size] [ex x; ex y]
+            sym_expr @@ sym_prim (FIdent ("mul_bits", 0)) [sym_of_int size] [ex x; ex y]
 
             (* x >= y  iff  y <= x  iff  x - y >= 0*)
           | Expr_TApply (FIdent ("ge_int", 0), [], [x;y])
@@ -377,7 +377,7 @@ module Bits2 = struct
             sym_expr @@
               sym_eq_bits Unknown
               (sym_slice Unknown
-                (sym_prim (FIdent ("sub_bits", 0)) [sym_int size] [ex x; ex y])
+                (sym_prim (FIdent ("sub_bits", 0)) [sym_of_int size] [ex x; ex y])
                 (size-1)
                 1)
               (Val (from_bitsLit "0"))
@@ -393,7 +393,7 @@ module Bits2 = struct
             sym_expr @@
               sym_eq_bits Unknown
               (sym_slice Unknown
-                (sym_prim (FIdent ("sub_bits", 0)) [sym_int size] [ex x; ex y])
+                (sym_prim (FIdent ("sub_bits", 0)) [sym_of_int size] [ex x; ex y])
                 (size-1)
                 1)
               (Val (from_bitsLit "1"))
