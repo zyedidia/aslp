@@ -329,7 +329,7 @@ let field_vals_flags_only (enc: encoding) (name: string) (wd: int): int list =
   | _, "cond" -> [1]
   | _ when Utils.startswith name "R" && name <> "R" -> [0;1]
   | _ when Utils.startswith name "X" && name <> "R" -> [1]
-  | _ when Utils.startswith name "imm" -> [1]
+  | _ when Utils.startswith name "imm" -> [0;1]
   | _ when Utils.startswith name "uimm" -> [1]
   | _ -> List.init (Int.shift_left 1 wd) (fun x -> x)
 
