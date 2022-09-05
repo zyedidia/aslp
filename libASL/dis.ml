@@ -954,7 +954,7 @@ and dis_lexpr' (loc: l) (x: lexpr) (r: sym): unit rws =
                 set_fields (i + w) fs'
             )
         in
-        set_fields 0 fs
+        set_fields 0 (List.rev fs)
     | LExpr_Slices(l, ss) ->
         let e = lexpr_to_expr loc l in
         let@ ty = type_of_load loc e in
@@ -1315,12 +1315,13 @@ let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt l
     let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
     let stmts' = remove_unused globals @@ stmts in
     (* let stmts' = Transforms.Bits.bitvec_conversion stmts' in *)
-    let stmts' = Asl_visitor.visit_stmts (new Transforms.Bits2.bits_traverse_coerce :> Asl_visitor.aslVisitor) stmts' in
+    let stmts' = Asl_visitor.visit_stmts (new Transforms.Bits2.bits_coerce_precise) stmts' in
     if !debug_level >= 2 then begin
         Printf.printf "===========\n";
         List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts';
         Printf.printf "===========\n";
     end;
+    let stmts' = Asl_visitor.visit_stmts (new Transforms.Bits2.bits_coerce_narrow) stmts' in
     stmts'
 
 

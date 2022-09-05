@@ -772,7 +772,7 @@ and eval_lexpr (loc: l) (env: Env.t) (x: AST.lexpr) (r: value): unit =
                         set_fields (i + w) fs' v'
                 )
             in
-            eval_lexpr_modify loc env l (set_fields 0 fs)
+            eval_lexpr_modify loc env l (set_fields 0 (List.rev fs))
     | LExpr_Slices(l, ss) ->
             let rec eval (o: value) (ss': AST.slice list) (prev: value): value =
                 (match ss' with
