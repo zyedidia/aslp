@@ -294,14 +294,6 @@ module Bits2 = struct
     | Val v -> bits_size_of_val v
     | Exp e -> bits_size_of_expr vars e
 
-  let expr_sign_extend (vars: interval Bindings.t) (size: int) (e: sym) =
-    let old = bits_size_of_sym vars e in
-    assert (old <= size);
-    if old = size then
-      e
-    else
-      (sym_sign_extend (size - old) old e)
-
   class bits_traverse_coerce = object (self)
     inherit Asl_visitor.nopAslVisitor
 
@@ -309,6 +301,27 @@ module Bits2 = struct
 
     val mutable vars : ident Bindings.t = Bindings.empty
     val mutable intervals : interval Bindings.t = Bindings.empty
+
+    method bv_sign_extend (size: int) (e: sym) =
+      let old = bits_size_of_sym intervals e in
+      assert (old <= size);
+      if old = size then
+        e
+      else
+        (sym_sign_extend (size - old) old e)
+
+    method bv_sym_of_expr e =
+      let e' =
+        match e with
+        | Expr_LitInt n ->
+          let n' = Z.of_string n in
+          let size = num_bits_signed n' in
+          let a = Z.extract n' 0 size in
+          (Expr_LitBits (Z.format ("%0" ^ string_of_int size ^ "b") a))
+        | _ -> e
+      in
+      sym_of_expr e'
+
 
 
     method make_var nm =
@@ -330,26 +343,26 @@ module Bits2 = struct
 
     method! vexpr e =
       match e with
-      | Expr_LitInt n ->
+      (* | Expr_LitInt n ->
         let n' = Z.of_string n in
         let size = num_bits_signed n' in
         let a = Z.extract n' 0 size in
-        ChangeTo (Expr_LitBits (Z.format ("%0" ^ string_of_int size ^ "b") a))
+        ChangeTo (Expr_LitBits (Z.format ("%0" ^ string_of_int size ^ "b") a)) *)
       | Expr_TApply (fn, tes, es) ->
         (* Printf.printf "going down\n"; *)
         ChangeDoChildrenPost (e, fun e' ->
             (* Printf.printf "going up with %s\n" (pp_expr e); *)
           match e' with
 
-          | Expr_TApply (FIdent ("cvt_bits_uint", 0), [_], [e]) ->
-            sym_expr @@ sym_zero_extend 1 (int_of_expr (List.hd tes)) (sym_of_expr e)
+          | Expr_TApply (FIdent ("cvt_bits_uint", 0), [t], [e]) ->
+            sym_expr @@ sym_zero_extend 1 (int_of_expr t) (self#bv_sym_of_expr e)
           | Expr_TApply (FIdent ("cvt_bits_sint", 0), [_], [e]) ->
             e
           | Expr_TApply (FIdent ("add_int", 0), [], [x;y]) ->
             let xsize = bits_size_of_expr intervals x in
             let ysize = bits_size_of_expr intervals y in
             let size = max xsize ysize + 1 in
-            let ex e = expr_sign_extend intervals size (sym_of_expr e) in
+            let ex e = self#bv_sign_extend size (self#bv_sym_of_expr e) in
             (* Printf.printf "x %s\ny %s\n" (pp_expr x) (pp_expr y) ; *)
             sym_expr @@ sym_prim (FIdent ("add_bits", 0)) [sym_int size] [ex x; ex y]
 
@@ -357,35 +370,22 @@ module Bits2 = struct
             let xsize = bits_size_of_expr intervals x in
             let ysize = bits_size_of_expr intervals y in
             let size = max xsize ysize in
-            let ex e = expr_sign_extend intervals size (sym_of_expr e) in
+            let ex e = self#bv_sign_extend size (self#bv_sym_of_expr e) in
             sym_expr @@ sym_prim (FIdent ("eq_bits", 0)) [sym_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("ne_int", 0), [], [x;y]) ->
             let xsize = bits_size_of_expr intervals x in
             let ysize = bits_size_of_expr intervals y in
             let size = max xsize ysize in
-            let ex e = expr_sign_extend intervals size (sym_of_expr e) in
+            let ex e = self#bv_sign_extend size (self#bv_sym_of_expr e) in
             sym_expr @@ sym_prim (FIdent ("ne_bits", 0)) [sym_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent (f, 0), _, _) when Utils.endswith f "_int" ->
             failwith @@ "unsupported integer function: " ^ pp_expr e
 
-          | Expr_TApply (fn', _, es') when fn' = fn ->
-            Expr_TApply (fn', tes, es')
           | _ -> e'
         )
-    | Expr_Slices (base, slices) ->
-      ChangeDoChildrenPost (e, function
-        | Expr_Slices (base', _) -> Expr_Slices (base', slices)
-        | _ -> assert false)
-    | Expr_Array (base, ind) ->
-      ChangeDoChildrenPost (e, function
-        | Expr_Array (base', _) -> Expr_Array (base', ind)
-        | _ -> assert false)
     | _ -> DoChildren
-
-    method! vtype x = SkipChildren
-    method! vlexpr x = SkipChildren
 
   end
 
