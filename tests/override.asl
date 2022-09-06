@@ -7,3 +7,16 @@ AArch64.CheckFPAdvSIMDEnabled()
 
 integer ImplementedSVEVectorLength(integer nbits)
     return 128;
+
+boolean IsSVEEnabled(bits(2) el)
+    return FALSE;
+
+boolean sle_bits(bits(N) x, bits(N) y)
+    integer xn = SInt(x);
+    integer yn = SInt(y);
+    return xn <= yn;
+
+boolean slt_bits(bits(N) x, bits(N) y)
+    integer xn = SInt(x);
+    integer yn = SInt(y);
+    return xn < yn;

@@ -229,6 +229,8 @@ let sym_prim (f: ident) (tes: sym list) (es: sym list): sym =
 
 let sym_true     = Val (from_bool true)
 let sym_false    = Val (from_bool false)
+let sym_zeros n  = Val (VBits (prim_zeros_bits (Z.of_int n)))
+
 let sym_eq_int   = prim_binop "eq_int"
 let sym_add_int  = prim_binop "add_int"
 let sym_sub_int  = prim_binop "sub_int"
@@ -280,6 +282,23 @@ let sym_append_bits (loc: l) (xw: int) (yw: int) (x: sym) (y: sym): sym =
    of primitive with eval_prim. *)
 let sym_append_bits_unsafe loc x y = sym_append_bits loc (-1) (-1) x y
 
+let expr_of_int n = Expr_LitInt (string_of_int n)
+
+let sym_replicate (xw: int) (x: sym) (n: int): sym =
+  match n with
+  | _ when n < 0 -> failwith @@ "sym_replicate: negative replicate count"
+  | 0 -> Val (from_bitsLit "")
+  | 1 -> x
+  | _ ->
+    match x with
+    | Val (VBits b) -> Val (VBits (prim_replicate_bits b (Z.of_int n)))
+    | Val _ -> failwith @@ "sym_replicate: invalid replicate value " ^ pp_sym x
+    | Exp e -> Exp (
+      Expr_TApply (
+        FIdent ("replicate_bits", 0),
+        [expr_of_int xw; expr_of_int n],
+        [e; expr_of_int n]))
+
 (** Extract a slice from a symbolic bitvector given known bounds.
     Applies optimisations to collapse consecutive slice operations and
     distributes slices across bitvector append operations.
@@ -296,6 +315,23 @@ let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
     | (Expr_Slices (e', [Slice_LoWd (Expr_LitInt l',_)])) ->
         let l2 = int_of_string l' in
         sym_slice loc (sym_of_expr e') (l2 + lo) wd
+    | (Expr_TApply (
+        FIdent (("ZeroExtend" | "SignExtend") as ext_type, 0),
+        [Expr_LitInt t1; Expr_LitInt t2],
+        [x;_])) ->
+      let t1 = int_of_string t1 in (* old width *)
+      let t2 = int_of_string t2 in (* extended width *)
+      let ext_wd = (t2 - t1) in (* width of extend bits *)
+      let ext_bit =
+        match ext_type with
+        | "ZeroExtend" -> Val (from_bitsLit "0")
+        | "SignExtend" -> sym_slice loc (Exp x) (t1-1) 1
+        | _ -> assert false
+      in
+      let ext = sym_replicate 1 ext_bit ext_wd in
+      sym_slice loc
+        (sym_append_bits loc ext_wd t1 ext (sym_of_expr x))
+        lo wd
     | (Expr_TApply (FIdent ("append_bits", 0), [Expr_LitInt t1; Expr_LitInt t2], [x1; x2])) ->
       let t2 = int_of_string t2 in
       if t2 < 0 then
@@ -317,21 +353,6 @@ let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
     | _ -> Exp slice_expr)
 
 
-let expr_of_int n = Expr_LitInt (string_of_int n)
-
-let sym_replicate (xw: int) (x: sym) (n: int): sym =
-  match n with
-  | 1 -> x
-  | _ ->
-    match x with
-    | Val (VBits b) -> Val (VBits (prim_replicate_bits b (Z.of_int n)))
-    | Val _ -> failwith @@ "sym_replicate: invalid replicate value " ^ pp_sym x
-    | Exp e -> Exp (
-      Expr_TApply (
-        FIdent ("replicate_bits", 0),
-        [expr_of_int xw; expr_of_int n],
-        [e; expr_of_int n]))
-
 (** Wrapper around sym_slice to handle cases of symbolic slice bounds *)
 let sym_extract_bits loc v i w =
   match ( i, w) with
@@ -348,12 +369,20 @@ let val_zeros n =
   VBits {n=n; v=Z.zero}
 
 let sym_zero_extend num_zeros old_width e =
-  sym_append_bits Unknown num_zeros old_width (Val (val_zeros num_zeros)) e
+  match sym_append_bits Unknown num_zeros old_width (Val (val_zeros num_zeros)) e with
+  | Val v -> Val v
+  | Exp _ ->
+      let n' = expr_of_int (num_zeros + old_width) in
+      Exp (expr_prim' "ZeroExtend" [expr_of_int old_width; n'] [sym_expr e; n'])
 
 let sym_sign_extend num_zeros old_width (e: sym): sym =
   let sign = sym_slice Unknown e (old_width-1) 1 in
   let rep = sym_replicate 1 sign num_zeros in
-  sym_append_bits Unknown num_zeros old_width rep e
+  match sym_append_bits Unknown num_zeros old_width rep e with
+  | Val v -> Val v
+  | Exp _ ->
+      let n' = expr_of_int (num_zeros + old_width) in
+      Exp (expr_prim' "SignExtend" [expr_of_int old_width; n'] [sym_expr e; n'])
 
 (** Overwrite bits from position lo up to (lo+wd) exclusive of old with the value v.
     Needs to know the widths of both old and v to perform the operation.

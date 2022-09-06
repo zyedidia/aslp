@@ -277,6 +277,8 @@ module Bits2 = struct
       | FIdent ("zeros_bits", 0), [Expr_LitInt n], _
       | FIdent ("ones_bits", 0), [Expr_LitInt n], _ -> int_of_string n
       | FIdent ("append_bits", 0), [Expr_LitInt n; Expr_LitInt m], _ -> int_of_string n + int_of_string m
+      | FIdent ("ZeroExtend", 0), [_; Expr_LitInt m], _
+      | FIdent ("SignExtend", 0), [_; Expr_LitInt m], _ -> int_of_string m
       | _ -> failwith @@ "bits_size_of_expr: unhandled " ^ pp_expr e
       )
     | _ -> size_of_interval (interval_of_expr e)
@@ -371,32 +373,18 @@ module Bits2 = struct
           | Expr_TApply (FIdent ("le_int", 0), [], [y;x]) ->
             let xsize = bits_size_of_expr x in
             let ysize = bits_size_of_expr y in
-            let size = max xsize ysize + 1 in
-            let ex = self#extend size in
-            (* implemented as x - y >= 0, by checking the sign bit is zero *)
-            sym_expr @@
-              sym_eq_bits Unknown
-              (sym_slice Unknown
-                (sym_prim (FIdent ("sub_bits", 0)) [sym_of_int size] [ex x; ex y])
-                (size-1)
-                1)
-              (Val (from_bitsLit "0"))
+            let size = max xsize ysize in
+            let ex x = sym_expr (self#extend size x) in
+            expr_prim' "sle_bits" [expr_of_int size] [ex y;ex x]
 
             (* x < y  iff  y > x  iff x - y < 0 *)
           | Expr_TApply (FIdent ("lt_int", 0), [], [x;y])
           | Expr_TApply (FIdent ("gt_int", 0), [], [y;x]) ->
             let xsize = bits_size_of_expr x in
             let ysize = bits_size_of_expr y in
-            let size = max xsize ysize + 1 in
-            let ex = self#extend size in
-            (* implemented as x - y < 0, by checking the sign bit is set. *)
-            sym_expr @@
-              sym_eq_bits Unknown
-              (sym_slice Unknown
-                (sym_prim (FIdent ("sub_bits", 0)) [sym_of_int size] [ex x; ex y])
-                (size-1)
-                1)
-              (Val (from_bitsLit "1"))
+            let size = max xsize ysize in
+            let ex x = sym_expr (self#extend size x) in
+            expr_prim' "slt_bits" [expr_of_int size] [ex x;ex y]
 
           | Expr_TApply (FIdent (f, 0), _, _) when Utils.endswith f "_int" ->
             failwith @@ "unsupported integer function: " ^ pp_expr e'
