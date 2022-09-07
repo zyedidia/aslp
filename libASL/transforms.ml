@@ -252,7 +252,7 @@ module IntToBits = struct
     | Expr_Slices (expr, slice_list) ->
       let wds = List.map (function | Slice_LoWd (_,Expr_LitInt n) -> int_of_string n | _ -> assert false) slice_list in
       List.fold_left (+) 0 wds
-    | _ -> assert false
+    | _ -> failwith @@ "bits_size_of_expr: unhandled " ^ pp_expr e
 
   (** Returns the bit-width of the given value,
       and errors if the value is not a bit value. *)
@@ -275,10 +275,7 @@ module IntToBits = struct
       then e
       else (sym_sign_extend (size - old) old e)
 
-  (** Returns a symbolic bits expression of the given expression,
-      including coercing integers to two's complement bits where
-      needed. *)
-  let bits_sym_of_expr e =
+  let bits_coerce_of_expr e =
     let e' =
       match e with
       | Expr_LitInt n
@@ -291,14 +288,19 @@ module IntToBits = struct
     in
     sym_of_expr e'
 
+  (** Returns a symbolic bits expression of the given expression
+      along with the bit width,
+      including coercing integers to two's complement bits where
+      needed. *)
+  let bits_with_size_of_expr e =
+    let e' = bits_coerce_of_expr e in
+    e', bits_size_of_sym e'
+
   (** Transform integer expressions into bit-vector expressions while
       maintaining precision by widening bit-vector sizes as operations
       are applied. *)
   class bits_coerce_widening = object (self)
     inherit Asl_visitor.nopAslVisitor
-
-    method extend size e =
-      bits_sign_extend size (bits_sym_of_expr e)
 
 
     (** Visits an expression, coercing integer expressions into bit-vector
@@ -316,67 +318,73 @@ module IntToBits = struct
           match e' with
 
           | Expr_TApply (FIdent ("cvt_bits_uint", 0), [t], [e]) ->
-            sym_expr @@ sym_zero_extend 1 (int_of_expr t) (bits_sym_of_expr e)
-          | Expr_TApply (FIdent ("cvt_bits_sint", 0), [_], [e]) ->
-            e
+            sym_expr @@ sym_zero_extend 1 (int_of_expr t) (bits_coerce_of_expr e)
+          | Expr_TApply (FIdent ("cvt_bits_sint", 0), [t], [e]) ->
+            sym_expr @@ sym_slice Unknown (bits_coerce_of_expr e) 0 (int_of_expr t)
           | Expr_TApply (FIdent ("add_int", 0), [], [x;y]) ->
-            let xsize = bits_size_of_expr x in
-            let ysize = bits_size_of_expr y in
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
             let size = max xsize ysize + 1 in
-            let ex = self#extend size in
+            let ex = bits_sign_extend size in
             (* Printf.printf "x %s\ny %s\n" (pp_expr x) (pp_expr y) ; *)
-            sym_expr @@ sym_prim (FIdent ("add_bits", 0)) [sym_of_int size] [ex x; ex y]
+            sym_expr @@ sym_prim (FIdent ("add_bits", 0)) [sym_of_int size] [ex x;ex y]
 
           | Expr_TApply (FIdent ("sub_int", 0), [], [x;y]) ->
-            let xsize = bits_size_of_expr x in
-            let ysize = bits_size_of_expr y in
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
             let size = max xsize ysize + 1 in
-            let ex = self#extend size in
+            let ex = bits_sign_extend size in
             (* Printf.printf "x %s\ny %s\n" (pp_expr x) (pp_expr y) ; *)
             sym_expr @@ sym_prim (FIdent ("sub_bits", 0)) [sym_of_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("eq_int", 0), [], [x;y]) ->
-            let xsize = bits_size_of_expr x in
-            let ysize = bits_size_of_expr y in
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
             let size = max xsize ysize in
-            let ex = self#extend size in
+            let ex = bits_sign_extend size in
             sym_expr @@ sym_prim (FIdent ("eq_bits", 0)) [sym_of_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("ne_int", 0), [], [x;y]) ->
-            let xsize = bits_size_of_expr x in
-            let ysize = bits_size_of_expr y in
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
             let size = max xsize ysize in
-            let ex = self#extend size in
+            let ex = bits_sign_extend size in
             sym_expr @@ sym_prim (FIdent ("ne_bits", 0)) [sym_of_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("mul_int", 0), [], [x;y]) ->
-            let xsize = bits_size_of_expr x in
-            let ysize = bits_size_of_expr y in
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
             let size = xsize + ysize in
-            let ex = self#extend size in
+            let ex = bits_sign_extend size in
             sym_expr @@ sym_prim (FIdent ("mul_bits", 0)) [sym_of_int size] [ex x; ex y]
 
             (* x >= y  iff  y <= x  iff  x - y >= 0*)
           | Expr_TApply (FIdent ("ge_int", 0), [], [x;y])
           | Expr_TApply (FIdent ("le_int", 0), [], [y;x]) ->
-            let xsize = bits_size_of_expr x in
-            let ysize = bits_size_of_expr y in
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
             let size = max xsize ysize in
-            let ex x = sym_expr (self#extend size x) in
+            let ex x = sym_expr (bits_sign_extend size x) in
             expr_prim' "sle_bits" [expr_of_int size] [ex y;ex x]
 
             (* x < y  iff  y > x  iff x - y < 0 *)
           | Expr_TApply (FIdent ("lt_int", 0), [], [x;y])
           | Expr_TApply (FIdent ("gt_int", 0), [], [y;x]) ->
-            let xsize = bits_size_of_expr x in
-            let ysize = bits_size_of_expr y in
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
             let size = max xsize ysize in
-            let ex x = sym_expr (self#extend size x) in
+            let ex x = sym_expr (bits_sign_extend size x) in
             expr_prim' "slt_bits" [expr_of_int size] [ex x;ex y]
           (* NOTE: sle_bits and slt_bits are signed less or equal,
              and signed less than.
              These are not primitive in ASL but are defined in BIL so
              we take advantage of them. *)
+
+          | Expr_TApply (FIdent ("neg_int", 0), [], [x]) ->
+            let (x,xsize) = bits_with_size_of_expr x in
+            let size = xsize + 1 in
+            let ex x = sym_expr (bits_sign_extend size x) in
+            expr_prim' "neg_bits" [expr_of_int size] [ex x]
 
           | Expr_TApply (FIdent (f, 0), _, _) when Utils.endswith f "_int" ->
             failwith @@ "unsupported integer function: " ^ pp_expr e'
@@ -407,6 +415,7 @@ module IntToBits = struct
         (match fn with
         | "add_bits" -> ChangeDoChildrenPost (narrow, fun x -> Expr_Slices (x, [sl]))
         | "sub_bits" -> ChangeDoChildrenPost (narrow, fun x -> Expr_Slices (x, [sl]))
+        | "neg_bits" -> ChangeDoChildrenPost (narrow, fun x -> Expr_Slices (x, [sl]))
         | _ -> DoChildren
         )
       | _ -> DoChildren
