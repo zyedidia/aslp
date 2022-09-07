@@ -103,6 +103,8 @@ let sym_of_int (n: int): sym =
 let expr_of_int n =
   Expr_LitInt (string_of_int n)
 
+(** Coerces the expression to a symbolic expression, converting
+    literal expressions into values. *)
 let sym_of_expr (e: expr): sym =
   match e with
   | Expr_LitInt(i) ->    (Val (from_intLit i))
@@ -325,7 +327,7 @@ let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
       let ext_bit =
         match ext_type with
         | "ZeroExtend" -> Val (from_bitsLit "0")
-        | "SignExtend" -> sym_slice loc (Exp x) (t1-1) 1
+        | "SignExtend" -> sym_slice loc (sym_of_expr x) (t1-1) 1
         | _ -> assert false
       in
       let ext = sym_replicate 1 ext_bit ext_wd in

@@ -1267,45 +1267,6 @@ and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: 
     else
         DisEnv.pure false
 
-let rec remove_unused (globals: IdentSet.t) xs = (remove_unused' globals xs)
-
-and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
-    fst @@ List.fold_right (fun stmt (acc, used) ->
-        let pass = (acc, used)
-        and emit (s: stmt) =
-            (s::acc, IdentSet.union used (fv_stmt s))
-        in
-        match stmt with
-        | Stmt_VarDeclsNoInit(ty, vs, loc) ->
-            let vs' = List.filter (fun i -> IdentSet.mem i used) vs in
-            (match vs' with
-            | [] -> pass
-            | _ -> emit (Stmt_VarDeclsNoInit(ty, vs', loc)))
-        | Stmt_VarDecl(ty, v, i, loc) ->
-            if IdentSet.mem v used
-                then emit stmt
-                else pass
-        | Stmt_ConstDecl(ty, v, i, loc) ->
-            if IdentSet.mem v used
-                then emit stmt
-                else pass
-        | Stmt_Assign(le, r, loc) ->
-            let lvs = assigned_vars_of_stmts [stmt] in
-            (* TODO: Don't pass if v is global *)
-            if not (IdentSet.disjoint lvs used)
-                then emit stmt
-                else pass
-        | Stmt_If(c, tstmts, elsif, fstmts, loc) ->
-            let tstmts' = remove_unused' used tstmts in
-            let fstmts' = remove_unused' used fstmts in
-            let elsif' = List.map (fun (S_Elsif_Cond (c,ss)) ->
-                S_Elsif_Cond (c, remove_unused' used ss)) elsif in
-            (match (tstmts',fstmts',elsif') with
-            | [], [], [] -> pass
-            | _, _, _ -> emit (Stmt_If(c, tstmts', elsif', fstmts', loc)))
-        | x -> emit x
-    ) xs ([], used)
-
 let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt list =
     let DecoderCase_Case (_,_,loc) = decode in
 
@@ -1313,15 +1274,14 @@ let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt l
     let globals = IdentSet.of_list @@ List.map fst @@ Bindings.bindings (Eval.Env.readGlobals env) in
     let lenv = LocalEnv.init env in
     let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
-    let stmts' = remove_unused globals @@ stmts in
+    let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
     (* let stmts' = Transforms.Bits.bitvec_conversion stmts' in *)
-    let stmts' = Asl_visitor.visit_stmts (new Transforms.Bits2.bits_coerce_precise) stmts' in
     if !debug_level >= 2 then begin
         Printf.printf "===========\n";
         List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts';
         Printf.printf "===========\n";
     end;
-    let stmts' = Asl_visitor.visit_stmts (new Transforms.Bits2.bits_coerce_narrow) stmts' in
+    let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
     stmts'
 
 

@@ -5,191 +5,187 @@ open Visitor
 open Symbolic
 open Value
 
-(* module unused. *)
+(** Remove variables which are unused at the end of the statement list. *)
 module RemoveUnused = struct
+  let rec remove_unused (globals: IdentSet.t) xs = (remove_unused' globals xs)
 
-  module M = Rws.Make(struct
-    type r = unit
-    type w = stmt list
-    type s = IdentSet.t
+  and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
+    fst @@ List.fold_right (fun stmt (acc, used) ->
 
-    let mappend = (@)
-    let mempty = []
-  end)
-
-  include M.Let
-
-  let rec remove_unused' (xs: stmt list): unit M.rws =
-    M.traverse_ (fun stmt ->
-      let* used = M.get in
-
-      let include_stmt (s: stmt): unit M.rws =
-        let* () = M.write [s] in
-        M.modify (IdentSet.union (fv_stmt s)) in
+      let pass = (acc, used)
+      and emit (s: stmt) = (s::acc, IdentSet.union used (fv_stmt s))
+      in
 
       match stmt with
       | Stmt_VarDeclsNoInit(ty, vs, loc) ->
-          let vs' = List.filter (fun i -> IdentSet.mem i used) vs in
-          (match vs' with
-          | [] -> M.unit
-          | _ -> include_stmt (Stmt_VarDeclsNoInit(ty, vs', loc)))
+        let vs' = List.filter (fun i -> IdentSet.mem i used) vs in
+        (match vs' with
+        | [] -> pass
+        | _ -> emit (Stmt_VarDeclsNoInit(ty, vs', loc)))
       | Stmt_VarDecl(ty, v, i, loc) ->
-          if IdentSet.mem v used
-            then include_stmt stmt
-            else M.unit
+        if IdentSet.mem v used
+          then emit stmt
+          else pass
       | Stmt_ConstDecl(ty, v, i, loc) ->
-          if IdentSet.mem v used
-            then include_stmt stmt
-            else M.unit
-      | Stmt_Assign(LExpr_Var(v), r, loc) ->
-          if IdentSet.mem v used
-            then include_stmt stmt
-            else M.unit
+        if IdentSet.mem v used
+          then emit stmt
+          else pass
+      | Stmt_Assign(le, r, loc) ->
+        let lvs = assigned_vars_of_stmts [stmt] in
+        if not (IdentSet.disjoint lvs used)
+          then emit stmt
+          else pass
       | Stmt_If(c, tstmts, elsif, fstmts, loc) ->
-          let* (_, tstmts') = M.locally_ (remove_unused' tstmts) in
-          let* (_, fstmts') = M.locally_ (remove_unused' tstmts) in
-          let* elsif' = M.traverse
-            (fun (S_Elsif_Cond (c,ss)) ->
-              let+ (_,ss') = M.locally_ (remove_unused' ss) in
-              S_Elsif_Cond(c,ss')) elsif in
-          (match tstmts',elsif',fstmts' with
-          | [], [], [] -> M.unit
-          | _ -> include_stmt (Stmt_If(c, tstmts', elsif', fstmts', loc)))
-      | _ -> include_stmt stmt
-    ) (List.rev xs)
+        let tstmts' = remove_unused' used tstmts in
+        let fstmts' = remove_unused' used fstmts in
+        let elsif' = List.map
+          (fun (S_Elsif_Cond (c,ss)) ->
+            S_Elsif_Cond (c, remove_unused' used ss))
+          elsif in
+        (match (tstmts',fstmts',elsif') with
+        | [], [], [] -> pass
+        | _, _, _ -> emit (Stmt_If(c, tstmts', elsif', fstmts', loc)))
+      | x -> emit x
 
-  let go xs =
-    let ((), _, xs') = remove_unused' xs () IdentSet.empty in
-    List.rev xs'
-
+    ) xs ([], used)
 end
 
 
-(**
 
-We would like to implement a method for recursing and looking for structures
-of the form:
-
-add_int.0 {{  }} (
-  cvt_bits_uint.0 {{ 64 }} ( Exp2__2 [ 0 +: 64 ] ),
-  cvt_bits_uint.0 {{ 64 }} ( Exp5__3 [ 0 +: 64 ] )
-) [ 0 +: 64 ]
-
-and replacing it with an equivalent "pure bitvector expression" like:
-
-add_bits.0 {{ 64 }} (
-  Exp2__2 [ 0 +: 64 ],
-  Exp5__3 [ 0 +: 64 ]
-)
-
-
-This is done using two visitors over the expression tree.
-- First, we search for a bitvector coercion to bits of the form "x[0:+64]"
-  using the bits_traverse_entry visitor.
-- Then, we visit the subexpression "x" and attempt to convert it into a pure
-  bitvector expression using the bits_traverse_to_cvt visitor. If this is
-  possible, we replace "x[0:+64]" with this pure bits expression "x'".
-
+(** Transforms setters using formal reference (in/out) parameters
+    into functions returning modified versions of the reference parameters.
 *)
-module Bits = struct
+module RefParams = struct
 
-  (** Exception raised by the bitvector conversion visitor when an irreducible
-      expression is reached which is not a bitvector type.data
+  (** Filters the given list of sformal, returning a list of
+      (argument index, type, argument name) with only the ref params. *)
+  let get_ref_params (xs: sformal list): (int * ty * ident) list =
+    let xs = List.mapi (fun i x -> (i,x)) xs in
+    List.filter_map
+      (fun (n,f) ->
+      match f with
+      | Formal_InOut (t,i) -> Some (n,t,i)
+      | _ -> None)
+      xs
 
-      Examples of these cases are: an arbitrary variable name, or non-bits literal.
-  *)
-  exception Non_bits_atomic of expr
+  (** Replaces all procedure returns in the given statement list
+      with the given statement. *)
+  let replace_returns ss s =
+    let visit = object
+      inherit Asl_visitor.nopAslVisitor
+      method! vstmt =
+        function
+        | Stmt_ProcReturn _ -> ChangeTo s
+        | Stmt_FunReturn _ -> failwith "unexpected function return in ref param conversion."
+        | _ -> DoChildren
+    end
+    in
+    Asl_visitor.visit_stmts visit ss
 
-  (** Visit the subtree until we reach a pure bitvector expression or a coercion from
-      pure bitvector to integer.
+  (** Replaces setter declarations which use formal in-out parameters with
+      functions which return their modified parameters.
 
-      The vexpr method returns the expression as a pure bitvector expression of the
-      correct width if that is possible. Otherwise, it throws an exception.
-  *)
-  class bits_traverse_coerce width = object (self)
+      For example,
+
+        Elem[bits(N) &vector, integer e] = bits(size) value
+          ...
+          return;
+
+      is transformed to
+
+        (bits(N)) Elem.read(bits(N) vector, integer e, bits(size) value)
+          ...
+          return (vector);
+
+
+      *)
+  class visit_decls = object
     inherit Asl_visitor.nopAslVisitor
 
-    (** Substitutes integer function names and type arguments with their bitvector versions.
+    (* mapping of function identifiers to the indices of their
+       reference parameters. *)
+    val mutable ref_params : int list Bindings.t = Bindings.empty
 
-        No conversion of argument expressions is done in this function. We assume that
-        is done by the vexpr method.
-    *)
-    method to_bits_fun f tes =
-      match (f, tes) with
-      | (FIdent ("add_int", 0), []) -> (FIdent ("add_bits", 0), [Expr_LitInt width])
-      | (FIdent ("sub_int", 0), []) -> (FIdent ("sub_bits", 0), [Expr_LitInt width])
-      | (FIdent ("mul_int", 0), []) -> (FIdent ("mul_bits", 0), [Expr_LitInt width])
-      | _ -> (f, tes)
+    method ref_params = ref_params
 
-    method! vexpr e = match e with
-    | Expr_LitBits (s) when String.length s = int_of_string width -> SkipChildren
+    method! vdecl (d: declaration): declaration visitAction =
+      match d with
+      | Decl_ArraySetterDefn (nm, args, vty, vnm, body, loc)->
+        (match get_ref_params args with
+        | [] -> DoChildren
+        | refs ->
+          (* indices, types, and identifiers for the ref params. *)
+          let ns = List.map (fun (n,_,_) -> n) refs in
+          let ts = List.map (fun (_,t,_) -> t) refs in
+          let is = List.map (fun (_,_,i) -> i) refs in
 
-    | Expr_TApply (FIdent ("cvt_int_real", _), _, _) -> raise (Non_bits_atomic e)
+          ref_params <- Bindings.add nm ns ref_params;
 
-    | Expr_TApply (FIdent ("cvt_bits_uint", 0), [Expr_LitInt w], [e]) ->
-      let w = int_of_string w in
-      let width = int_of_string width in
-      let padwidth = width - w in
-      if padwidth = 0 then
-        (* width matches what we want. just return original bitvector expression.  *)
-        ChangeTo e
-      else if padwidth > 0 then
-        (* expression width is shorter than what we want, pad it with padwidth zeros. *)
-        let pad = String.init padwidth (fun _ -> '0') in
-        ChangeTo (
-          Expr_TApply (FIdent ("append_bits", 0),
-          [Expr_LitInt (string_of_int padwidth); Expr_LitInt (string_of_int w)],
-          [Expr_LitBits pad; e])
+          (* append setter value argument to formal argument list. *)
+          let args' = List.map Tcheck.formal_of_sformal args @ [vty, vnm] in
+
+          (* construct return expression to return modified ref vars. *)
+          let vars = List.map (fun x -> Expr_Var x) is in
+          let ret = Stmt_FunReturn (Expr_Tuple vars, loc) in
+          let body' = replace_returns body ret in
+
+          let rty = Type_Tuple ts in
+          ChangeTo (Decl_FunDefn (rty, nm, args', body', loc))
         )
-      else
-        raise (Non_bits_atomic e)
-
-    | Expr_TApply (ident, tes, es) -> ChangeDoChildrenPost (e,
-      function
-      | Expr_TApply (ident, tes, es) ->
-          let (f', tes') = self#to_bits_fun ident tes in
-          (* Printf.printf "f: %s\n" (pprint_ident ident); *)
-          Expr_TApply (f', tes', es)
-      | x -> x
-      )
-
-    | _ -> raise (Non_bits_atomic e)
+      | _ -> DoChildren
   end
 
-  (** Starts the bitvector conversion by looking for coercions _to_ a bitvector.
+  (** Replaces writes to the setters modified above to assign
+      the return value back to the original variables.
 
-      Then calls the bits_traverse_coerce visitor to coerce subexpressions of
-      this into pure bitvector expressions if possible.
-  *)
-  let bits_traverse_begin width = object
+      For example,
+
+        Elem[vector, 2] = '1001';
+
+      is transformed to
+
+        vector = Elem.read(vector, 2, '1001');
+
+      *)
+  class visit_writes ref_params = object
     inherit Asl_visitor.nopAslVisitor
 
-    val coerce_visitor = (new bits_traverse_coerce width :> Asl_visitor.aslVisitor)
+    method! vstmt (s: stmt): stmt visitAction =
+      match s with
+      | Stmt_Assign (LExpr_Write (setter, targs, args), r, loc) ->
+        (* Printf.printf " %s\n" (pp_stmt s); *)
+        (match Bindings.find_opt setter ref_params with
+        | None -> DoChildren
+        | Some ns ->
+          let refs = List.map (List.nth args) ns in
+          (* Printf.printf "ref param: %s\n" (pp_expr a); *)
 
-    method! vexpr e =
-      (* post-order visit of x[0:+64] expressions. *)
-      ChangeDoChildrenPost (e,
-        fun e ->
-          match e with
-          | Expr_Slices (expr, [Slice_LoWd(Expr_LitInt "0", Expr_LitInt w)]) when w = width ->
-            (try Asl_visitor.visit_expr coerce_visitor expr
-            with | Non_bits_atomic _ -> e)
-          | _ -> e)
+          let les = List.map Symbolic.expr_to_lexpr refs in
+          let call = Expr_TApply (setter, targs, args @ [r]) in
+          ChangeTo (Stmt_Assign (LExpr_Tuple les, call, loc))
+        )
+      | _ -> DoChildren
   end
 
-  (** Performs the bitvector expression coercion on the given statement list.  *)
-  let bitvec_conversion (xs: stmt list): stmt list =
-    Asl_visitor.visit_stmts (bits_traverse_begin "64") xs
+  let ref_param_conversion (ds: declaration list) =
+    let v1 = new visit_decls in
+    let ds = List.map (Asl_visitor.visit_decl (v1 :> Asl_visitor.aslVisitor)) ds in
+    let v2 = new visit_writes (v1#ref_params) in
+    let ds = List.map (Asl_visitor.visit_decl v2) ds in
+    ds
 end
 
 
-module Bits2 = struct
+
+(** Transforms expressions of integers into equivalent expressions over
+    bit-vectors. *)
+module IntToBits = struct
   type interval = (Z.t * Z.t)
   let empty_interval = (Z.zero, Z.minus_one)
 
-  let type_bits n = Type_Bits (Expr_LitInt (string_of_int n))
-  let type_bits_var i = Type_Bits (Expr_Var i)
 
+  (** Returns the number of bits needed to represent n (where n >= 0),
+      assuming the bits are interpreted as unsigned. *)
   let num_bits_unsigned n =
     assert (Z.geq n Z.zero);
     if Z.equal n Z.zero then
@@ -197,73 +193,43 @@ module Bits2 = struct
     else
       Z.log2 n + 1
 
+  (** Returns the number of bits needed to represent n, assuming
+      the bits are interpreted as signed two's complement.  *)
   let num_bits_signed n =
     if Z.geq n Z.zero then
+      (* non-negative n case is same as unsigned + 1 for sign bit. *)
       num_bits_unsigned n + 1
     else
+      (* representing -1 requires representing |n|-1 in
+         unsigned, then + 1 for sign bit. *)
       num_bits_unsigned (Z.sub (Z.abs n) Z.one) + 1
 
+  (** Returns the number of (signed) bits needed to represent
+      all numbers within (lo,hi) inclusive.  *)
   let size_of_interval (lo,hi) =
     assert (Z.leq lo hi);
     max (max (num_bits_signed lo) (num_bits_signed hi)) 1
 
-  let type_interval x =
-    type_bits (size_of_interval x)
-
-  let is_empty (x,y) = Z.equal x Z.zero && Z.equal y Z.minus_one
-
-  let interval_join (x: interval) (y: interval) =
-    match x,y with
-    | _,_ when is_empty x || is_empty y -> assert false
-    | (x1,x2),(y1,y2) -> Z.min x1 y1, Z.max x2 y2
-
-  let interval_fold (xs: interval list) =
-    match xs with
-    | [] -> assert false
-    | x::xs -> List.fold_left interval_join x xs
-
+  (** Returns the interval which is representable by the given number
+      of two's complement bits.  *)
   let interval_of_size (n: int): interval =
     assert (n >= 1);
     let magnitude = Z.shift_left Z.one (n - 1) in
     (Z.neg magnitude, Z.sub magnitude Z.one)
 
+  (** Removes all space characters from the given string. *)
+  let drop_space x = Value.drop_chars x ' '
 
-
-  (* interpret a bit literal as a SIGNED integer. *)
+  (** Interprets a bit literal as a signed integer. *)
   let sint_of_bits x =
     let x = Value.drop_chars x ' ' in
     let len = String.length x in
     Z.signed_extract (Z.of_string_base 2 x) 0 len
 
 
-  (* returns the interval of an expression. expression must evaluate to an integer. *)
-  let rec interval_of_expr  (e: expr): interval =
-    match e with
-    | Expr_Binop _ -> assert false
-    | Expr_Unop _ -> assert false
-    | Expr_Field (expr, ident) -> assert false
-    | Expr_Fields (expr, ident_list) -> assert false
-    | Expr_Slices (expr, slice_list) ->
-      let wds = List.map (function | Slice_LoWd (_,Expr_LitInt n) -> int_of_string n | _ -> assert false) slice_list in
-      let wd = List.fold_left (+) 0 wds in
-      interval_of_size wd
-    | Expr_In (expr, pattern) -> assert false
-    | Expr_Var (ident) -> assert false
-    | Expr_Parens (expr) -> interval_of_expr expr
-    | Expr_Tuple (expr_list) -> assert false
-    | Expr_Unknown (ty) -> assert false
-    | Expr_ImpDef (ty, str_option) -> assert false
-    | Expr_TApply (ident, expr_list, expr_list2) -> assert false (* TODO *)
-    | Expr_If (ty, cond, t, e_elsif_list, f) -> assert false
-    | Expr_Array (expr, expr2) -> assert false
-    | Expr_LitInt (s)
-    | Expr_LitHex (s) -> let n = Z.of_string s in (n,n)
-    | Expr_LitReal (str) -> assert false
-    | Expr_LitBits (str) -> let n = sint_of_bits str in (n,n)
-    | Expr_LitMask (str) -> assert false
-    | Expr_LitString (str) -> assert false
-
-  let bits_size_of_expr  (e: expr): int =
+  (** Returns the bit-width of the given expression.
+      Requires expression to evaluate to a bit-vector type. *)
+  let rec bits_size_of_expr (e: expr): int =
     match e with
     | Expr_TApply (fn, tes, es) ->
       (match (fn, tes, es) with
@@ -281,45 +247,67 @@ module Bits2 = struct
       | FIdent ("SignExtend", 0), [_; Expr_LitInt m], _ -> int_of_string m
       | _ -> failwith @@ "bits_size_of_expr: unhandled " ^ pp_expr e
       )
-    | _ -> size_of_interval (interval_of_expr e)
+    | Expr_Parens e -> bits_size_of_expr e
+    | Expr_LitBits s -> String.length (drop_space s)
+    | Expr_Slices (expr, slice_list) ->
+      let wds = List.map (function | Slice_LoWd (_,Expr_LitInt n) -> int_of_string n | _ -> assert false) slice_list in
+      List.fold_left (+) 0 wds
+    | _ -> assert false
 
+  (** Returns the bit-width of the given value,
+      and errors if the value is not a bit value. *)
   let bits_size_of_val (v: value): int =
     match v with
     | VBits {n=n; _} -> n
     | _ -> failwith @@ "bits_size_of_val: unhandled " ^ pp_value v
 
+  (** Returns the bit-width of the given symbolic. *)
   let bits_size_of_sym = function
     | Val v -> bits_size_of_val v
     | Exp e -> bits_size_of_expr e
 
-  class bits_coerce_precise = object (self)
+  (** Extends the given symbolic to the given size,
+      treating it as a signed two's complement expression. *)
+  let bits_sign_extend (size: int) (e: sym) =
+    let old = bits_size_of_sym e in
+    assert (old <= size);
+    if old = size
+      then e
+      else (sym_sign_extend (size - old) old e)
+
+  (** Returns a symbolic bits expression of the given expression,
+      including coercing integers to two's complement bits where
+      needed. *)
+  let bits_sym_of_expr e =
+    let e' =
+      match e with
+      | Expr_LitInt n
+      | Expr_LitHex n ->
+        let n' = Z.of_string (drop_space n) in
+        let size = num_bits_signed n' in
+        let a = Z.extract n' 0 size in
+        (Expr_LitBits (Z.format ("%0" ^ string_of_int size ^ "b") a))
+      | _ -> e
+    in
+    sym_of_expr e'
+
+  (** Transform integer expressions into bit-vector expressions while
+      maintaining precision by widening bit-vector sizes as operations
+      are applied. *)
+  class bits_coerce_widening = object (self)
     inherit Asl_visitor.nopAslVisitor
 
-    val mutable count = 0;
-
-    method bv_sign_extend (size: int) (e: sym) =
-      let old = bits_size_of_sym e in
-      assert (old <= size);
-      if old = size then
-        e
-      else
-        (sym_sign_extend (size - old) old e)
-
-    method bv_sym_of_expr e =
-      let e' =
-        match e with
-        | Expr_LitInt n ->
-          let n' = Z.of_string n in
-          let size = num_bits_signed n' in
-          let a = Z.extract n' 0 size in
-          (Expr_LitBits (Z.format ("%0" ^ string_of_int size ^ "b") a))
-        | _ -> e
-      in
-      sym_of_expr e'
-
     method extend size e =
-      self#bv_sign_extend size (self#bv_sym_of_expr e)
+      bits_sign_extend size (bits_sym_of_expr e)
 
+
+    (** Visits an expression, coercing integer expressions into bit-vector
+        operations.
+
+        Bit-vectors generated by this conversion are in SIGNED two's complement.
+        Each visit case assumes its sub-expressions have already been converted
+        to signed bit-vectors.
+    *)
     method! vexpr e =
       match e with
 
@@ -328,7 +316,7 @@ module Bits2 = struct
           match e' with
 
           | Expr_TApply (FIdent ("cvt_bits_uint", 0), [t], [e]) ->
-            sym_expr @@ sym_zero_extend 1 (int_of_expr t) (self#bv_sym_of_expr e)
+            sym_expr @@ sym_zero_extend 1 (int_of_expr t) (bits_sym_of_expr e)
           | Expr_TApply (FIdent ("cvt_bits_sint", 0), [_], [e]) ->
             e
           | Expr_TApply (FIdent ("add_int", 0), [], [x;y]) ->
@@ -385,6 +373,10 @@ module Bits2 = struct
             let size = max xsize ysize in
             let ex x = sym_expr (self#extend size x) in
             expr_prim' "slt_bits" [expr_of_int size] [ex x;ex y]
+          (* NOTE: sle_bits and slt_bits are signed less or equal,
+             and signed less than.
+             These are not primitive in ASL but are defined in BIL so
+             we take advantage of them. *)
 
           | Expr_TApply (FIdent (f, 0), _, _) when Utils.endswith f "_int" ->
             failwith @@ "unsupported integer function: " ^ pp_expr e'
@@ -395,6 +387,8 @@ module Bits2 = struct
 
   end
 
+  (** A second transform pass which narrows bit-vector expressions which are
+      later sliced, by considering the bits needed in that final slice. *)
   class bits_coerce_narrow = object (self)
     inherit Asl_visitor.nopAslVisitor
 
@@ -408,12 +402,20 @@ module Bits2 = struct
         let slice e = sym_expr @@ sym_slice Unknown (sym_of_expr e) 0 wd' in
         let narrow = Expr_TApply (FIdent (fn, 0), [expr_of_int wd'], List.map slice es) in
 
+        (* for add and sub expressions, we only need the lowest n bits in order
+           to have n bits of precision in the output. *)
         (match fn with
         | "add_bits" -> ChangeDoChildrenPost (narrow, fun x -> Expr_Slices (x, [sl]))
+        | "sub_bits" -> ChangeDoChildrenPost (narrow, fun x -> Expr_Slices (x, [sl]))
         | _ -> DoChildren
         )
       | _ -> DoChildren
 
   end
+
+  let ints_to_bits xs =
+    xs
+    |> Asl_visitor.visit_stmts (new bits_coerce_widening)
+    |> Asl_visitor.visit_stmts (new bits_coerce_narrow)
 
 end
