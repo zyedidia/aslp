@@ -22,6 +22,23 @@ let to_string (d: PPrint.document): string =
  * List related
  ****************************************************************)
 
+let rec take (n: int) (xs: 'a list) =
+    match xs with
+    | _ when n < 0 -> failwith "take: negative"
+    | [] when n = 0 -> []
+    | [] -> failwith "take: list too short"
+    | x::rest -> x :: take (n-1) rest
+
+let rec drop (n: int) (xs: 'a list) =
+    match xs with
+    | _ when n < 0 -> failwith "drop: negative"
+    | [] when n = 0 -> []
+    | [] -> failwith "drop: list too short"
+    | _::rest -> drop (n-1) rest
+
+let rec chunks (n: int) (xs: 'a list): 'a list list =
+    take n xs :: (chunks n (drop n xs))
+
 let nub (xs: 'a list): 'a list =
     let rec nub_aux seen xs = (match xs with
         | [] -> seen
