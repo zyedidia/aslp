@@ -414,3 +414,55 @@ let op_test_opcode (env: Env.t) (iset: string) (op: int): Env.t opresult =
   let* disstmts = op_dis env iset op in
   let* disevalenv = op_diseval initenv disstmts in
   op_compare (evalenv, disevalenv)
+
+let get_opcodes (opt_verbose: bool ref) (iset: string) (instr: string) (env: Env.t): (string * instr_field list * ((int * bool) list) option) list =
+  if !opt_verbose then Printf.printf "Coverage for encoding %s\n" instr;
+
+  let re = Str.regexp instr in
+  let encoding_matches = function
+      | (Encoding_Block (Ident nm, Ident is, _, _, _, _, _, _)) ->
+          is = iset && Str.string_match re nm 0
+      | _ -> assert false
+  in
+  let encs = List.map (fun (x,_,_,_) -> x) (Env.listInstructions env) in
+  let encs' = List.filter encoding_matches encs in
+
+  let opcodes = load_opcodes "encodings" in
+  let get_opcodes nm =
+      (match opcodes with
+      | Some opcodes' -> Option.value (Bindings.find_opt nm opcodes') ~default:[||]
+      | None -> [| (0, Int.max_int) |]
+  ) in
+
+  (match opcodes with
+  | None ->
+      Printf.printf "WARNING: encodings/ directory missing, assuming all opcodes are valid.\n";
+      Printf.printf "         If encodings.tar.gz exists, it should be extracted.\n\n"
+  | Some x ->
+      let add_opcodes = Array.to_list (get_opcodes (Ident "ADD_Z_ZI__")) in
+      let expected = [(0x2520c000, 0x2520ffff); (0x2560c000,0x2560ffff); (0x25a0c000,0x25a0ffff); (0x25e0c000,0x25e0ffff)] in
+      (* check that encodings file has been parsed to correct values.
+          if this fails, it is likely your encodings/ directory has the
+          incorrect format. *)
+      assert (add_opcodes = expected);
+      if !opt_verbose then Printf.printf "Loaded opcodes for %d encodings\n" (Bindings.cardinal x)
+  );
+
+  List.fold_left (fun encs enc ->
+      let Encoding_Block (nm,_,fields,_,_,_,_,_) = enc in
+      let newEnc = pprint_ident nm in
+      let t = enumerate_encoding enc (field_vals_flags_only enc) in
+      let l = list_of_enc_tree t in
+      let opcodes = (match get_opcodes nm with
+      | [||] -> 
+        None
+      | ops ->
+          Some (List.fold_left (fun codes op ->
+              if pair_array_mem ops op then
+                codes @ [(op, true)]
+              else
+                codes @ [(op, false)]
+          ) [] l)
+      ) in
+      encs @ [(newEnc, fields, opcodes)]
+  ) [] encs'

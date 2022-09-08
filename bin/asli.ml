@@ -81,57 +81,21 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         Testing.enumerate_opcodes cpu.env decoder start stop fname
     | [":coverage"; iset; instr] ->
         let open Testing in
-        Printf.printf "Coverage for encoding %s\n" instr;
-
-        let re = Str.regexp instr in
-        let encoding_matches = function
-            | (Encoding_Block (Ident nm, Ident is, _, _, _, _, _, _)) ->
-                is = iset && Str.string_match re nm 0
-            | _ -> assert false
-        in
-        let encs = List.map (fun (x,_,_,_) -> x) (Env.listInstructions cpu.env) in
-        let encs' = List.filter encoding_matches encs in
-
-        let opcodes = load_opcodes "encodings" in
-        let get_opcodes nm =
-            (match opcodes with
-            | Some opcodes' -> Option.value (Bindings.find_opt nm opcodes') ~default:[||]
-            | None -> [| (0, Int.max_int) |]
-        ) in
-
-        (match opcodes with
-        | None ->
-            Printf.printf "WARNING: encodings/ directory missing, assuming all opcodes are valid.\n";
-            Printf.printf "         If encodings.tar.gz exists, it should be extracted.\n\n"
-        | Some x ->
-            let add_opcodes = Array.to_list (get_opcodes (Ident "ADD_Z_ZI__")) in
-            let expected = [(0x2520c000, 0x2520ffff); (0x2560c000,0x2560ffff); (0x25a0c000,0x25a0ffff); (0x25e0c000,0x25e0ffff)] in
-            (* check that encodings file has been parsed to correct values.
-               if this fails, it is likely your encodings/ directory has the
-               incorrect format. *)
-            assert (add_opcodes = expected);
-            Printf.printf "Loaded opcodes for %d encodings\n" (Bindings.cardinal x)
-        );
-
-        List.iter (fun enc ->
-            let Encoding_Block (nm,_,fields,_,_,_,_,_) = enc in
-            Printf.printf "\nENCODING: %s\n" (pprint_ident nm);
-            let t = enumerate_encoding enc (field_vals_flags_only enc) in
-            let l = list_of_enc_tree t in
-            match get_opcodes nm with
-            | [||] -> Printf.printf "(encoding unused)\n";
-            | ops ->
-                List.iter (fun op ->
+        let encodings = get_opcodes opt_verbose iset instr cpu.env in
+        List.iter (fun (enc, fields, opt_opcodes) ->
+            Printf.printf "\nENCODING: %s\n" enc;
+            match opt_opcodes with
+            | None -> Printf.printf "(encoding unused)\n";
+            | Some opcodes ->
+                List.iter (fun (op, valid) ->
                     let fs = fields_of_opcode fields op in
                     Printf.printf "%s: %s --> " (hex_of_int op) (pp_enc_fields fs);
-                    (* flush stdout; *)
-                    if pair_array_mem ops op then
+                    if valid then
                         let result = op_test_opcode cpu.env iset op in
                         Printf.printf "%s\n" (pp_opresult (fun _ -> "OK") result)
-                    else
-                        Printf.printf "(invalid)\n";
-                ) l
-        ) encs'
+                    else Printf.printf "(invalid)\n";
+                ) opcodes
+        ) encodings;
     | [":compare"; iset; file] ->
         let decoder = Eval.Env.getDecoder cpu.env (Ident iset) in
         let inchan = open_in file in
@@ -196,6 +160,26 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         let op = Z.of_int (int_of_string opcode) in
         Printf.printf "Decoding and executing instruction %s %s\n" iset (Z.format "%x" op);
         cpu.opcode iset op
+    | [":opcodes"; iset; instr] ->
+        let open Testing in
+        let encodings = get_opcodes opt_verbose iset instr cpu.env in
+        List.iter (fun (_, _, opt_opcodes) ->
+            match opt_opcodes with
+            | None -> ()
+            | Some opcodes ->
+                List.iter (fun (op, valid) ->
+                    if valid then
+                        let op' = (String.sub (hex_of_int op) 2 8) in
+                        Printf.printf "%c" (String.get op' 6);
+                        Printf.printf "%c " (String.get op' 7);
+                        Printf.printf "%c" (String.get op' 4);
+                        Printf.printf "%c " (String.get op' 5);
+                        Printf.printf "%c" (String.get op' 2);
+                        Printf.printf "%c " (String.get op' 3);
+                        Printf.printf "%c" (String.get op' 0);
+                        Printf.printf "%c " (String.get op' 1);
+                ) opcodes
+        ) encodings;
     | [":sem"; iset; opcode] ->
         let cpu' = Cpu.mkCPU (Eval.Env.copy cpu.env) in
         let op = Z.of_int (int_of_string opcode) in
@@ -305,8 +289,8 @@ let _ =
 let main () =
     if !opt_print_version then Printf.printf "%s\n" version
     else begin
-        List.iter print_endline banner;
-        print_endline "\nType :? for help";
+        if !opt_verbose then List.iter print_endline banner;
+        if !opt_verbose then print_endline "\nType :? for help";
         let t  = LoadASL.read_file "prelude.asl" true !opt_verbose in
         let ts = List.map (fun filename ->
             if Utils.endswith filename ".spec" then begin
