@@ -231,6 +231,8 @@ let sym_prim (f: ident) (tes: sym list) (es: sym list): sym =
 
 let sym_true     = Val (from_bool true)
 let sym_false    = Val (from_bool false)
+let expr_true    = Expr_Var (Ident "TRUE")
+let expr_false   = Expr_Var (Ident "FALSE")
 let sym_zeros n  = Val (VBits (prim_zeros_bits (Z.of_int n)))
 
 let sym_eq_int   = prim_binop "eq_int"
