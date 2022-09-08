@@ -445,20 +445,28 @@ module IntToBits = struct
     method! vexpr e =
       match e with
       | Expr_Slices(
-          Expr_TApply (FIdent (fn, 0), [_], es),
+          Expr_TApply (f, tes, es) as inner,
           [Slice_LoWd (Expr_LitInt lo, Expr_LitInt wd) as sl] ) ->
 
         let wd' = int_of_string lo + int_of_string wd in
-        let slice e = sym_expr @@ sym_slice Unknown (sym_of_expr e) 0 wd' in
-        let narrow = Expr_TApply (FIdent (fn, 0), [expr_of_int wd'], List.map slice es) in
+        let narrow e =
+          Printf.printf "slicing %s\n" (pp_expr e);
+          let e = sym_of_expr e in
+          let size = bits_size_of_sym e in
+          let ext = wd' - size in
+          (* if expression is shorter than slice, extend it as needed. *)
+          let e' = if ext > 0 then (sym_sign_extend ext size e) else e in
+          sym_expr @@ sym_slice Unknown e' 0 wd'
+        in
+        let narrow_args () = Expr_TApply (f, [expr_of_int wd'], List.map narrow es) in
 
         (* for add and sub expressions, we only need the lowest n bits in order
            to have n bits of precision in the output. *)
-        (match fn with
-        | "add_bits" -> ChangeDoChildrenPost (narrow, fun x -> Expr_Slices (x, [sl]))
-        | "sub_bits" -> ChangeDoChildrenPost (narrow, fun x -> Expr_Slices (x, [sl]))
-        | "neg_bits" -> ChangeDoChildrenPost (narrow, fun x -> Expr_Slices (x, [sl]))
-        | _ -> DoChildren
+        (match name_of_FIdent f with
+        | "add_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
+        | "sub_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
+        | "neg_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
+        | _ -> ChangeDoChildrenPost (narrow inner, fun x -> Expr_Slices (x, [sl]))
         )
       | _ -> DoChildren
 
