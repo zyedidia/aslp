@@ -450,7 +450,7 @@ module IntToBits = struct
 
         let wd' = int_of_string lo + int_of_string wd in
         let narrow e =
-          Printf.printf "slicing %s\n" (pp_expr e);
+          (* Printf.printf "slicing %s\n" (pp_expr e); *)
           let e = sym_of_expr e in
           let size = bits_size_of_sym e in
           let ext = wd' - size in
