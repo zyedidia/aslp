@@ -81,13 +81,18 @@ let set_scope (k: ident) (v: value) (s: scope): unit =
 (** {2 Mutable bindings}                                        *)
 (****************************************************************)
 
+type fun_sig = (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list)
+
 (** Environment representing both global and local state of the system *)
 module Env : sig
     type t
+
     val empty               : t
     val nestTop             : (t -> 'a) -> (t -> 'a)
     val nest                : (t -> 'a) -> (t -> 'a)
     val copy                : t -> t
+    val freeze              : t -> t
+
     val compare             : t -> t -> bool
     val compareLocals       : t -> t -> bool
 
@@ -96,6 +101,7 @@ module Env : sig
 
     val addGlobalConst      : t -> ident -> value -> unit
     val getGlobalConst      : t -> ident -> value
+    val readGlobalConsts    : t -> value Bindings.t
 
     (* to support generation of unknown values, we need to remember the structure
      * of user-defined types such as enumerations and records
@@ -120,6 +126,7 @@ module Env : sig
 
     val getInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list)
     val addInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list) -> unit
+    val listInstructions    : t -> (encoding * (stmt list) option * bool * stmt list) list
 
     val getDecoder          : t -> ident -> decode_case
     val addDecoder          : t -> ident -> decode_case -> unit
@@ -127,27 +134,13 @@ module Env : sig
     val setImpdef           : t -> string -> value -> unit
     val getImpdef           : AST.l -> t -> string -> value
 
-    val getReturnSymbol     : AST.l -> t -> AST.expr
-    val addReturnSymbol     : t -> AST.expr -> unit
-    val removeReturnSymbol  : t -> unit
-
-    val getNumSymbols       : t -> int
-
-    val getLocalPrefix      : AST.l -> t -> string
-    val addLocalPrefix      : t -> string -> unit
-    val removeLocalPrefix   : t -> unit
-
-    val addImplicitValue    : t -> ident -> value -> unit
-    val addImplicitLevel    : t -> unit
-    val getImplicitLevel    : t -> (ident * value) list
-    
     val setLocals           : t -> scope list -> unit
     val getLocals           : t -> scope list
+    val readLocals          : t -> value Bindings.t list
 
     val getGlobals          : t -> scope
+    val readGlobals         : t -> value Bindings.t
     val removeGlobals       : t -> unit
-
-    val initialize          : t -> bigint list -> unit
 
 end = struct
     type t = {
@@ -166,7 +159,8 @@ end = struct
         mutable returnSymbols: AST.expr list;
         mutable numSymbols   : int;
         mutable localPrefixes: string list;
-        mutable implicitLevels: ((ident * value) list) list
+        mutable implicitLevels: ((ident * value) list) list;
+        frozen : bool
     }
 
     let empty = {
@@ -186,6 +180,7 @@ end = struct
         numSymbols   = 0;
         localPrefixes= [];
         implicitLevels = [];
+        frozen = false;
     }
 
     let nestTop (k: t -> 'a) (parent: t): 'a =
@@ -206,6 +201,7 @@ end = struct
             numSymbols   = parent.numSymbols;
             localPrefixes= parent.localPrefixes;
             implicitLevels = parent.implicitLevels;
+            frozen       = parent.frozen;
         } in
         k child
 
@@ -227,6 +223,7 @@ end = struct
             numSymbols   = parent.numSymbols;
             localPrefixes= parent.localPrefixes;
             implicitLevels = parent.implicitLevels;
+            frozen       = parent.frozen;
         } in
         k child
 
@@ -240,32 +237,27 @@ end = struct
             enumNeqs     = env.enumNeqs;
             records      = env.records;
             typedefs     = env.typedefs;
-            globals      = { bs = 
-                List.fold_left (fun bs' (key, value) -> 
-                    Bindings.add key value bs'
-                ) Bindings.empty (Bindings.bindings env.globals.bs) 
-            };
+            globals      = { bs = env.globals.bs };
             constants    = env.constants;
             impdefs      = env.impdefs;
-            locals       = 
-            List.map (fun x -> { bs = 
-                List.fold_left (fun bs' (key, value) -> 
-                    Bindings.add key value bs'
-                ) Bindings.empty (Bindings.bindings x.bs) 
-            }) env.locals; 
+            locals       = List.map (fun x -> { bs = x.bs }) env.locals;
             returnSymbols= env.returnSymbols;
             numSymbols   = env.numSymbols;
             localPrefixes= env.localPrefixes;
             implicitLevels = env.implicitLevels;
+            frozen       = false; (* copies are unfrozen by default. *)
         }
 
+    let freeze (env: t): t =
+        { env with frozen = true }
+
     let compareLocals (env1: t) (env2: t): bool =
-        List.for_all2 (fun scope1 scope2 -> 
+        List.for_all2 (fun scope1 scope2 ->
             List.for_all (fun (key, value) ->
                 if not (Bindings.mem key scope2.bs) then begin Printf.printf "%s not in second environment\n" (pprint_ident key); false
                 end else if Bindings.find key scope2.bs <> value then begin Printf.printf "%s has mismatched value: %s | %s\n" (pprint_ident key) (pp_value value) (pp_value (Bindings.find key scope2.bs)); false
                 end else true
-            ) (Bindings.bindings scope1.bs) 
+            ) (Bindings.bindings scope1.bs)
             ||
             List.for_all (fun (key, value) ->
                 if not (Bindings.mem key scope1.bs) then begin Printf.printf "%s not in first environment\n" (pprint_ident key); false
@@ -274,20 +266,40 @@ end = struct
             ) (Bindings.bindings scope2.bs);
         ) env1.locals env2.locals
 
+    (* Compares the two environments, returning true iff they are equal. *)
     let compare (env1: t) (env2: t): bool =
-            List.for_all (fun (key, value) ->
-                if not (Bindings.mem key env2.globals.bs) then begin Printf.printf "%s not in second environment\n" (pprint_ident key); false
-                end else if Bindings.find key env2.globals.bs <> value then begin Printf.printf "%s has mismatched value: %s | %s\n" (pprint_ident key) (pp_value value) (pp_value (Bindings.find key env2.globals.bs)); false
-                end else true
-            ) (Bindings.bindings env1.globals.bs) 
-            ||
-            List.for_all (fun (key, value) ->
-                if not (Bindings.mem key env1.globals.bs) then begin Printf.printf "%s not in first environment\n" (pprint_ident key); false
-                end else if Bindings.find key env1.globals.bs <> value then begin Printf.printf "%s has mismatched value: %s | %s\n" (pprint_ident key) (pp_value value) (pp_value (Bindings.find key env1.globals.bs)); false
-                end else true
-            ) (Bindings.bindings env2.globals.bs)
+            Bindings.for_all (fun k v1 ->
+                match (Bindings.find_opt k env2.globals.bs) with
+                | Some v2 when v1 = v2 -> true
+                | None ->
+                    Printf.printf "%s not in second environment\n" (pprint_ident k);
+                    false
+                | Some v2 ->
+                    Printf.printf "%s has mismatched value: %s | %s\n"
+                        (pprint_ident k) (pp_value v1) (pp_value v2);
+                    false
+            ) env1.globals.bs
+            &&
+            Bindings.for_all (fun k v2 ->
+                match (Bindings.find_opt k env1.globals.bs) with
+                | Some v1 when v1 = v2 -> true
+                | None ->
+                    Printf.printf "%s not in first environment\n"
+                        (pprint_ident k);
+                    false
+                | Some v1 ->
+                    Printf.printf "%s has mismatched value: %s | %s\n"
+                        (pprint_ident k) (pp_value v2) (pp_value v1);
+                    false
+            ) env2.globals.bs
+
+    let assertNotFrozen (env: t): unit =
+        if env.frozen then begin
+            failwith "attempt to modify environment in immutable state."
+        end
 
     let addLocalVar (loc: l) (env: t) (x: ident) (v: value): unit =
+        assertNotFrozen env;
         if !trace_write then Printf.printf "TRACE: fresh %s = %s\n" (pprint_ident x) (pp_value v);
         (match env.locals with
         | (bs :: _) -> set_scope x v bs
@@ -295,6 +307,7 @@ end = struct
         )
 
     let addLocalConst (loc: l) (env: t) (x: ident) (v: value): unit =
+        assertNotFrozen env;
         (* todo: should constants be held separately from local vars? *)
         (match env.locals with
         | (bs :: _) -> set_scope x v bs
@@ -302,12 +315,17 @@ end = struct
         )
 
     let addGlobalConst (env: t) (x: ident) (v: value): unit =
+        assertNotFrozen env;
         set_scope x v env.constants
 
     let getGlobalConst (env: t) (x: ident): value =
         get_scope x env.constants
 
+    let readGlobalConsts (env: t) =
+        env.constants.bs
+
     let addEnum (env: t) (x: ident) (vs: value list): unit =
+        assertNotFrozen env;
         env.enums    <- Bindings.add x vs env.enums
 
     let getEnum (env: t) (x: ident): (value list) option =
@@ -317,18 +335,21 @@ end = struct
     let isEnumNeq (env: t) (x: ident): bool = IdentSet.mem x env.enumNeqs
 
     let addRecord (env: t) (x: ident) (fs: (AST.ty * ident) list): unit =
+        assertNotFrozen env;
         env.records <- Bindings.add x fs env.records
 
     let getRecord (env: t) (x: ident): ((AST.ty * ident) list) option =
         Bindings.find_opt x env.records
 
     let addTypedef (env: t) (x: ident) (ty: AST.ty): unit =
+        assertNotFrozen env;
         env.typedefs <- Bindings.add x ty env.typedefs
 
     let getTypedef (env: t) (x: ident): AST.ty option =
         Bindings.find_opt x env.typedefs
 
     let addGlobalVar (env: t) (x: ident) (v: value): unit =
+        assertNotFrozen env;
         set_scope x v env.globals
 
     let findScope (env: t) (x: ident): scope option =
@@ -351,19 +372,28 @@ end = struct
         )
 
     let setVar (loc: l) (env: t) (x: ident) (v: value): unit =
+        assertNotFrozen env;
         if !trace_write then Printf.printf "TRACE: write %s = %s\n" (pprint_ident x) (pp_value v);
         (match findScope env x with
         | Some bs -> set_scope x v bs
         | None    -> raise (EvalError (loc, "setVar " ^ pprint_ident x))
         )
 
-    let getFun (loc: l) (env: t) (x: ident): (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) =
+    let getFun (loc: l) (env: t) (x: ident): fun_sig =
         (match Bindings.find_opt x env.functions with
         | Some def -> def
         | None     -> raise (EvalError (loc, "getFun " ^ pprint_ident x))
         )
 
-    let addFun (loc: l) (env: t) (x: ident) (def: (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list)): unit =
+    (*  Here, a function definition is given as a tuple of:
+            ty option           - optional return type
+            (ty * ident) list   - list of formal argument types and names
+            ident list          - list of type argument names
+            ident list          - list of argument names
+            loc                 - declaration location
+            stmt list           - function body
+        *)
+    let addFun (loc: l) (env: t) (x: ident) (def: fun_sig): unit =
         if false then Printf.printf "Adding function %s\n" (pprint_ident x);
         if Bindings.mem x env.functions then begin
             if true then begin
@@ -382,15 +412,21 @@ end = struct
         Bindings.find x env.instructions
 
     let addInstruction (loc: AST.l) (env: t) (x: ident) (instr: encoding * (stmt list) option * bool * stmt list): unit =
+        assertNotFrozen env;
         env.instructions <- Bindings.add x instr env.instructions
+
+    let listInstructions (env: t) =
+        List.map snd (Bindings.bindings env.instructions)
 
     let getDecoder (env: t) (x: ident): decode_case =
         Bindings.find x env.decoders
 
     let addDecoder (env: t) (x: ident) (d: decode_case): unit =
+        assertNotFrozen env;
         env.decoders <- Bindings.add x d env.decoders
 
     let setImpdef (env: t) (x: string) (v: value): unit =
+        assertNotFrozen env;
         env.impdefs <- ImpDefs.add x v env.impdefs
 
     let getImpdef (loc: l) (env: t) (x: string): value =
@@ -400,75 +436,62 @@ end = struct
                 raise (EvalError (loc, "Unknown value for IMPLEMENTATION_DEFINED \""^x^"\""))
         )
 
-    let getReturnSymbol (loc: l) (env: t): AST.expr =
-        match env.returnSymbols with
-        | [] -> raise (EvalError (loc, "Return not in function"))
-        | (e :: rs) -> e
-
-    let addReturnSymbol (env: t) (e: AST.expr): unit =
-        env.returnSymbols <- e :: env.returnSymbols
-
-    let removeReturnSymbol (env: t): unit =
-        (match env.returnSymbols with
-        | [] -> ()
-        | (s::ss) -> env.returnSymbols <- ss
-        )
-
-    let getNumSymbols (env: t): int =
-        env.numSymbols <- env.numSymbols + 1;
-        env.numSymbols
-
-    let getLocalPrefix (loc: l) (env: t): string =
-        match env.localPrefixes with
-        | [] -> raise (EvalError (loc, "Local not in function"))
-        | (s :: ss) -> s
-
-    let addLocalPrefix (env: t) (s: string): unit =
-        env.localPrefixes <- s :: env.localPrefixes
-
-    let removeLocalPrefix (env: t): unit =
-        (match env.localPrefixes with
-        | [] -> ()
-        | (s::ss) -> env.localPrefixes <- ss
-        )
-
-    let addImplicitValue (env: t) (arg: ident) (v: value): unit =
-        match env.implicitLevels with
-        | [] -> raise (EvalError (Unknown, "No levels exist"))
-        | (level::levels) -> (match level with
-            | [] -> env.implicitLevels <- ([(arg, v)]::levels)
-            | values -> env.implicitLevels <- (((arg, v)::values)::levels))
-
-    let addImplicitLevel (env: t): unit =
-        env.implicitLevels <- ([]::env.implicitLevels)
-
-    let getImplicitLevel (env: t): (ident * value) list =
-        match env.implicitLevels with
-        | [] -> raise (EvalError (Unknown, "No levels exist"))
-        | (level::levels) -> env.implicitLevels <- levels; level
-
     let setLocals (env: t) (xs: scope list): unit =
         env.locals <- xs
 
     let getLocals (env: t): scope list =
+        assertNotFrozen env;
         env.locals
 
     let getGlobals (env: t): scope =
+        assertNotFrozen env;
         env.globals
 
     let removeGlobals (env: t): unit =
         env.globals <- empty_scope ()
 
-    let initialize (env: t) (xs: bigint list): unit =
-        setVar 
-            Unknown 
-            env 
-            (Ident "_R") 
-            (VArray (List.fold_left2 (fun arr n v -> 
-                ImmutableArray.add n (VBits { n = 64; v}) arr
-            ) ImmutableArray.empty (Utils.range 0 (List.length xs)) xs, VUninitialized))
+    let readLocals (env: t): value Bindings.t list =
+        List.map (fun x -> x.bs) env.locals
+
+    let readGlobals (env: t): value Bindings.t =
+        env.globals.bs
 
 end
+
+let rec eval_uninitialized_to_defaults  (env: Env.t) (v: value): value =
+    match v with
+    | VUninitialized t ->
+        (match t with
+        | Type_Bits (Expr_LitInt wd) -> VBits (Primops.mkBits (int_of_string wd) Z.zero)
+        | Type_Constructor (Ident "__RAM") -> VRAM (Primops.init_ram (char_of_int 0))
+        | Type_Constructor (Ident "integer") -> VInt Z.zero
+        | Type_Constructor (Ident "real") -> VReal Q.zero
+        | Type_Constructor (Ident "string") -> VString "<UNKNOWN string>"
+        | Type_Constructor (Ident "boolean") -> VBool false
+        | Type_Constructor id ->
+            (match Env.getEnum env id with
+            | Some (enumval::_) -> enumval
+            | _ -> failwith ("eval_uninitialized: unsupported type constructor: " ^ pprint_ident id))
+        | _ -> failwith ("eval_uninitialized: unsupported type " ^ pp_type t))
+    | VRecord bs -> VRecord (Bindings.map (eval_uninitialized_to_defaults env) bs)
+    | VTuple vs -> VTuple (List.map (eval_uninitialized_to_defaults env) vs)
+    | VArray (arr, d) -> VArray (arr, (eval_uninitialized_to_defaults env) d)
+    | _ -> v
+
+let initializeGlobals (env: Env.t): unit =
+    let g = Env.getGlobals env in
+    g.bs <- Bindings.map (eval_uninitialized_to_defaults env) g.bs
+
+let initializeRegisters (env: Env.t) (xs: bigint list): unit =
+    let d = VBits {n=64; v=Z.zero} in
+    let vals = List.mapi (fun i v -> (i, VBits {n=64; v})) xs in
+    let arr = List.fold_left
+        (fun a (k,v) -> ImmutableArray.add k v a)
+        ImmutableArray.empty
+        vals
+    in
+    Env.setVar Unknown env (Ident "_R") (VArray (arr, d))
+
 
 let isGlobalConst (env: Env.t) (id: AST.ident): bool =
     match Env.getGlobalConst env id with
@@ -521,7 +544,7 @@ and mk_uninitialized (loc: l) (env: Env.t) (x: AST.ty): value =
         | None ->
             (match Env.getTypedef env tc with
             | Some ty' -> mk_uninitialized loc env ty'
-            | None     -> VUninitialized
+            | None     -> VUninitialized x
             )
         )
     | Type_Array(Index_Enum(tc),ety) ->
@@ -533,8 +556,15 @@ and mk_uninitialized (loc: l) (env: Env.t) (x: AST.ty): value =
     (* bitvectors and registers should really track whether a bit is initialized individually *)
     | Type_Bits(n) -> eval_unknown_bits (to_integer loc (eval_expr loc env n))
     | Type_Register(wd, _) -> eval_unknown_bits (Z.of_string wd)
+
+    (* full evaluation requires bits to be set to a modifiable value.
+       until we can initialize bits individually, this will have to do. *)
+    (*
+    | Type_Bits n -> VBits (prim_cvt_int_bits (to_integer loc (eval_expr loc env n)) Z.zero)
+    | Type_Register (n,_) -> VBits (mkBits (int_of_string n) Z.zero)
+    *)
     | _ ->
-            VUninitialized (* should only be used for scalar types *)
+            VUninitialized x (* should only be used for scalar types *)
     )
 
 (** Evaluate UNKNOWN at given type *)
@@ -543,6 +573,7 @@ and eval_unknown (loc: l) (env: Env.t) (x: AST.ty): value =
     | Type_Constructor(Ident "integer") -> eval_unknown_integer ()
     | Type_Constructor(Ident "real")    -> eval_unknown_real ()
     | Type_Constructor(Ident "string")  -> eval_unknown_string ()
+    | Type_Constructor(Ident "boolean")  -> VUninitialized x
     | Type_Constructor(tc) ->
         (match Env.getEnum env tc with
         | Some (e::_) -> e
@@ -620,11 +651,13 @@ and eval_slice (loc: l) (env: Env.t) (x: AST.slice): (value * value) =
 (** Evaluate expression *)
 and eval_expr (loc: l) (env: Env.t) (x: AST.expr): value =
     (match x with
-    | Expr_If(c, t, els, e) ->
+    | Expr_If(ty, c, t, els, e) ->
             let rec eval_if xs d = match xs with
                 | [] -> eval_expr loc env d
                 | AST.E_Elsif_Cond (cond, b)::xs' ->
-                    if to_bool loc (eval_expr loc env cond) then
+                    match eval_expr loc env cond with
+                    | VUninitialized _ -> VUninitialized ty
+                    | v -> if to_bool loc v then
                         eval_expr loc env b
                     else
                         eval_if xs' d
@@ -739,7 +772,7 @@ and eval_lexpr (loc: l) (env: Env.t) (x: AST.lexpr) (r: value): unit =
                         set_fields (i + w) fs' v'
                 )
             in
-            eval_lexpr_modify loc env l (set_fields 0 fs)
+            eval_lexpr_modify loc env l (set_fields 0 (List.rev fs))
     | LExpr_Slices(l, ss) ->
             let rec eval (o: value) (ss': AST.slice list) (prev: value): value =
                 (match ss' with
@@ -804,12 +837,19 @@ and eval_lexpr_modify (loc: l) (env: Env.t) (x: AST.lexpr) (modify: value -> val
 and eval_stmts (env: Env.t) (xs: AST.stmt list): unit =
     Env.nest (fun env' -> List.iter (eval_stmt env') xs) env
 
+(** For evaluation only, we need to set uninitialized bits to zeros in order to
+    perform operations on parts of them. *)
+and mk_uninitialized' (loc: l) (env: Env.t) (ty: ty): value =
+    match ty with
+    | Type_Bits n -> let n = to_int loc (eval_expr loc env n) in
+        VBits (mkBits n Z.zero)
+    | _ -> mk_uninitialized loc env ty
+
 (** Evaluate statement *)
 and eval_stmt (env: Env.t) (x: AST.stmt): unit =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
-            
-            List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized loc env ty)) vs
+            List.iter (fun v -> Env.addLocalVar loc env v (mk_uninitialized' loc env ty)) vs
     | Stmt_VarDecl(ty, v, i, loc) ->
             let i' = eval_expr loc env i in
             Env.addLocalVar loc env v i'
@@ -1138,6 +1178,10 @@ let eval_uninitialized (loc: l) (env: Env.t) (x: AST.ty): value = eval_unknown l
 (** Construct environment from global declarations *)
 let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
     if false then Printf.printf "Building environment from %d declarations\n" (List.length ds);
+
+    (* perform reference parameter transformation. *)
+    let ds = Transforms.RefParams.ref_param_conversion ds in
+
     let env = Env.empty in
     (* todo?: first pull out the constants/configs and evaluate all of them
      * lazily?
@@ -1188,14 +1232,16 @@ let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
                 Env.addFun loc env f (Some ty, [], tvs, args, loc, body)
         | Decl_ArraySetterDefn(f, atys, ty, v, body, loc) ->
                 let tvs = Asl_utils.to_sorted_list (Asl_utils.IdentSet.union (Asl_utils.fv_sformals atys) (Asl_utils.fv_type ty) |> removeGlobalConsts env) in
-                let name_of (x: AST.sformal): ident =
+                let tuple_of (x: AST.sformal): ty * ident =
                     (match x with
-                    | Formal_In (_, nm) -> nm
-                    | Formal_InOut (_, nm) -> nm
+                    | Formal_In (t, nm) -> t,nm
+                    | Formal_InOut (t, nm) -> t,nm
                     )
                 in
-                let args = List.map name_of atys in
-                Env.addFun loc env f (Some ty, [], tvs, List.append args [v], loc, body)
+                (* Add value parameter for setter to end of arguments. *)
+                let atys' = List.map tuple_of atys @ [(ty, v)] in
+                let args = List.map snd atys' in
+                Env.addFun loc env f (None, atys', tvs, args, loc, body)
         | Decl_InstructionDefn(nm, encs, opost, conditional, exec, loc) ->
                 (* Instructions are looked up by their encoding name *)
                 List.iter (fun enc ->

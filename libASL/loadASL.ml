@@ -56,13 +56,13 @@ let report_type_error (on_error: unit -> 'a) (f: unit -> 'a): 'a =
     )
 
 let report_eval_error (on_error: unit -> 'a) (f: unit -> 'a): 'a =
-    (try
+    (* (try *)
         f ()
-    with
+    (* with
     | Value.EvalError (loc, msg) ->
         Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg;
         on_error ()
-    )
+    ) *)
 
 (* Official ASL does not have specific syntax for declaring variable getter
    functions, so if we encounter a variable declaration and a variable getter

@@ -31,7 +31,12 @@ type value =
     | VRecord of (value Bindings.t)
     | VArray  of (value ImmutableArray.t * value)
     | VRAM    of ram
-    | VUninitialized (* initial value of scalars with no explicit initialization *)
+    | VUninitialized of AST.ty (* initial value of scalars with no explicit initialization *)
+
+let type_builtin s: AST.ty = Type_Constructor (Ident s)
+let type_constructor = type_builtin
+let type_bits wd: AST.ty = Type_Bits (Expr_LitInt wd)
+let type_integer = type_builtin "integer"
 
 
 (****************************************************************)
@@ -75,7 +80,7 @@ let rec pp_value (x: value): string =
         let vs = List.map (fun (i, v) -> string_of_int i ^":"^ pp_value v) (ImmutableArray.bindings a) in
         "[" ^ String.concat ", " vs ^ "]"
     | VRAM _ -> "RAM"
-    | VUninitialized -> "UNINITIALIZED"
+    | VUninitialized t -> "UNINITIALIZED(" ^ pp_type t ^ ")"
     )
 
 
@@ -340,9 +345,40 @@ let eval_prim (f: string) (tvs: value list) (vs: value list): value option =
 
     | ("program_end",        _,       [                          ]) -> Some (raise (Throw (Unknown, Exc_ExceptionTaken)))
 
+    (* | ("eq_enum" | "ne_enum" | "eq_bool" | "ne_bool" | "equiv_bool" | "not_bool"
+    | "eq_int" | "ne_int" | "le_int" | "lt_int" | "ge_int" | "gt_int" | "is_pow2_int" | "neg_int" | "add_int" | "sub_int"
+    | "shl_int" | "shr_int" | "mul_int" | "zdiv_int" | "zrem_int" | "fdiv_int" | "frem_int" | "mod_pow2_int" | "align_int" | "pow2_int" | "pow_int_int"
+    | "cvt_int_real" | "eq_real" | "ne_real" | "le_real" | "lt_real" | "ge_real" | "gt_real" | "add_real" | "neg_real" | "sub_real" | "mul_real" | "divide_real"
+    | "pow2_real" | "round_tozero_real" | "round_down_real" | "round_up_real" | "sqrt_real"
+    | "cvt_int_bits" | "cvt_bits_sint" | "cvt_bits_uint" | "in_mask" | "notin_mask"
+    | "eq_bits" | "ne_bits" | "add_bits" | "sub_bits" | "mul_bits" | "and_bits" | "or_bits" | "eor_bits" | "not_bits"
+    | "zeros_bits" | "ones_bits" | "replicate_bits" | "append_bits"
+    | "eq_str" | "ne_str" | "append_str_str"
+    | "cvt_int_hexstr" | "cvt_int_decstr" | "cvt_bool_str" | "cvt_bits_str" | "cvt_real_str"
+    | "is_cunpred_exc" | "is_exctaken_exc" | "is_impdef_exc" | "is_see_exc" | "is_undefined_exc" | "is_unpred_exc"
+
+    | "ram_init" | "ram_read" | "ram_write"
+    | "trace_memory_read" | "trace_memory_write" | "trace_event"
+    | "asl_file_open" | "asl_file_write" | "asl_file_getc"
+    | "print_str" | "print_char" | "program_end") , _, _ ->
+        Some (raise (EvalError (Unknown, "eval_prim: failed to invoke " ^ f ^ " {{ " ^ Utils.pp_list pp_value tvs ^ " }} ( " ^ Utils.pp_list pp_value vs ^ " )"))) *)
+
     (* No function matches *)
     | _ -> None
     )
+
+let prims_pure = [
+    "eq_enum"; "eq_enum"; "ne_enum"; "ne_enum"; "eq_bool"; "ne_bool"; "equiv_bool"; "not_bool"; "eq_int"; "ne_int"; "le_int";
+    "lt_int"; "ge_int"; "gt_int"; "is_pow2_int"; "neg_int"; "add_int"; "sub_int"; "shl_int"; "shr_int"; "mul_int"; "zdiv_int";
+    "zrem_int"; "fdiv_int"; "frem_int"; "mod_pow2_int"; "align_int"; "pow2_int"; "pow_int_int"; "cvt_int_real"; "eq_real";
+    "ne_real"; "le_real"; "lt_real"; "ge_real"; "gt_real"; "add_real"; "neg_real"; "sub_real"; "mul_real"; "divide_real";
+    "pow2_real"; "round_tozero_real"; "round_down_real"; "round_up_real"; "sqrt_real"; "cvt_int_bits"; "cvt_bits_sint";
+    "cvt_bits_uint"; "in_mask"; "notin_mask"; "eq_bits"; "ne_bits"; "add_bits"; "sub_bits"; "mul_bits"; "and_bits"; "or_bits";
+    "eor_bits"; "not_bits"; "zeros_bits"; "ones_bits"; "replicate_bits"; "append_bits"; "eq_str"; "ne_str"; "append_str_str";
+    "cvt_int_hexstr"; "cvt_int_decstr"; "cvt_bool_str"; "cvt_bits_str"; "cvt_real_str"; "is_cunpred_exc"; "is_exctaken_exc";
+    "is_impdef_exc"; "is_see_exc"; "is_undefined_exc"; "is_unpred_exc"]
+and prims_impure = ["ram_init"; "ram_read"; "ram_write"; "trace_memory_read"; "trace_memory_write"; "trace_event";
+    "asl_file_open"; "asl_file_write"; "asl_file_getc"; "print_str"; "print_char"; "program_end"]
 
 
 (****************************************************************)
@@ -419,14 +455,17 @@ let eval_concat (loc: AST.l) (xs: value list): value =
  *)
 
 let eval_unknown_bits (wd: Primops.bigint): value =
-    VBits (Primops.mkBits (Z.to_int wd) Z.zero)
+  VUninitialized (Type_Bits (Expr_LitInt (Z.to_string wd)))
+    (*VBits (Primops.mkBits (Z.to_int wd) Z.zero)*)
 
 let eval_unknown_ram (a: Primops.bigint): value =
-    VRAM (Primops.init_ram (char_of_int 0))
+  VUninitialized (type_builtin "__RAM")
+    (*VRAM (Primops.init_ram (char_of_int 0))*)
 
-let eval_unknown_integer (_: unit): value = VInt Z.zero
-let eval_unknown_real    (_: unit): value = VReal Q.zero
-let eval_unknown_string  (_: unit): value = VString "<UNKNOWN string>"
+let eval_unknown_integer (_: unit): value = VUninitialized (type_builtin "integer") (*VInt Z.zero*)
+let eval_unknown_real    (_: unit): value = VUninitialized (type_builtin "real") (*VReal Q.zero*)
+let eval_unknown_string  (_: unit): value = VUninitialized (type_builtin "string") (*VString "<UNKNOWN string>"*)
+
 
 (****************************************************************
  * End

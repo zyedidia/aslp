@@ -65,23 +65,23 @@ end
     different.
  *)
 
-let rec visit_exprs (vis: aslVisitor) (xs: expr list): expr list =
+let rec visit_exprs (vis: #aslVisitor) (xs: expr list): expr list =
         mapNoCopy (visit_expr vis) xs
 
-    and visit_var (vis: aslVisitor) (x: ident): ident =
-        let aux (_: aslVisitor) (x: ident): ident =
+    and visit_var (vis: #aslVisitor) (x: ident): ident =
+        let aux (_: #aslVisitor) (x: ident): ident =
             x
         in
         doVisit vis (vis#vvar x) aux x
 
-    and visit_lvar (vis: aslVisitor) (x: ident): ident =
-        let aux (_: aslVisitor) (x: ident): ident =
+    and visit_lvar (vis: #aslVisitor) (x: ident): ident =
+        let aux (_: #aslVisitor) (x: ident): ident =
             x
         in
         doVisit vis (vis#vlvar x) aux x
 
-    and visit_e_elsif (vis: aslVisitor) (x: e_elsif): e_elsif =
-        let aux (vis: aslVisitor) (x: e_elsif): e_elsif =
+    and visit_e_elsif (vis: #aslVisitor) (x: e_elsif): e_elsif =
+        let aux (vis: #aslVisitor) (x: e_elsif): e_elsif =
             (match x with
             | E_Elsif_Cond(c, e) ->
                     let c' = visit_expr vis c in
@@ -91,8 +91,8 @@ let rec visit_exprs (vis: aslVisitor) (xs: expr list): expr list =
         in
         doVisit vis (vis#ve_elsif x) aux x
 
-    and visit_slice (vis: aslVisitor) (x: slice): slice =
-        let aux (vis: aslVisitor) (x: slice): slice =
+    and visit_slice (vis: #aslVisitor) (x: slice): slice =
+        let aux (vis: #aslVisitor) (x: slice): slice =
             (match x with
             | Slice_Single(e) ->
                     let e' = visit_expr vis e in
@@ -109,11 +109,11 @@ let rec visit_exprs (vis: aslVisitor) (xs: expr list): expr list =
         in
         doVisit vis (vis#vslice x) aux x
 
-    and visit_patterns (vis: aslVisitor) (xs: pattern list): pattern list =
+    and visit_patterns (vis: #aslVisitor) (xs: pattern list): pattern list =
         mapNoCopy (visit_pattern vis) xs
 
-    and visit_pattern (vis: aslVisitor) (x: pattern): pattern = 
-        let aux (vis: aslVisitor) (x: pattern): pattern =
+    and visit_pattern (vis: #aslVisitor) (x: pattern): pattern =
+        let aux (vis: #aslVisitor) (x: pattern): pattern =
             ( match x with
             | Pat_LitInt(_)  -> x
             | Pat_LitHex(_)  -> x
@@ -138,15 +138,16 @@ let rec visit_exprs (vis: aslVisitor) (xs: expr list): expr list =
         in
         doVisit vis (vis#vpattern x) aux x
 
-    and visit_expr (vis: aslVisitor) (x: expr): expr =
-        let aux (vis: aslVisitor) (x: expr): expr =
+    and visit_expr (vis: #aslVisitor) (x: expr): expr =
+        let aux (vis: #aslVisitor) (x: expr): expr =
             (match x with
-            | Expr_If(c, t, els, e) ->
+            | Expr_If(ty, c, t, els, e) ->
+                    let ty   = visit_type vis ty in
                     let c'   = visit_expr vis c in
                     let t'   = visit_expr vis t in
                     let els' = mapNoCopy (visit_e_elsif vis) els in
                     let e'   = visit_expr vis e in
-                    if c == c' && t == t' && els == els' && e == e' then x else Expr_If(c', t', els', e')
+                    if c == c' && t == t' && els == els' && e == e' then x else Expr_If(ty, c', t', els', e')
             | Expr_Binop(a, op, b) ->
                     let a' = visit_expr vis a in
                     let b' = visit_expr vis b in
@@ -202,11 +203,11 @@ let rec visit_exprs (vis: aslVisitor) (xs: expr list): expr list =
         doVisit vis (vis#vexpr x) aux x
 
 
-    and visit_types (vis: aslVisitor) (xs: ty list): ty list =
+    and visit_types (vis: #aslVisitor) (xs: ty list): ty list =
         mapNoCopy (visit_type vis) xs
 
-    and visit_type (vis: aslVisitor) (x: ty): ty =
-        let aux (vis: aslVisitor) (x: ty): ty =
+    and visit_type (vis: #aslVisitor) (x: ty): ty =
+        let aux (vis: #aslVisitor) (x: ty): ty =
             ( match x with
             | Type_Constructor(_) -> x
             | Type_Bits(n) ->
@@ -239,11 +240,11 @@ let rec visit_exprs (vis: aslVisitor) (xs: expr list): expr list =
         in
         doVisit vis (vis#vtype x) aux x
 
-let rec visit_lexprs (vis: aslVisitor) (xs: lexpr list): lexpr list =
+let rec visit_lexprs (vis: #aslVisitor) (xs: lexpr list): lexpr list =
         mapNoCopy (visit_lexpr vis) xs
 
-    and visit_lexpr (vis: aslVisitor) (x: lexpr): lexpr =
-        let aux (vis: aslVisitor) (x: lexpr): lexpr =
+    and visit_lexpr (vis: #aslVisitor) (x: lexpr): lexpr =
+        let aux (vis: #aslVisitor) (x: lexpr): lexpr =
             ( match x with
             | LExpr_Wildcard   -> x
             | LExpr_Var(v) ->
@@ -284,7 +285,7 @@ let rec visit_lexprs (vis: aslVisitor) (xs: lexpr list): lexpr list =
         in
         doVisit vis (vis#vlexpr x) aux x
 
-let with_locals (ls: ((ty * ident) list)) (vis: aslVisitor) (f: aslVisitor -> 'a): 'a =
+let with_locals (ls: ((ty * ident) list)) (vis: #aslVisitor) (f: #aslVisitor -> 'a): 'a =
     vis#enter_scope ls;
     let result = f vis in
     vis#leave_scope ();
@@ -294,14 +295,14 @@ let with_locals (ls: ((ty * ident) list)) (vis: aslVisitor) (f: aslVisitor -> 'a
  * visit_stmt to generate a list of statements and provide a mechanism to emit
  * statements to be inserted before/after the statement being transformed
  *)
-let rec visit_stmts (vis: aslVisitor) (xs: stmt list): stmt list =
+let rec visit_stmts (vis: #aslVisitor) (xs: stmt list): stmt list =
         vis#enter_scope [];
         let stmts' = mapNoCopy (visit_stmt vis) xs in
         vis#leave_scope ();
         stmts'
 
-    and visit_stmt (vis: aslVisitor) (x: stmt): stmt =
-        let aux (vis: aslVisitor) (x: stmt): stmt =
+    and visit_stmt (vis: #aslVisitor) (x: stmt): stmt =
+        let aux (vis: #aslVisitor) (x: stmt): stmt =
             (match x with
             | Stmt_VarDeclsNoInit (ty, vs, loc) ->
                     let ty' = visit_type vis ty in
@@ -390,8 +391,8 @@ let rec visit_stmts (vis: aslVisitor) (xs: stmt list): stmt list =
         in
         doVisit vis (vis#vstmt x) aux x
 
-    and visit_s_elsif (vis: aslVisitor) (x: s_elsif): s_elsif =
-        let aux (vis: aslVisitor) (x: s_elsif): s_elsif =
+    and visit_s_elsif (vis: #aslVisitor) (x: s_elsif): s_elsif =
+        let aux (vis: #aslVisitor) (x: s_elsif): s_elsif =
             (match x with
             | S_Elsif_Cond(c, b) ->
                     let c' = visit_expr vis c in
@@ -401,8 +402,8 @@ let rec visit_stmts (vis: aslVisitor) (xs: stmt list): stmt list =
         in
         doVisit vis (vis#vs_elsif x) aux x
 
-    and visit_alt (vis: aslVisitor) (x: alt): alt =
-        let aux (vis: aslVisitor) (x: alt): alt =
+    and visit_alt (vis: #aslVisitor) (x: alt): alt =
+        let aux (vis: #aslVisitor) (x: alt): alt =
             (match x with
             | Alt_Alt(ps, oc, b) ->
                     let ps' = visit_patterns vis ps in
@@ -413,8 +414,8 @@ let rec visit_stmts (vis: aslVisitor) (xs: stmt list): stmt list =
         in
         doVisit vis (vis#valt x) aux x
 
-    and visit_catcher (vis: aslVisitor) (x: catcher): catcher =
-        let aux (vis: aslVisitor) (x: catcher): catcher =
+    and visit_catcher (vis: #aslVisitor) (x: catcher): catcher =
+        let aux (vis: #aslVisitor) (x: catcher): catcher =
             (match x with
             | Catcher_Guarded(c, b) ->
                     let c' = visit_expr vis c in
@@ -425,8 +426,8 @@ let rec visit_stmts (vis: aslVisitor) (xs: stmt list): stmt list =
         doVisit vis (vis#vcatcher x) aux x
 
 
-let visit_mapfield (vis: aslVisitor) (x: mapfield): mapfield =
-        let aux (vis: aslVisitor) (x: mapfield): mapfield =
+let visit_mapfield (vis: #aslVisitor) (x: mapfield): mapfield =
+        let aux (vis: #aslVisitor) (x: mapfield): mapfield =
             (match x with
             | MapField_Field (v, p) ->
                     let v' = visit_var vis v in
@@ -436,8 +437,8 @@ let visit_mapfield (vis: aslVisitor) (x: mapfield): mapfield =
         in
         doVisit vis (vis#vmapfield x) aux x
 
-let visit_sformal (vis: aslVisitor) (x: sformal): sformal =
-        let aux (vis: aslVisitor) (x: sformal): sformal =
+let visit_sformal (vis: #aslVisitor) (x: sformal): sformal =
+        let aux (vis: #aslVisitor) (x: sformal): sformal =
             (match x with
             | Formal_In (ty, v) ->
                     let ty' = visit_type vis ty in
@@ -451,8 +452,8 @@ let visit_sformal (vis: aslVisitor) (x: sformal): sformal =
         in
         doVisit vis (vis#vsformal x) aux x
 
-let rec visit_dpattern (vis: aslVisitor) (x: decode_pattern): decode_pattern =
-        let aux (vis: aslVisitor) (x: decode_pattern): decode_pattern =
+let rec visit_dpattern (vis: #aslVisitor) (x: decode_pattern): decode_pattern =
+        let aux (vis: #aslVisitor) (x: decode_pattern): decode_pattern =
             (match x with
             | DecoderPattern_Bits _ -> x
             | DecoderPattern_Mask _ -> x
@@ -464,8 +465,8 @@ let rec visit_dpattern (vis: aslVisitor) (x: decode_pattern): decode_pattern =
         in
         doVisit vis (vis#vdpattern x) aux x
 
-let visit_encoding (vis: aslVisitor) (x: encoding): encoding =
-        let aux (vis: aslVisitor) (x: encoding): encoding =
+let visit_encoding (vis: #aslVisitor) (x: encoding): encoding =
+        let aux (vis: #aslVisitor) (x: encoding): encoding =
             (match x with
             | Encoding_Block (nm, iset, fs, op, e, ups, b, loc) ->
                     let e' = visit_expr vis e in
@@ -475,8 +476,8 @@ let visit_encoding (vis: aslVisitor) (x: encoding): encoding =
         in
         doVisit vis (vis#vencoding x) aux x
 
-let rec visit_decode_case (vis: aslVisitor) (x: decode_case): decode_case =
-        let aux (vis: aslVisitor) (x: decode_case): decode_case =
+let rec visit_decode_case (vis: #aslVisitor) (x: decode_case): decode_case =
+        let aux (vis: #aslVisitor) (x: decode_case): decode_case =
             (match x with
             | DecoderCase_Case (ss, alts, loc) ->
                     let alts' = mapNoCopy (visit_decode_alt vis) alts in
@@ -485,8 +486,8 @@ let rec visit_decode_case (vis: aslVisitor) (x: decode_case): decode_case =
         in
         doVisit vis (vis#vdcase x) aux x
 
-    and visit_decode_alt (vis: aslVisitor) (x: decode_alt): decode_alt =
-        let aux (vis: aslVisitor) (x: decode_alt): decode_alt =
+    and visit_decode_alt (vis: #aslVisitor) (x: decode_alt): decode_alt =
+        let aux (vis: #aslVisitor) (x: decode_alt): decode_alt =
             (match x with
             | DecoderAlt_Alt (ps, b) ->
                     let ps' = mapNoCopy (visit_dpattern vis) ps in
@@ -497,8 +498,8 @@ let rec visit_decode_case (vis: aslVisitor) (x: decode_case): decode_case =
         in
         doVisit vis (vis#vdalt x) aux x
 
-    and visit_decode_body (vis: aslVisitor) (x: decode_body): decode_body =
-        let aux (vis: aslVisitor) (x: decode_body): decode_body =
+    and visit_decode_body (vis: #aslVisitor) (x: decode_body): decode_body =
+        let aux (vis: #aslVisitor) (x: decode_body): decode_body =
             (match x with
             | DecoderBody_UNPRED   _ -> x
             | DecoderBody_UNALLOC  _ -> x
@@ -511,7 +512,7 @@ let rec visit_decode_case (vis: aslVisitor) (x: decode_case): decode_case =
         in
         doVisit vis (vis#vdbody x) aux x
 
-let visit_arg (vis: aslVisitor) (x: (ty * ident)): (ty * ident) =
+let visit_arg (vis: #aslVisitor) (x: (ty * ident)): (ty * ident) =
         (match x with
         | (ty, v) ->
                 let ty' = visit_type vis ty in
@@ -520,7 +521,7 @@ let visit_arg (vis: aslVisitor) (x: (ty * ident)): (ty * ident) =
                 (ty', v')
         )
 
-let visit_args (vis: aslVisitor) (xs: (ty * ident) list): (ty * ident) list =
+let visit_args (vis: #aslVisitor) (xs: (ty * ident) list): (ty * ident) list =
         mapNoCopy (visit_arg vis) xs
 
 let arg_of_sformal (sf: sformal): (ty * ident) =
@@ -534,8 +535,8 @@ let arg_of_ifield (IField_Field (id, _, wd)): (ty * ident) =
 let args_of_encoding (Encoding_Block (_, _, fs, _, _, _, _, _)): (ty * ident) list =
     List.map arg_of_ifield fs
 
-let visit_decl (vis: aslVisitor) (x: declaration): declaration =
-        let aux (vis: aslVisitor) (x: declaration): declaration =
+let visit_decl (vis: #aslVisitor) (x: declaration): declaration =
+        let aux (vis: #aslVisitor) (x: declaration): declaration =
             (match x with
             | Decl_BuiltinType (v, loc) ->
                     let v'  = visit_var vis v in

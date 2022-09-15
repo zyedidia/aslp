@@ -13,6 +13,7 @@
 
 let to_string (d: PPrint.document): string =
     let buf = Buffer.create 100 in
+    (* PPrint.ToBuffer.pretty 100.0 80 buf d; *)
     PPrint.ToBuffer.compact buf d;
     Buffer.contents buf
 
@@ -20,6 +21,23 @@ let to_string (d: PPrint.document): string =
 (****************************************************************
  * List related
  ****************************************************************)
+
+let rec take (n: int) (xs: 'a list) =
+    match xs with
+    | _ when n < 0 -> failwith "take: negative"
+    | [] when n = 0 -> []
+    | [] -> failwith "take: list too short"
+    | x::rest -> x :: take (n-1) rest
+
+let rec drop (n: int) (xs: 'a list) =
+    match xs with
+    | _ when n < 0 -> failwith "drop: negative"
+    | [] when n = 0 -> []
+    | [] -> failwith "drop: list too short"
+    | _::rest -> drop (n-1) rest
+
+let rec chunks (n: int) (xs: 'a list): 'a list list =
+    take n xs :: (chunks n (drop n xs))
 
 let nub (xs: 'a list): 'a list =
     let rec nub_aux seen xs = (match xs with
@@ -39,24 +57,29 @@ let zipWithIndex (f: 'a -> int -> 'b) (xs: 'a list): 'b list =
     aux 0 xs
 
 (** Generate range of numbers from i to j *)
-let range (i: int) (j: int): 'a list = 
+let range (i: int) (j: int): 'a list =
     let rec aux n acc =
       if n < i then acc else aux (n-1) (n :: acc)
     in aux (j - 1) [] ;;
 
 let rec iter3 (f: 'a -> 'b -> 'c -> unit) (xs: 'a list) (ys: 'b list) (zs: 'c list): unit =
     match (xs, ys, zs) with
-    | ([], _, _) -> ()
-    | (_, [], _) -> ()
-    | (_, _, []) -> ()
+    | ([], [], []) -> ()
     | ((x::xs), (y::ys), (z::zs)) -> f x y z; iter3 f xs ys zs
+    | _, _, _ -> invalid_arg "Utils.iter3: list lengths differ."
 
 let rec map3 (f: 'a -> 'b -> 'c -> 'd) (xs: 'a list) (ys: 'b list) (zs: 'c list): 'd list =
     match (xs, ys, zs) with
-    | ([], _, _) -> []
-    | (_, [], _) -> []
-    | (_, _, []) -> []
+    | ([], [], []) -> []
     | ((x::xs), (y::ys), (z::zs)) -> (f x y z) :: (map3 f xs ys zs)
+    | _, _, _ -> invalid_arg "Utils.map3: list lengths differ."
+
+let rec nth_modify (f: 'a -> 'a) (n: int) (xs: 'a list): 'a list =
+    match n, xs with
+    | n, _ when n < 0 -> invalid_arg "nth_modify: negative index"
+    | _, [] -> raise Not_found
+    | 0, x::rest -> f x :: rest
+    | n, x::rest -> x :: nth_modify f (n-1) rest
 
 (****************************************************************
  * Option related
@@ -152,6 +175,16 @@ let rec first_option (f: 'a -> 'b option) (xs: 'a list): 'b option =
             )
     )
 
+(** Replaces the first non-None result from f on the list with
+    the result of the function. *)
+let rec replace_in_list (f: 'a -> 'a option) (xs: 'a list): 'a list =
+    match xs with
+    | [] -> raise Not_found
+    | x::xs' ->
+        (match f x with
+        | Some y -> y::xs'
+        | None -> x::replace_in_list f xs')
+
 
 (****************************************************************
  * String related
@@ -187,6 +220,12 @@ let stringDrop (n: int) (s: string): string =
     end else begin
         String.sub s n (l-n)
     end
+
+let pp_unit () = "()"
+
+let pp_list f xs = Printf.sprintf "[%s]" (String.concat " ; " (List.map f xs))
+
+let pp_pair l r (x,y) = Printf.sprintf "(%s, %s)" (l x) (r y)
 
 (****************************************************************
  * End
