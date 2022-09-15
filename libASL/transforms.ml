@@ -2,6 +2,7 @@ open Asl_utils
 
 open AST
 open Visitor
+open Asl_visitor
 open Symbolic
 open Value
 
@@ -102,9 +103,9 @@ module RefParams = struct
   class visit_decls = object
     inherit Asl_visitor.nopAslVisitor
 
-    (* mapping of function identifiers to the indices of their
-       reference parameters. *)
-    val mutable ref_params : int list Bindings.t = Bindings.empty
+    (* mapping of function identifiers to their (new) signature along with
+       the indices of their. *)
+    val mutable ref_params : (Tcheck.funtype * int list) Bindings.t = Bindings.empty
 
     method ref_params = ref_params
 
@@ -119,8 +120,6 @@ module RefParams = struct
           let ts = List.map (fun (_,t,_) -> t) refs in
           let is = List.map (fun (_,_,i) -> i) refs in
 
-          ref_params <- Bindings.add nm ns ref_params;
-
           (* append setter value argument to formal argument list. *)
           let args' = List.map Tcheck.formal_of_sformal args @ [vty, vnm] in
 
@@ -130,6 +129,8 @@ module RefParams = struct
           let body' = replace_returns body ret in
 
           let rty = Type_Tuple ts in
+          let funty = (nm, false, [], [], List.map arg_of_sformal args @ [(vty, vnm)], rty) in
+          ref_params <- Bindings.add nm (funty,ns) ref_params;
           ChangeTo (Decl_FunDefn (rty, nm, args', body', loc))
         )
       | _ -> DoChildren
@@ -147,22 +148,61 @@ module RefParams = struct
         vector = Elem.read(vector, 2, '1001');
 
       *)
-  class visit_writes ref_params = object
+  class visit_writes (ref_params: (Tcheck.funtype * int list) Bindings.t) = object
     inherit Asl_visitor.nopAslVisitor
+
+    val mutable n = 0;
 
     method! vstmt (s: stmt): stmt visitAction =
       match s with
       | Stmt_Assign (LExpr_Write (setter, targs, args), r, loc) ->
-        (* Printf.printf " %s\n" (pp_stmt s); *)
         (match Bindings.find_opt setter ref_params with
         | None -> DoChildren
-        | Some ns ->
+        | Some (_,ns) ->
           let refs = List.map (List.nth args) ns in
           (* Printf.printf "ref param: %s\n" (pp_expr a); *)
 
           let les = List.map Symbolic.expr_to_lexpr refs in
           let call = Expr_TApply (setter, targs, args @ [r]) in
           ChangeTo (Stmt_Assign (LExpr_Tuple les, call, loc))
+        )
+      (* case where a write expression is used within a tuple destructuring. *)
+      | Stmt_Assign (LExpr_Tuple(LExpr_Write (setter, tes, es) :: rest), r, loc) ->
+        (match Bindings.find_opt setter ref_params with
+        | None -> DoChildren
+        | Some ((nm, _, _, _, args, _),ns) ->
+
+          n <- n + 1;
+          (* create new variable to store value to be passed to setter. *)
+          let rvar = Ident ("Write_" ^ pprint_ident (stripTag setter) ^ string_of_int n) in
+          (* arguments to setter function appended with r-value. *)
+          let es' = es @ [Expr_Var rvar] in
+
+          (* infer value argument type of setter by substituting arguments into
+             the last type argument. *)
+          let subs = List.combine (List.map snd args) es' in
+          let sub_bindings = Bindings.of_seq (List.to_seq subs) in
+          let (vty,_) = List.hd (List.rev args) in
+          let vty = subst_type sub_bindings vty in
+
+          (* emit: vty rvar declaration *)
+          let decl_var = Stmt_VarDeclsNoInit (vty, [rvar], loc) in
+          (* emit: (rvar, ...) = r *)
+          let assign_tuple = Stmt_Assign (LExpr_Tuple (LExpr_Var rvar :: rest), r, loc) in
+
+          let refs = List.map (List.nth es') ns in
+          let les = List.map Symbolic.expr_to_lexpr refs in
+          let write_call = Expr_TApply (setter, tes, es') in
+          (* emit: (refparams) = __write(es, rvar) *)
+          let assign_write = Stmt_Assign (LExpr_Tuple les, write_call, loc) in
+
+          let x = (Stmt_If (
+            expr_true,
+            [decl_var; assign_tuple; assign_write],
+            [],
+            [],
+            loc)) in
+          ChangeTo x
         )
       | _ -> DoChildren
   end
@@ -173,6 +213,8 @@ module RefParams = struct
     let v2 = new visit_writes (v1#ref_params) in
     let ds = List.map (Asl_visitor.visit_decl v2) ds in
     ds
+    (* Tcheck.GlobalEnv.clear Tcheck.env0;
+    Tcheck.tc_declarations false ds *)
 end
 
 
@@ -252,7 +294,7 @@ module IntToBits = struct
     | Expr_Slices (expr, slice_list) ->
       let wds = List.map (function | Slice_LoWd (_,Expr_LitInt n) -> int_of_string n | _ -> assert false) slice_list in
       List.fold_left (+) 0 wds
-    | _ -> assert false
+    | _ -> failwith @@ "bits_size_of_expr: unhandled " ^ pp_expr e
 
   (** Returns the bit-width of the given value,
       and errors if the value is not a bit value. *)
@@ -275,10 +317,7 @@ module IntToBits = struct
       then e
       else (sym_sign_extend (size - old) old e)
 
-  (** Returns a symbolic bits expression of the given expression,
-      including coercing integers to two's complement bits where
-      needed. *)
-  let bits_sym_of_expr e =
+  let bits_coerce_of_expr e =
     let e' =
       match e with
       | Expr_LitInt n
@@ -291,14 +330,19 @@ module IntToBits = struct
     in
     sym_of_expr e'
 
+  (** Returns a symbolic bits expression of the given expression
+      along with the bit width,
+      including coercing integers to two's complement bits where
+      needed. *)
+  let bits_with_size_of_expr e =
+    let e' = bits_coerce_of_expr e in
+    e', bits_size_of_sym e'
+
   (** Transform integer expressions into bit-vector expressions while
       maintaining precision by widening bit-vector sizes as operations
       are applied. *)
   class bits_coerce_widening = object (self)
     inherit Asl_visitor.nopAslVisitor
-
-    method extend size e =
-      bits_sign_extend size (bits_sym_of_expr e)
 
 
     (** Visits an expression, coercing integer expressions into bit-vector
@@ -316,67 +360,73 @@ module IntToBits = struct
           match e' with
 
           | Expr_TApply (FIdent ("cvt_bits_uint", 0), [t], [e]) ->
-            sym_expr @@ sym_zero_extend 1 (int_of_expr t) (bits_sym_of_expr e)
-          | Expr_TApply (FIdent ("cvt_bits_sint", 0), [_], [e]) ->
-            e
+            sym_expr @@ sym_zero_extend 1 (int_of_expr t) (bits_coerce_of_expr e)
+          | Expr_TApply (FIdent ("cvt_bits_sint", 0), [t], [e]) ->
+            sym_expr @@ sym_slice Unknown (bits_coerce_of_expr e) 0 (int_of_expr t)
           | Expr_TApply (FIdent ("add_int", 0), [], [x;y]) ->
-            let xsize = bits_size_of_expr x in
-            let ysize = bits_size_of_expr y in
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
             let size = max xsize ysize + 1 in
-            let ex = self#extend size in
+            let ex = bits_sign_extend size in
             (* Printf.printf "x %s\ny %s\n" (pp_expr x) (pp_expr y) ; *)
-            sym_expr @@ sym_prim (FIdent ("add_bits", 0)) [sym_of_int size] [ex x; ex y]
+            sym_expr @@ sym_prim (FIdent ("add_bits", 0)) [sym_of_int size] [ex x;ex y]
 
           | Expr_TApply (FIdent ("sub_int", 0), [], [x;y]) ->
-            let xsize = bits_size_of_expr x in
-            let ysize = bits_size_of_expr y in
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
             let size = max xsize ysize + 1 in
-            let ex = self#extend size in
+            let ex = bits_sign_extend size in
             (* Printf.printf "x %s\ny %s\n" (pp_expr x) (pp_expr y) ; *)
             sym_expr @@ sym_prim (FIdent ("sub_bits", 0)) [sym_of_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("eq_int", 0), [], [x;y]) ->
-            let xsize = bits_size_of_expr x in
-            let ysize = bits_size_of_expr y in
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
             let size = max xsize ysize in
-            let ex = self#extend size in
+            let ex = bits_sign_extend size in
             sym_expr @@ sym_prim (FIdent ("eq_bits", 0)) [sym_of_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("ne_int", 0), [], [x;y]) ->
-            let xsize = bits_size_of_expr x in
-            let ysize = bits_size_of_expr y in
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
             let size = max xsize ysize in
-            let ex = self#extend size in
+            let ex = bits_sign_extend size in
             sym_expr @@ sym_prim (FIdent ("ne_bits", 0)) [sym_of_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("mul_int", 0), [], [x;y]) ->
-            let xsize = bits_size_of_expr x in
-            let ysize = bits_size_of_expr y in
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
             let size = xsize + ysize in
-            let ex = self#extend size in
+            let ex = bits_sign_extend size in
             sym_expr @@ sym_prim (FIdent ("mul_bits", 0)) [sym_of_int size] [ex x; ex y]
 
             (* x >= y  iff  y <= x  iff  x - y >= 0*)
           | Expr_TApply (FIdent ("ge_int", 0), [], [x;y])
           | Expr_TApply (FIdent ("le_int", 0), [], [y;x]) ->
-            let xsize = bits_size_of_expr x in
-            let ysize = bits_size_of_expr y in
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
             let size = max xsize ysize in
-            let ex x = sym_expr (self#extend size x) in
+            let ex x = sym_expr (bits_sign_extend size x) in
             expr_prim' "sle_bits" [expr_of_int size] [ex y;ex x]
 
             (* x < y  iff  y > x  iff x - y < 0 *)
           | Expr_TApply (FIdent ("lt_int", 0), [], [x;y])
           | Expr_TApply (FIdent ("gt_int", 0), [], [y;x]) ->
-            let xsize = bits_size_of_expr x in
-            let ysize = bits_size_of_expr y in
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
             let size = max xsize ysize in
-            let ex x = sym_expr (self#extend size x) in
+            let ex x = sym_expr (bits_sign_extend size x) in
             expr_prim' "slt_bits" [expr_of_int size] [ex x;ex y]
           (* NOTE: sle_bits and slt_bits are signed less or equal,
              and signed less than.
              These are not primitive in ASL but are defined in BIL so
              we take advantage of them. *)
+
+          | Expr_TApply (FIdent ("neg_int", 0), [], [x]) ->
+            let (x,xsize) = bits_with_size_of_expr x in
+            let size = xsize + 1 in
+            let ex x = sym_expr (bits_sign_extend size x) in
+            expr_prim' "neg_bits" [expr_of_int size] [ex x]
 
           | Expr_TApply (FIdent (f, 0), _, _) when Utils.endswith f "_int" ->
             failwith @@ "unsupported integer function: " ^ pp_expr e'
@@ -395,19 +445,28 @@ module IntToBits = struct
     method! vexpr e =
       match e with
       | Expr_Slices(
-          Expr_TApply (FIdent (fn, 0), [_], es),
+          Expr_TApply (f, tes, es) as inner,
           [Slice_LoWd (Expr_LitInt lo, Expr_LitInt wd) as sl] ) ->
 
         let wd' = int_of_string lo + int_of_string wd in
-        let slice e = sym_expr @@ sym_slice Unknown (sym_of_expr e) 0 wd' in
-        let narrow = Expr_TApply (FIdent (fn, 0), [expr_of_int wd'], List.map slice es) in
+        let narrow e =
+          (* Printf.printf "slicing %s\n" (pp_expr e); *)
+          let e = sym_of_expr e in
+          let size = bits_size_of_sym e in
+          let ext = wd' - size in
+          (* if expression is shorter than slice, extend it as needed. *)
+          let e' = if ext > 0 then (sym_sign_extend ext size e) else e in
+          sym_expr @@ sym_slice Unknown e' 0 wd'
+        in
+        let narrow_args () = Expr_TApply (f, [expr_of_int wd'], List.map narrow es) in
 
         (* for add and sub expressions, we only need the lowest n bits in order
            to have n bits of precision in the output. *)
-        (match fn with
-        | "add_bits" -> ChangeDoChildrenPost (narrow, fun x -> Expr_Slices (x, [sl]))
-        | "sub_bits" -> ChangeDoChildrenPost (narrow, fun x -> Expr_Slices (x, [sl]))
-        | _ -> DoChildren
+        (match name_of_FIdent f with
+        | "add_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
+        | "sub_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
+        | "neg_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
+        | _ -> ChangeDoChildrenPost (narrow inner, fun x -> Expr_Slices (x, [sl]))
         )
       | _ -> DoChildren
 

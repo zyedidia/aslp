@@ -1179,6 +1179,7 @@ let eval_uninitialized (loc: l) (env: Env.t) (x: AST.ty): value = eval_unknown l
 let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
     if false then Printf.printf "Building environment from %d declarations\n" (List.length ds);
 
+    (* perform reference parameter transformation. *)
     let ds = Transforms.RefParams.ref_param_conversion ds in
 
     let env = Env.empty in
