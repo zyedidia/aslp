@@ -2,7 +2,7 @@
 # Builds the a64 lifter plugin for bap.
 # Requires that the asli package has been installed (see package_asli.sh)
 
-cd $HOME/bap/plugins/a64 &&
+cd $HOME/bap/plugins/a64 && eval $(opam env) &&
 rm -rf _build &&
 rm *.plugin &&
 bapbuild -package asli.libASL a64_main.plugin &&

@@ -9,6 +9,7 @@ then
 	exit 0
 fi
 
+eval $(opam env) &&
 bap-mc --show-bir --arch=aarch64 --primus-lisp-semantics=disable \
 --a64-main-prelude=$HOME/asl-interpreter/prelude.asl \
 --a64-main-specs=$HOME/mra_tools/arch/regs.asl \

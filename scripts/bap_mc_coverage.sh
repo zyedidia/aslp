@@ -8,6 +8,8 @@ then
 	exit 0
 fi
 
+eval $(opam env)
+
 # Get all the opcodes for the given instruction
 OPCODES=$(echo ":opcodes A64 $1" | \
 ~/asl-interpreter/asli prelude.asl $HOME/mra_tools/arch/regs.asl \

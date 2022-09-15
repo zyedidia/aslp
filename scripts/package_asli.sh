@@ -4,6 +4,6 @@
 # If you are having issues with your changes not getting included (opam says 'no changes'),
 # try unpinning and repinning the package.
 
-cd $HOME/asl-interpreter &&
+cd $HOME/asl-interpreter && eval $(opam env) &&
 dune build &&
 opam install asli
