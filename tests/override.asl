@@ -20,3 +20,6 @@ boolean slt_bits(bits(N) x, bits(N) y)
     integer xn = SInt(x);
     integer yn = SInt(y);
     return xn < yn;
+
+bits(N) neg_bits(bits(N) x)
+    return (NOT x) + ZeroExtend('1', N);
