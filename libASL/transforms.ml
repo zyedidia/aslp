@@ -277,7 +277,7 @@ module IntToBits = struct
 
   (** Returns the bit-width of the given expression.
       Requires expression to evaluate to a bit-vector type. *)
-  let rec bits_size_of_expr (e: expr): int =
+  let rec bits_size_of_expr (vars: ty Bindings.t) (e: expr): int =
     match e with
     | Expr_TApply (fn, tes, es) ->
       (match (fn, tes, es) with
@@ -295,11 +295,19 @@ module IntToBits = struct
       | FIdent ("SignExtend", 0), [_; Expr_LitInt m], _ -> int_of_string m
       | _ -> failwith @@ "bits_size_of_expr: unhandled " ^ pp_expr e
       )
-    | Expr_Parens e -> bits_size_of_expr e
+    | Expr_Parens e -> bits_size_of_expr vars e
     | Expr_LitBits s -> String.length (drop_space s)
     | Expr_Slices (expr, slice_list) ->
       let wds = List.map (function | Slice_LoWd (_,Expr_LitInt n) -> int_of_string n | _ -> assert false) slice_list in
       List.fold_left (+) 0 wds
+    | Expr_Var nm ->
+      (match Bindings.find_opt nm vars with
+      | Some (Type_Bits (Expr_LitInt n)) -> int_of_string n
+      | Some t ->
+        failwith @@ "bits_size_of_expr: expected bits type but got " ^
+        pp_type t ^ " for " ^ pp_expr e
+      | None -> failwith @@ "bits_size_of_expr: no type known for " ^ pp_expr e
+      )
     | _ -> failwith @@ "bits_size_of_expr: unhandled " ^ pp_expr e
 
   (** Returns the bit-width of the given value,
@@ -310,9 +318,9 @@ module IntToBits = struct
     | _ -> failwith @@ "bits_size_of_val: unhandled " ^ pp_value v
 
   (** Returns the bit-width of the given symbolic. *)
-  let bits_size_of_sym = function
+  let bits_size_of_sym ?(vars = Bindings.empty)= function
     | Val v -> bits_size_of_val v
-    | Exp e -> bits_size_of_expr e
+    | Exp e -> bits_size_of_expr vars e
 
   (** Extends the given symbolic to the given size,
       treating it as a signed two's complement expression. *)
@@ -448,6 +456,15 @@ module IntToBits = struct
   class bits_coerce_narrow = object (self)
     inherit Asl_visitor.nopAslVisitor
 
+    val mutable var_types : ty Bindings.t = Bindings.empty;
+
+    method! vstmt s =
+      match s with
+      | Stmt_ConstDecl(ty, nm, _, _) ->
+        var_types <- Bindings.add nm ty var_types;
+        DoChildren
+      | _ -> DoChildren
+
     method! vexpr e =
       match e with
       | Expr_Slices(
@@ -457,21 +474,24 @@ module IntToBits = struct
         let wd' = int_of_string lo + int_of_string wd in
         let narrow e =
           (* Printf.printf "slicing %s\n" (pp_expr e); *)
-          let e = sym_of_expr e in
-          let size = bits_size_of_sym e in
+          let e' = sym_of_expr e in
+          let size = bits_size_of_sym ~vars:var_types e' in
           let ext = wd' - size in
           (* if expression is shorter than slice, extend it as needed. *)
-          let e' = if ext > 0 then (sym_sign_extend ext size e) else e in
-          sym_expr @@ sym_slice Unknown e' 0 wd'
+          let e' = if ext > 0 then (sym_sign_extend ext size e') else e' in
+          if wd' <> size then
+            sym_expr @@ sym_slice Unknown e' 0 wd'
+          else
+            e
         in
         let narrow_args () = Expr_TApply (f, [expr_of_int wd'], List.map narrow es) in
 
         (* for add and sub expressions, we only need the lowest n bits in order
            to have n bits of precision in the output. *)
         (match name_of_FIdent f with
-        | "add_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
-        | "sub_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
-        | "neg_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
+        | "add_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> x)
+        | "sub_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> x)
+        | "neg_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> x)
         | _ -> ChangeDoChildrenPost (narrow inner, fun x -> Expr_Slices (x, [sl]))
         )
       | _ -> DoChildren
