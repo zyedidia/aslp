@@ -205,6 +205,12 @@ module RefParams = struct
           ChangeTo x
         )
       | _ -> DoChildren
+
+    method! vlexpr le =
+      match le with
+      | LExpr_Write (nm, _, _) when Bindings.mem nm ref_params ->
+        failwith @@ "unexpected write using parameters by reference: " ^ pp_lexpr le
+      | _ -> DoChildren
   end
 
   let ref_param_conversion (ds: declaration list) =
