@@ -319,7 +319,7 @@ let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
     | (Expr_Slices (e', [Slice_LoWd (Expr_LitInt l',_)])) ->
         let l2 = int_of_string l' in
         sym_slice loc (sym_of_expr e') (l2 + lo) wd
-    | (Expr_TApply (
+    (* | (Expr_TApply (
         FIdent (("ZeroExtend" | "SignExtend") as ext_type, 0),
         [Expr_LitInt t1; Expr_LitInt t2],
         [x;_])) ->
@@ -335,7 +335,7 @@ let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
       let ext = sym_replicate 1 ext_bit ext_wd in
       sym_slice loc
         (sym_append_bits loc ext_wd t1 ext (sym_of_expr x))
-        lo wd
+        lo wd *)
     | (Expr_TApply (FIdent ("append_bits", 0), [Expr_LitInt t1; Expr_LitInt t2], [x1; x2])) ->
       let t2 = int_of_string t2 in
       if t2 < 0 then

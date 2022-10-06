@@ -766,9 +766,12 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
 (** Disassemble call to function *)
 and dis_funcall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): sym rws =
     let+ ret = dis_call loc f tvs vs in
-    match ret with
-    | None -> internal_error loc "function call finished without returning a value"
-    | Some x -> x
+    match ret, f with
+    | None, _ -> internal_error loc "function call finished without returning a value"
+    | Some (Exp _), FIdent (("SignExtend" | "ZeroExtend"), 0) ->
+      (* avoid expanding SignExtend/ZeroExtend into replicate_bits *)
+      Exp (Expr_TApply (f, List.map sym_expr tvs, List.map sym_expr vs))
+    | Some x, _ -> x
 
 (** Evaluate call to procedure *)
 and dis_proccall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): unit rws =

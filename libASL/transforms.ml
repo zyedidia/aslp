@@ -291,6 +291,7 @@ module IntToBits = struct
       | FIdent ("zeros_bits", 0), [Expr_LitInt n], _
       | FIdent ("ones_bits", 0), [Expr_LitInt n], _ -> int_of_string n
       | FIdent ("append_bits", 0), [Expr_LitInt n; Expr_LitInt m], _ -> int_of_string n + int_of_string m
+      | FIdent ("replicate_bits", 0), [Expr_LitInt n; Expr_LitInt m], _ -> int_of_string n * int_of_string m
       | FIdent ("ZeroExtend", 0), [_; Expr_LitInt m], _
       | FIdent ("SignExtend", 0), [_; Expr_LitInt m], _ -> int_of_string m
       | _ -> failwith @@ "bits_size_of_expr: unhandled " ^ pp_expr e
