@@ -488,7 +488,7 @@ class resugarClass (ops: AST.binop Bindings.t) = object (self)
         | Expr_TApply(f, tys, args) ->
                 let args' = List.map (visit_expr (self :> aslVisitor)) args in
                 (match (Bindings.find_opt f ops, args') with
-                | (Some op, [a; b]) -> ChangeTo (Expr_Binop(a, op, b))
+                | (Some op, [a; b]) -> ChangeTo (Expr_Parens(Expr_Binop(a, op, b)))
                 (* | (Some op, [a]) -> ChangeTo (Expr_Unop(op, a)) *)
                 | _ -> ChangeTo (Expr_TApply(f, [], args'))
                 )

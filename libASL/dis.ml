@@ -1279,12 +1279,13 @@ let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt l
     let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
     (* let stmts' = Transforms.Bits.bitvec_conversion stmts' in *)
+    let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
     if !debug_level >= 2 then begin
+        let stmts' = Asl_visitor.visit_stmts (new Asl_utils.resugarClass (!TC.binop_table)) stmts' in
         Printf.printf "===========\n";
         List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts';
         Printf.printf "===========\n";
     end;
-    let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
     stmts'
 
 
