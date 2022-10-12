@@ -261,6 +261,20 @@ let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
 
 (*** Symbolic Bitvector Operations ***)
 
+let is_zero_bits = function
+  | (VBits {n = _; v = v}) -> Z.equal Z.zero v
+  | _ -> false
+
+let is_one_bits = function
+  | VBits b -> prim_eq_bits (prim_not_bits b) (prim_zeros_bits (Z.of_int b.n))
+  | _ -> false
+
+let expr_zeros n =
+  Expr_LitBits (String.init n (fun _ -> '0'))
+
+let val_zeros n =
+  VBits {n=n; v=Z.zero}
+
 (** Append two bitvector symbols and explicitly provide their widths *)
 let sym_append_bits (loc: l) (xw: int) (yw: int) (x: sym) (y: sym): sym =
   (match (x,y) with
@@ -285,8 +299,6 @@ let sym_append_bits (loc: l) (xw: int) (yw: int) (x: sym) (y: sym): sym =
 (* WARNING: incorrect type arguments passed to append_bits but sufficient for evaluation
    of primitive with eval_prim. *)
 let sym_append_bits_unsafe loc x y = sym_append_bits loc (-1) (-1) x y
-
-let expr_of_int n = Expr_LitInt (string_of_int n)
 
 let sym_replicate (xw: int) (x: sym) (n: int): sym =
   match n with
@@ -356,7 +368,6 @@ let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
         sym_append_bits loc  w1 w2 x1' x2'
     | _ -> Exp slice_expr)
 
-
 (** Wrapper around sym_slice to handle cases of symbolic slice bounds *)
 let sym_extract_bits loc v i w =
   match ( i, w) with
@@ -365,12 +376,6 @@ let sym_extract_bits loc v i w =
       let w' = to_int loc w' in
       sym_slice loc v i' w'
   | _ -> Exp (Expr_Slices (sym_expr v, [Slice_LoWd (sym_expr i, sym_expr w)]))
-
-let expr_zeros n =
-  Expr_LitBits (String.init n (fun _ -> '0'))
-
-let val_zeros n =
-  VBits {n=n; v=Z.zero}
 
 let sym_zero_extend num_zeros old_width e =
   match sym_append_bits Unknown num_zeros old_width (Val (val_zeros num_zeros)) e with
@@ -416,7 +421,50 @@ let sym_concat (loc: AST.l) (xs: sym list): sym =
   | [] -> Val (VBits empty_bits)
   | x::xs -> List.fold_left (sym_append_bits_unsafe loc) x xs
 
+(* Identify the bits in an expression that might be 1.
+   Represent these as a bitvector with 1s in their position, of width w. *)
+let rec maybe_set (w: Z.t) (e: expr): bitvector =
+  let r = (match e with
+  | Expr_LitBits v ->
+      let x' = drop_chars v ' ' in
+      mkBits (String.length x') (Z.of_string_base 2 x')
+  | Expr_TApply (FIdent ("and_bits", 0), _, [x1; x2]) ->
+      prim_and_bits (maybe_set w x1) (maybe_set w x2)
+  | Expr_TApply (FIdent ("or_bits", 0), _, [x1; x2]) ->
+      prim_or_bits (maybe_set w x1) (maybe_set w x2)
+  | Expr_TApply (FIdent ("ZeroExtend", 0), [Expr_LitInt w;_], [x1; Expr_LitInt n]) ->
+      let n = Z.of_string n in
+      let w = Z.of_string w in
+      prim_append_bits (prim_zeros_bits n) (maybe_set w x1)
+  | Expr_Slices (v, [Slice_LoWd (Expr_LitInt l, Expr_LitInt w)]) ->
+      let l = Z.of_string l in
+      let w = Z.of_string w in
+      prim_extract (maybe_set (Z.add l w) v) l w
+  | Expr_TApply (FIdent ("append_bits", 0), [Expr_LitInt l1;Expr_LitInt l2], [x1; x2]) ->
+      let l1 = Z.of_string l1 in
+      let l2 = Z.of_string l2 in
+      prim_append_bits (maybe_set l1 x1) (maybe_set l2 x2)
+  | _ -> prim_ones_bits w) in
+  prim_extract r Z.zero w
+
+(* Identify whether the bitvector is a trivial mask, consisting of one continuous run of 1s *)
+let is_insert_mask (b: bitvector): (int * int) option =
+  let x = Z.format ("%0" ^ string_of_int b.n ^ "b") b.v in
+  let f1 = String.index_opt x '1' in
+  let l1 = String.rindex_opt x '1' in
+  match f1, l1 with
+  | Some f1, Some l1 ->
+      let w = l1 - f1 + 1 in
+      let l = String.length x - l1 - 1 in
+      let m = String.sub x f1 w in
+      if String.contains m '0' then None
+      else begin
+        Some (l, w)
+      end
+  | _ -> None
+
 let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option =
+  let loc = Unknown in
 
   let vint_eq cmp = function
     | VInt x when Z.equal cmp x -> true
@@ -425,9 +473,10 @@ let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option 
   let [@warning "-26"] is_zero = vint_eq Z.zero
   and [@warning "-26"] is_one = vint_eq Z.one in
 
-  let is_zero_bits = function
-    | (VBits {n = _; v = v}) -> Z.equal Z.zero v
-    | _ -> false in
+  (* Utility to overwrite outer[wd:lo] with inner[wd:lo] *)
+  let insert w outer lo wd inner =
+    let mid = sym_slice loc inner lo wd in
+    sym_insert_bits loc (Z.to_int w) outer (sym_of_int lo) (sym_of_int wd) mid in
 
   (match (name, tes, es) with
   | ("add_int",     _,                [Val x1; x2])       when is_zero x1 -> Some x2
@@ -438,8 +487,37 @@ let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option 
 
   | ("append_bits", [Val t1; _],      [_; x2])            when is_zero t1 -> Some x2
   | ("append_bits", [_; Val t2],      [x1; _])            when is_zero t2 -> Some x1
+
   | ("or_bits",     _,                [Val x1; x2])       when is_zero_bits x1 -> Some x2
   | ("or_bits",     _,                [x1; Val x2])       when is_zero_bits x2 -> Some x1
+  | ("or_bits",     _,                [Val x1; x2])       when is_one_bits x1 -> Some (Val x1)
+  | ("or_bits",     _,                [x1; Val x2])       when is_one_bits x2 -> Some (Val x2)
+  | ("or_bits",     [Val (VInt n)],   [x1; x2]) ->
+      (* Identify whether the arguments are disjoint in terms of their maybe set bits *)
+      let m1 = maybe_set n (sym_expr x1) in
+      let m2 = maybe_set n (sym_expr x2) in
+      let r = prim_and_bits m1 m2 in
+      if Z.equal Z.zero r.v then
+        (* If so, attempt to extract a trivial insert mask *)
+        (match is_insert_mask m1, is_insert_mask m2 with
+        | Some (l,w), _ -> Some (insert n x2 l w x1)
+        | _, Some (l,w) -> Some (insert n x1 l w x2)
+        | _ -> None)
+      else None
+
+  | ("and_bits",     _,               [Val x1; x2])       when is_zero_bits x1 -> Some (Val x1)
+  | ("and_bits",     _,               [x1; Val x2])       when is_zero_bits x2 -> Some (Val x2)
+  | ("and_bits",     _,               [Val v; x])         when is_one_bits v -> Some x
+  | ("and_bits",     _,               [x; Val v])         when is_one_bits v -> Some x
+  | ("and_bits",    [Val (VInt n)],   [Val (VBits m); x])
+  | ("and_bits",    [Val (VInt n)],   [x; Val (VBits m)]) ->
+      let z = Val (VBits (prim_zeros_bits n)) in
+      (* Check if the and operation is a trivial mask *)
+      (match is_insert_mask m, is_insert_mask (prim_not_bits m) with
+      | Some (l,w), _ -> Some (insert n z l w x)
+      | _, Some (l,w) -> Some (insert n x l w z)
+      | _ -> None)
+
   | _ -> None)
 
 let rec val_type (v: value): ty =
