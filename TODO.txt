@@ -1,0 +1,42 @@
+===== FAILURES =====
+
+round_tozero_real not implemented:
+aarch64_integer_arithmetic_div
+0x1ac00800
+
+BAP doesn't recognise instructions:
+aarch64_integer_arithmetic_mcsubtracttaggedaddress[setflags]
+0xbac10021
+0x9ac10021
+aarch64_integer_flags_rmif
+0xba000400
+0x3a00080d
+
+UNDEFINED in ASL:
+aarch64_integer_bitfield
+0x13000000
+aarch64_integer_logical_immediate
+0x12000000
+aarch64_branch_unconditional_dret
+0xd6bf03e0
+aarch64_branch_unconditional_eret
+0xd69f03e0
+
+EvalError Raised at file "libASL/dis.ml", line 756, characters 12-78:
+aarch64_integer_crc
+0x1ac04000
+aarch64_branch_conditional_compare
+0x34000000
+aarch64_branch_conditional_cond
+0x54000000
+aarch64_branch_conditional_test
+0x36000000
+aarch64_branch_unconditional_immediate
+0x14000000
+aarch64_branch_unconditional_register
+0xd61f0000
+
+EvalError Raised at file "libASL/dis.ml", line 32, characters 2-35
+Called from file "libASL/rws.ml", line 47, characters 7-10:
+aarch64_integer_shift_variable
+0x1ac02000

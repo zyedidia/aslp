@@ -13,3 +13,7 @@ _build
 _opam
 
 encodings/
+scripts/errors.txt
+scripts/result.txt
+
+scripts/output.txt

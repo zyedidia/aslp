@@ -11,6 +11,9 @@ integer ImplementedSVEVectorLength(integer nbits)
 boolean IsSVEEnabled(bits(2) el)
     return FALSE;
 
+boolean HaveMTEExt()
+    return FALSE;
+
 boolean sle_bits(bits(N) x, bits(N) y)
     integer xn = SInt(x);
     integer yn = SInt(y);
@@ -157,3 +160,7 @@ integer HighestSetBit(bits(N) x)
         return 0;
     else
         return -1;
+
+boolean AArch64.CheckAlignment(bits(64) address, integer alignment, AccType acctype,
+                               boolean iswrite)
+    return TRUE;

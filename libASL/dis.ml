@@ -786,7 +786,25 @@ and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws 
 
 and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws =
     let@ fn = DisEnv.getFun loc f in
+    let no_inline = List.map (fun x -> FIdent (x, 0))
+        ["Mem.read"; "Mem.set"; "CheckSPAlignment"] in
     (match fn with
+    | Some (rty, _, targs, _, _, _) when List.mem f no_inline -> 
+        (match rty with 
+        | Some rty -> 
+            let@ () = DisEnv.modify LocalEnv.addLevel in
+            let@ () = DisEnv.sequence_ @@ List.map2 (fun arg e ->
+                declare_const loc type_integer arg e
+                ) targs tes in
+
+            let@ rty = dis_type loc rty in
+            let@ var = (capture_expr loc rty (Expr_TApply (f, List.map sym_expr tes, List.map sym_expr es))) in 
+            let@ () = DisEnv.modify LocalEnv.popLevel in
+            DisEnv.pure @@ Some (var_sym_expr var)
+        | None -> 
+            let+ () = DisEnv.write [Stmt_TCall (f, List.map sym_expr tes, List.map sym_expr es, loc)] in 
+            None
+        )
     | Some (rty, atys, targs, args, loc, b) ->
         let fname = name_of_FIdent f in
 
@@ -1084,7 +1102,7 @@ and dis_stmt' (x: AST.stmt): unit rws =
                 (* cannot throw here because this may be reached by disassembling a
                    case with unknown expressions.
                    should only throw an exception at runtime if does not match. *)
-                | None -> DisEnv.write [Stmt_See (Expr_LitString "unmatched case", loc)]
+                | None -> DisEnv.write [Stmt_Throw (Ident "UNMATCHED CASE", loc)]
                 | Some s -> dis_stmts s)
             | Alt_Alt(ps, oc, s) :: alts' ->
                 let pat = (sym_exists (dis_pattern loc v) ps) in
