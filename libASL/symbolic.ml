@@ -488,6 +488,12 @@ let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option 
   | ("append_bits", [Val t1; _],      [_; x2])            when is_zero t1 -> Some x2
   | ("append_bits", [_; Val t2],      [x1; _])            when is_zero t2 -> Some x1
 
+  | ("eq_enum",     _,                [x; Val (VBool true)])
+  | ("eq_enum",     _,                [Val (VBool true); x]) -> Some x
+
+  | ("add_bits",    _,                [Val x1; x2])       when is_zero_bits x1 -> Some x2
+  | ("add_bits",    _,                [x1; Val x2])       when is_zero_bits x2 -> Some x1
+
   | ("or_bits",     _,                [Val x1; x2])       when is_zero_bits x1 -> Some x2
   | ("or_bits",     _,                [x1; Val x2])       when is_zero_bits x2 -> Some x1
   | ("or_bits",     _,                [Val x1; x2])       when is_one_bits x1 -> Some (Val x1)
