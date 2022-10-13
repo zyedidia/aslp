@@ -490,9 +490,9 @@ module IntToBits = struct
         (* for add and sub expressions, we only need the lowest n bits in order
            to have n bits of precision in the output. *)
         (match name_of_FIdent f with
-        | "add_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> x)
-        | "sub_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> x)
-        | "neg_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> x)
+        | "add_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
+        | "sub_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
+        | "neg_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
         | _ -> ChangeDoChildrenPost (narrow inner, fun x -> Expr_Slices (x, [sl]))
         )
       | _ -> DoChildren
