@@ -17,4 +17,5 @@ bap-mc --show-bir --arch=aarch64 --primus-lisp-semantics=disable \
 --a64-main-specs=$HOME/mra_tools/arch/arch.asl \
 --a64-main-specs=$HOME/mra_tools/arch/arch_instrs.asl \
 --a64-main-specs=$HOME/mra_tools/arch/arch_decode.asl \
+--a64-main-specs=$HOME/asl-interpreter/tests/override.asl \
 -- $1

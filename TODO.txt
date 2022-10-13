@@ -13,10 +13,6 @@ aarch64_integer_flags_rmif
 0x3a00080d
 
 UNDEFINED in ASL:
-aarch64_integer_bitfield
-0x13000000
-aarch64_integer_logical_immediate
-0x12000000
 aarch64_branch_unconditional_dret
 0xd6bf03e0
 aarch64_branch_unconditional_eret
@@ -40,3 +36,7 @@ EvalError Raised at file "libASL/dis.ml", line 32, characters 2-35
 Called from file "libASL/rws.ml", line 47, characters 7-10:
 aarch64_integer_shift_variable
 0x1ac02000
+
+replicate_bits not defined:
+aarch64_integer_bitfield
+0x13000000

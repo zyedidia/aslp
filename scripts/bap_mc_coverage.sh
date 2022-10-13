@@ -19,7 +19,7 @@ $HOME/mra_tools/support/aes.asl $HOME/mra_tools/support/barriers.asl \
 $HOME/mra_tools/support/debug.asl $HOME/mra_tools/support/feature.asl \
 $HOME/mra_tools/support/hints.asl $HOME/mra_tools/support/interrupts.asl \
 $HOME/mra_tools/support/memory.asl $HOME/mra_tools/support/stubs.asl \
-$HOME/mra_tools/support/fetchdecode.asl)
+$HOME/mra_tools/support/fetchdecode.asl $HOME/asl-interpreter/tests/override.asl)
 
 # Test all the opcodes
 bap-mc --show-bir --arch=aarch64 --primus-lisp-semantics=disable \
@@ -29,4 +29,5 @@ bap-mc --show-bir --arch=aarch64 --primus-lisp-semantics=disable \
 --a64-main-specs=$HOME/mra_tools/arch/arch.asl \
 --a64-main-specs=$HOME/mra_tools/arch/arch_instrs.asl \
 --a64-main-specs=$HOME/mra_tools/arch/arch_decode.asl \
+--a64-main-specs=$HOME/asl-interpreter/tests/override.asl \
 -- $OPCODES > ${2:-/dev/stdout} 2> ${3:-/dev/stderr}
