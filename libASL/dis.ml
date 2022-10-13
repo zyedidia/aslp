@@ -787,7 +787,7 @@ and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws 
 and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws =
     let@ fn = DisEnv.getFun loc f in
     let no_inline = List.map (fun x -> FIdent (x, 0))
-        ["Mem.read"; "Mem.set"; "CheckSPAlignment"] in
+        ["Mem.read"; "Mem.set"; "CheckSPAlignment"; "LSL"; "LSR"; "ASR"] in
     (match fn with
     | Some (rty, _, targs, _, _, _) when List.mem f no_inline -> 
         (match rty with 

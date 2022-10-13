@@ -353,12 +353,17 @@ module IntToBits = struct
     let e' = bits_coerce_of_expr e in
     e', bits_size_of_sym e'
 
+  let is_power_of_2 n = 
+    n <> 0 && 0 = Int.logand n (n-1)
+
   (** Transform integer expressions into bit-vector expressions while
       maintaining precision by widening bit-vector sizes as operations
       are applied. *)
   class bits_coerce_widening = object (self)
     inherit Asl_visitor.nopAslVisitor
 
+    val no_int_conversion = List.map (fun f -> FIdent (f, 0)) 
+      []
 
     (** Visits an expression, coercing integer expressions into bit-vector
         operations.
@@ -370,8 +375,13 @@ module IntToBits = struct
     method! vexpr e =
       match e with
 
+      | Expr_TApply (f, _, _) when (List.mem f no_int_conversion) ->
+        SkipChildren
       | Expr_TApply (fn, tes, es) ->
         ChangeDoChildrenPost (e, fun e' ->
+          let unsupported () = 
+            failwith @@ "unsupported integer function: " ^ pp_expr e'
+          in
           match e' with
 
           | Expr_TApply (FIdent ("cvt_bits_uint", 0), [t], [e]) ->
@@ -443,8 +453,14 @@ module IntToBits = struct
             let ex x = sym_expr (bits_sign_extend size x) in
             expr_prim' "neg_bits" [expr_of_int size] [ex x]
 
+            (* when the divisor is a power of 2, mod can be implemented by truncating. *)
+          | Expr_TApply (FIdent ("frem_int", 0), [], [n;Expr_LitInt d]) when is_power_of_2 (int_of_string d) ->
+            let digits = Z.log2 (Z.of_string d) in
+            let n,_ = bits_with_size_of_expr n in
+            sym_expr @@ sym_zero_extend 1 digits (sym_slice Unknown n 0 digits)
+
           | Expr_TApply (FIdent (f, 0), _, _) when Utils.endswith f "_int" ->
-            failwith @@ "unsupported integer function: " ^ pp_expr e'
+            unsupported ()
 
           | _ -> e'
         )
