@@ -284,6 +284,7 @@ module IntToBits = struct
       | FIdent ("add_bits", 0), [Expr_LitInt n], _
       | FIdent ("sub_bits", 0), [Expr_LitInt n], _
       | FIdent ("mul_bits", 0), [Expr_LitInt n], _
+      | FIdent ("sdiv_bits", 0), [Expr_LitInt n], _
       | FIdent ("and_bits", 0), [Expr_LitInt n], _
       | FIdent ("or_bits", 0), [Expr_LitInt n], _
       | FIdent ("eor_bits", 0), [Expr_LitInt n], _
@@ -377,6 +378,23 @@ module IntToBits = struct
 
       | Expr_TApply (f, _, _) when (List.mem f no_int_conversion) ->
         SkipChildren
+
+        (* match two function calls deep to find truncated division. *)
+      | Expr_TApply (FIdent ("round_tozero_real",0), [], 
+          [Expr_TApply (FIdent ("divide_real",0), [], args)]) -> 
+
+        ChangeDoChildrenPost (Expr_Tuple args, fun e' -> 
+          match e' with 
+          | Expr_Tuple [x; y] -> 
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
+            let size = max xsize ysize + 1 in
+            let ex = bits_sign_extend size in
+            sym_expr @@ sym_prim (FIdent ("sdiv_bits", 0)) [sym_of_int size] [ex x; ex y]
+          | _ -> failwith "expected tuple in round divide real case."
+        )
+        
+
       | Expr_TApply (fn, tes, es) ->
         ChangeDoChildrenPost (e, fun e' ->
           let unsupported () = 
@@ -458,6 +476,11 @@ module IntToBits = struct
             let digits = Z.log2 (Z.of_string d) in
             let n,_ = bits_with_size_of_expr n in
             sym_expr @@ sym_zero_extend 1 digits (sym_slice Unknown n 0 digits)
+
+            (* very carefully coerce a signed integer to a "real" by just using its signed representation *)
+            (* this will only work for particular operations. *)
+          | Expr_TApply (FIdent ("cvt_int_real", 0), [], [x]) -> 
+            x
 
           | Expr_TApply (FIdent (f, 0), _, _) when Utils.endswith f "_int" ->
             unsupported ()

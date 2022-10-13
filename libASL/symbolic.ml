@@ -383,11 +383,16 @@ let sym_zero_extend num_zeros old_width e =
       Exp (expr_prim' "ZeroExtend" [expr_of_int old_width; n'] [sym_expr e; n'])
 
 let sym_sign_extend num_zeros old_width (e: sym): sym =
-  let sign = sym_slice Unknown e (old_width-1) 1 in
-  let rep = sym_replicate 1 sign num_zeros in
-  match sym_append_bits Unknown num_zeros old_width rep e with
-  | Val v -> Val v
-  | Exp _ ->
+  match e with 
+  | Exp (Expr_TApply (FIdent ("ZeroExtend",0), [Expr_LitInt oldsize; Expr_LitInt newsize], [x; _])) ->
+    let size' = string_of_int (num_zeros + int_of_string newsize) in
+    Exp (Expr_TApply (FIdent ("ZeroExtend",0), [Expr_LitInt oldsize; Expr_LitInt size'], [x; Expr_LitInt size']))
+  | _ ->
+    let sign = sym_slice Unknown e (old_width-1) 1 in
+    let rep = sym_replicate 1 sign num_zeros in
+    match sym_append_bits Unknown num_zeros old_width rep e with
+    | Val v -> Val v
+    | Exp _ ->
       let n' = expr_of_int (num_zeros + old_width) in
       Exp (expr_prim' "SignExtend" [expr_of_int old_width; n'] [sym_expr e; n'])
 
