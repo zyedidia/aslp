@@ -23,8 +23,15 @@ jobs:
         run: opam install . --deps-only --with-test
 
       - name: Build and test
+        id: test
         run: |
           eval `opam config env`
           export LD_LIBRARY_PATH=`opam config var z3:lib`
           dune build
           ./coverage.sh test
+
+      - name: Upload new coverage results
+        uses: actions/upload-artifact
+        with:
+          name: coverage-output
+          path: ${{ steps.test.outputs.OUTPUT }}
