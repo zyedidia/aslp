@@ -31,7 +31,7 @@ jobs:
           ./coverage.sh test
 
       - name: Upload new coverage results
-        uses: actions/upload-artifact
+        uses: actions/upload-artifact@v3
         with:
           name: coverage-output
           path: ${{ steps.test.outputs.OUTPUT }}
