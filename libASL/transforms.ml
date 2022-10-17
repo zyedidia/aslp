@@ -290,6 +290,8 @@ module IntToBits = struct
       | FIdent ("eor_bits", 0), [Expr_LitInt n], _
       | FIdent ("not_bits", 0), [Expr_LitInt n], _
       | FIdent ("zeros_bits", 0), [Expr_LitInt n], _
+      | FIdent ("lsl_bits", 0), [Expr_LitInt n; _], _
+      | FIdent ("asr_bits", 0), [Expr_LitInt n; _], _
       | FIdent ("ones_bits", 0), [Expr_LitInt n], _ -> int_of_string n
       | FIdent ("append_bits", 0), [Expr_LitInt n; Expr_LitInt m], _ -> int_of_string n + int_of_string m
       | FIdent ("replicate_bits", 0), [Expr_LitInt n; Expr_LitInt m], _ -> int_of_string n * int_of_string m
@@ -471,6 +473,27 @@ module IntToBits = struct
             let ex x = sym_expr (bits_sign_extend size x) in
             expr_prim' "neg_bits" [expr_of_int size] [ex x]
 
+          | Expr_TApply (FIdent ("shl_int", 0), [], [x; y]) -> 
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
+            (* in worst case, could shift by 2^(ysize-1)-1 bits, assuming y >= 0. *)
+            let size = xsize + Int.shift_left 2 (ysize - 1) - 1 in
+            let ex x = sym_expr (bits_sign_extend size x) in
+            (match y with 
+            | Val (VBits bv) -> 
+              (* if shift is statically known, simply append zeros. *)
+              let yshift = Z.to_int (Primops.prim_cvt_bits_sint bv) in 
+              sym_expr @@ sym_append_bits Unknown xsize yshift x (sym_zeros yshift)
+            | _ -> expr_prim' "lsl_bits" [expr_of_int size; expr_of_int ysize] [ex x;sym_expr y]
+            )
+
+          | Expr_TApply (FIdent ("shr_int", 0), [], [x; y]) -> 
+            let (x,xsize) = bits_with_size_of_expr x in
+            let (y,ysize) = bits_with_size_of_expr y in
+            let size = xsize in
+            let ex x = sym_expr (bits_sign_extend size x) in
+            expr_prim' "asr_bits" [expr_of_int size; expr_of_int ysize] [ex x;sym_expr y]
+            
             (* when the divisor is a power of 2, mod can be implemented by truncating. *)
           | Expr_TApply (FIdent ("frem_int", 0), [], [n;Expr_LitInt d]) when is_power_of_2 (int_of_string d) ->
             let digits = Z.log2 (Z.of_string d) in

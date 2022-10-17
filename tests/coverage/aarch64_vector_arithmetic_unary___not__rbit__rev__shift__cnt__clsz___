@@ -250,34 +250,34 @@ ENCODING: aarch64_vector_arithmetic_unary_rev
 0x6ee01821: [Q=1 ; U=1 ; size=3 ; o0=1 ; Rn=1 ; Rd=1] --> (invalid)
 
 ENCODING: aarch64_vector_arithmetic_unary_shift
-0x2e213800: [Q=0 ; size=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 56 +: 8 ],8 )")
-0x2e213801: [Q=0 ; size=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 56 +: 8 ],8 )")
-0x2e213820: [Q=0 ; size=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 56 +: 8 ],8 )")
-0x2e213821: [Q=0 ; size=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 56 +: 8 ],8 )")
-0x2e613800: [Q=0 ; size=1 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 48 +: 16 ],16 )")
-0x2e613801: [Q=0 ; size=1 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 48 +: 16 ],16 )")
-0x2e613820: [Q=0 ; size=1 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 48 +: 16 ],16 )")
-0x2e613821: [Q=0 ; size=1 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 48 +: 16 ],16 )")
-0x2ea13800: [Q=0 ; size=2 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 32 +: 32 ],32 )")
-0x2ea13801: [Q=0 ; size=2 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 32 +: 32 ],32 )")
-0x2ea13820: [Q=0 ; size=2 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 32 +: 32 ],32 )")
-0x2ea13821: [Q=0 ; size=2 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 32 +: 32 ],32 )")
+0x2e213800: [Q=0 ; size=0 ; Rn=0 ; Rd=0] --> OK
+0x2e213801: [Q=0 ; size=0 ; Rn=0 ; Rd=1] --> OK
+0x2e213820: [Q=0 ; size=0 ; Rn=1 ; Rd=0] --> OK
+0x2e213821: [Q=0 ; size=0 ; Rn=1 ; Rd=1] --> OK
+0x2e613800: [Q=0 ; size=1 ; Rn=0 ; Rd=0] --> OK
+0x2e613801: [Q=0 ; size=1 ; Rn=0 ; Rd=1] --> OK
+0x2e613820: [Q=0 ; size=1 ; Rn=1 ; Rd=0] --> OK
+0x2e613821: [Q=0 ; size=1 ; Rn=1 ; Rd=1] --> OK
+0x2ea13800: [Q=0 ; size=2 ; Rn=0 ; Rd=0] --> OK
+0x2ea13801: [Q=0 ; size=2 ; Rn=0 ; Rd=1] --> OK
+0x2ea13820: [Q=0 ; size=2 ; Rn=1 ; Rd=0] --> OK
+0x2ea13821: [Q=0 ; size=2 ; Rn=1 ; Rd=1] --> OK
 0x2ee13800: [Q=0 ; size=3 ; Rn=0 ; Rd=0] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 77597 char 42 - line 77598 char 0)
 0x2ee13801: [Q=0 ; size=3 ; Rn=0 ; Rd=1] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 77597 char 42 - line 77598 char 0)
 0x2ee13820: [Q=0 ; size=3 ; Rn=1 ; Rd=0] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 77597 char 42 - line 77598 char 0)
 0x2ee13821: [Q=0 ; size=3 ; Rn=1 ; Rd=1] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 77597 char 42 - line 77598 char 0)
-0x6e213800: [Q=1 ; size=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 120 +: 8 ],8 )")
-0x6e213801: [Q=1 ; size=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 120 +: 8 ],8 )")
-0x6e213820: [Q=1 ; size=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 120 +: 8 ],8 )")
-0x6e213821: [Q=1 ; size=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 120 +: 8 ],8 )")
-0x6e613800: [Q=1 ; size=1 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 112 +: 16 ],16 )")
-0x6e613801: [Q=1 ; size=1 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 112 +: 16 ],16 )")
-0x6e613820: [Q=1 ; size=1 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 112 +: 16 ],16 )")
-0x6e613821: [Q=1 ; size=1 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 112 +: 16 ],16 )")
-0x6ea13800: [Q=1 ; size=2 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 96 +: 32 ],32 )")
-0x6ea13801: [Q=1 ; size=2 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 96 +: 32 ],32 )")
-0x6ea13820: [Q=1 ; size=2 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 96 +: 32 ],32 )")
-0x6ea13821: [Q=1 ; size=2 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("unsupported integer function: shl_int.0 {{  }} ( Exp8__6 [ 96 +: 32 ],32 )")
+0x6e213800: [Q=1 ; size=0 ; Rn=0 ; Rd=0] --> OK
+0x6e213801: [Q=1 ; size=0 ; Rn=0 ; Rd=1] --> OK
+0x6e213820: [Q=1 ; size=0 ; Rn=1 ; Rd=0] --> OK
+0x6e213821: [Q=1 ; size=0 ; Rn=1 ; Rd=1] --> OK
+0x6e613800: [Q=1 ; size=1 ; Rn=0 ; Rd=0] --> OK
+0x6e613801: [Q=1 ; size=1 ; Rn=0 ; Rd=1] --> OK
+0x6e613820: [Q=1 ; size=1 ; Rn=1 ; Rd=0] --> OK
+0x6e613821: [Q=1 ; size=1 ; Rn=1 ; Rd=1] --> OK
+0x6ea13800: [Q=1 ; size=2 ; Rn=0 ; Rd=0] --> OK
+0x6ea13801: [Q=1 ; size=2 ; Rn=0 ; Rd=1] --> OK
+0x6ea13820: [Q=1 ; size=2 ; Rn=1 ; Rd=0] --> OK
+0x6ea13821: [Q=1 ; size=2 ; Rn=1 ; Rd=1] --> OK
 0x6ee13800: [Q=1 ; size=3 ; Rn=0 ; Rd=0] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 77597 char 42 - line 77598 char 0)
 0x6ee13801: [Q=1 ; size=3 ; Rn=0 ; Rd=1] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 77597 char 42 - line 77598 char 0)
 0x6ee13820: [Q=1 ; size=3 ; Rn=1 ; Rd=0] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 77597 char 42 - line 77598 char 0)

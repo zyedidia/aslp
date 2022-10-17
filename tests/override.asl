@@ -32,6 +32,13 @@ bits(N) sdiv_bits(bits(N) x, bits(N) y)
     integer yn = SInt(y);
     return RoundTowardsZero(Real(xn) / Real (yn))[N-1:0];
 
+bits(N1) lsl_bits(bits(N1) x, bits(N2) y)
+    integer yn = SInt(y);
+    return LSL(x, yn);
+
+bits(N1) asr_bits(bits(N1) x, bits(N2) y)
+    integer yn = SInt(y);
+    return ASR(x, yn);
 
 integer HighestSetBit(bits(N) x)
     assert 0 < N && N <= 64; 
