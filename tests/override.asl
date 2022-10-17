@@ -27,6 +27,11 @@ boolean slt_bits(bits(N) x, bits(N) y)
 bits(N) neg_bits(bits(N) x)
     return (NOT x) + ZeroExtend('1', N);
 
+bits(N) sdiv_bits(bits(N) x, bits(N) y)
+    integer xn = SInt(x);
+    integer yn = SInt(y);
+    return RoundTowardsZero(Real(xn) / Real (yn))[N-1:0];
+
 
 integer HighestSetBit(bits(N) x)
     assert 0 < N && N <= 64; 

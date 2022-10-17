@@ -27,4 +27,4 @@ jobs:
           eval `opam config env`
           export LD_LIBRARY_PATH=`opam config var z3:lib`
           dune build
-          dune runtest
+          ./coverage.sh test
