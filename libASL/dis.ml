@@ -768,9 +768,6 @@ and dis_funcall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): sym rws =
     let+ ret = dis_call loc f tvs vs in
     match ret, f with
     | None, _ -> internal_error loc "function call finished without returning a value"
-    | Some (Exp _), FIdent (("SignExtend" | "ZeroExtend"), 0) ->
-      (* avoid expanding SignExtend/ZeroExtend into replicate_bits *)
-      Exp (Expr_TApply (f, List.map sym_expr tvs, List.map sym_expr vs))
     | Some x, _ -> x
 
 (** Evaluate call to procedure *)
@@ -786,24 +783,39 @@ and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws 
 
 and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws =
     let@ fn = DisEnv.getFun loc f in
+    let no_inline_pure = ["LSL"; "LSR"; "ASR"; "SignExtend"; "ZeroExtend"] in
     let no_inline = List.map (fun x -> FIdent (x, 0))
-        ["Mem.read"; "Mem.set"; "CheckSPAlignment"; "LSL"; "LSR"; "ASR"] in
+        (["Mem.read"; "Mem.set"] @ no_inline_pure) in
     (match fn with
     | Some (rty, _, targs, _, _, _) when List.mem f no_inline -> 
-        (match rty with 
-        | Some rty -> 
-            let@ () = DisEnv.modify LocalEnv.addLevel in
-            let@ () = DisEnv.sequence_ @@ List.map2 (fun arg e ->
-                declare_const loc type_integer arg e
-                ) targs tes in
+        (match sym_prim_simplify (name_of_FIdent f) tes es with 
+        | Some x -> DisEnv.pure (Some x) 
+        | None ->
+            (match rty with
+            | Some rty ->
+                let@ () = DisEnv.modify LocalEnv.addLevel in
+                let@ () = DisEnv.sequence_ @@ List.map2 (fun arg e ->
+                    declare_const loc type_integer arg e
+                    ) targs tes in
 
-            let@ rty = dis_type loc rty in
-            let@ var = (capture_expr loc rty (Expr_TApply (f, List.map sym_expr tes, List.map sym_expr es))) in 
-            let@ () = DisEnv.modify LocalEnv.popLevel in
-            DisEnv.pure @@ Some (var_sym_expr var)
-        | None -> 
-            let+ () = DisEnv.write [Stmt_TCall (f, List.map sym_expr tes, List.map sym_expr es, loc)] in 
-            None
+                let@ rty = dis_type loc rty in
+                let func = Expr_TApply (f, List.map sym_expr tes, List.map sym_expr es) in
+                let pure = List.mem (name_of_FIdent f) no_inline_pure in
+                let@ result = 
+                    match pure with 
+                    | true -> 
+                        let+ _ = declare_fresh_const loc rty "Exp" func in
+                        Exp func
+                    | false -> 
+                        let+ var = capture_expr loc rty func in 
+                        var_sym_expr var
+                in 
+                let@ () = DisEnv.modify LocalEnv.popLevel in
+                DisEnv.pure @@ Some result
+            | None -> 
+                let+ () = DisEnv.write [Stmt_TCall (f, List.map sym_expr tes, List.map sym_expr es, loc)] in 
+                None
+            )
         )
     | Some (rty, atys, targs, args, loc, b) ->
         let fname = name_of_FIdent f in

@@ -491,6 +491,10 @@ let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option 
   | ("append_bits", [Val t1; _],      [_; x2])            when is_zero t1 -> Some x2
   | ("append_bits", [_; Val t2],      [x1; _])            when is_zero t2 -> Some x1
 
+  | ("LSL",         _,                [x1; Val x2])       when is_zero x2 -> Some x1
+  | ("LSR",         _,                [x1; Val x2])       when is_zero x2 -> Some x1
+  | ("ZeroExtend",  [Val (VInt v1); Val (VInt v2)], [x1;_]) when Z.equal v1 v2 -> Some x1
+
   | ("eq_enum",     _,                [x; Val (VBool true)])
   | ("eq_enum",     _,                [Val (VBool true); x]) -> Some x
 
