@@ -11,6 +11,8 @@ aarch64_integer_arithmetic_mcsubtracttaggedaddress[setflags]
 aarch64_integer_flags_rmif
 0xba000400
 0x3a00080d
+aarch64_memory_ordered_rcpc
+aarch64_memory_single_general_immediate_signed_offset_lda_stl
 
 UNDEFINED in ASL:
 aarch64_branch_unconditional_dret
@@ -31,6 +33,9 @@ aarch64_branch_unconditional_immediate
 0x14000000
 aarch64_branch_unconditional_register
 0xd61f0000
+aarch64_memory_atomicops_cas_single
+0x8a07c00
+aarch64_memory_atomicops_ld... (most of the memory instruction fail here)
 
 EvalError Raised at file "libASL/dis.ml", line 32, characters 2-35
 Called from file "libASL/rws.ml", line 47, characters 7-10:
@@ -40,3 +45,12 @@ aarch64_integer_shift_variable
 replicate_bits not defined:
 aarch64_integer_bitfield
 0x13000000
+
+hangs:
+aarch64_memory_atomicops_cas_pair
+0x8207c00
+
+Lifter things to implement:
+Lifters failed with a conflict: A64_lifter.Unhandled_expr("__array _Z [ 0 ]")
+Lifters failed with a conflict: A64_lifter.Unhandled_expr("Mem.read.0 {{ 4 }} ( add_bits.0 {{ 64 }} ( Exp4__5,SignExtend.0 {{ 21,64 }} ( '000000000000000000000',64 ) ),4,0 )")
+Lifters failed with a conflict: A64_lifter.Unhandled_stmt("Mem.set.0 {{ 4 }} ( add_bits.0 {{ 64 }} ( Exp10__5 [ 0 +: 64 ],LSL.0 {{ 64 }} ( SignExtend.0 {{ 7,64 }} ( '0000000',64 ),2 ) ),4,0,Exp12__5 [ 0 +: 32 ] ) ;")
