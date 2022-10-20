@@ -291,6 +291,7 @@ module IntToBits = struct
       | FIdent ("not_bits", 0), [Expr_LitInt n], _
       | FIdent ("zeros_bits", 0), [Expr_LitInt n], _
       | FIdent ("lsl_bits", 0), [Expr_LitInt n; _], _
+      | FIdent ("lsr_bits", 0), [Expr_LitInt n; _], _
       | FIdent ("asr_bits", 0), [Expr_LitInt n; _], _
       | FIdent ("ones_bits", 0), [Expr_LitInt n], _ -> int_of_string n
       | FIdent ("append_bits", 0), [Expr_LitInt n; Expr_LitInt m], _ -> int_of_string n + int_of_string m
@@ -493,7 +494,18 @@ module IntToBits = struct
             let size = xsize in
             let ex x = sym_expr (bits_sign_extend size x) in
             expr_prim' "asr_bits" [expr_of_int size; expr_of_int ysize] [ex x;sym_expr y]
-            
+
+            (* these functions take bits as first argument and integer as second. just coerce second to bits. *)
+          | Expr_TApply (FIdent ("LSL", 0), [size], [x; n]) -> 
+            let (n,nsize) = bits_with_size_of_expr n in
+            expr_prim' "lsl_bits" [size; expr_of_int nsize] [x;sym_expr n]
+          | Expr_TApply (FIdent ("LSR", 0), [size], [x; n]) -> 
+            let (n,nsize) = bits_with_size_of_expr n in
+            expr_prim' "lsr_bits" [size; expr_of_int nsize] [x;sym_expr n]
+          | Expr_TApply (FIdent ("ASR", 0), [size], [x; n]) -> 
+            let (n,nsize) = bits_with_size_of_expr n in
+            expr_prim' "asr_bits" [size; expr_of_int nsize] [x;sym_expr n]
+
             (* when the divisor is a power of 2, mod can be implemented by truncating. *)
           | Expr_TApply (FIdent ("frem_int", 0), [], [n;Expr_LitInt d]) when is_power_of_2 (int_of_string d) ->
             let digits = Z.log2 (Z.of_string d) in

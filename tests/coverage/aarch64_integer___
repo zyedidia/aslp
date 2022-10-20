@@ -4768,70 +4768,70 @@ ENCODING: aarch64_integer_pac_strip_hint
 (encoding unused)
 
 ENCODING: aarch64_integer_shift_variable
-0x1ac02000: [sf=0 ; Rm=0 ; op2=0 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x1ac02001: [sf=0 ; Rm=0 ; op2=0 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x1ac02020: [sf=0 ; Rm=0 ; op2=0 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x1ac02021: [sf=0 ; Rm=0 ; op2=0 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x1ac02400: [sf=0 ; Rm=0 ; op2=1 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac02401: [sf=0 ; Rm=0 ; op2=1 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac02420: [sf=0 ; Rm=0 ; op2=1 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac02421: [sf=0 ; Rm=0 ; op2=1 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac02800: [sf=0 ; Rm=0 ; op2=2 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x1ac02801: [sf=0 ; Rm=0 ; op2=2 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x1ac02820: [sf=0 ; Rm=0 ; op2=2 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x1ac02821: [sf=0 ; Rm=0 ; op2=2 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x1ac02c00: [sf=0 ; Rm=0 ; op2=3 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac02c01: [sf=0 ; Rm=0 ; op2=3 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac02c20: [sf=0 ; Rm=0 ; op2=3 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac02c21: [sf=0 ; Rm=0 ; op2=3 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac12000: [sf=0 ; Rm=1 ; op2=0 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x1ac12001: [sf=0 ; Rm=1 ; op2=0 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x1ac12020: [sf=0 ; Rm=1 ; op2=0 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x1ac12021: [sf=0 ; Rm=1 ; op2=0 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x1ac12400: [sf=0 ; Rm=1 ; op2=1 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac12401: [sf=0 ; Rm=1 ; op2=1 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac12420: [sf=0 ; Rm=1 ; op2=1 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac12421: [sf=0 ; Rm=1 ; op2=1 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac12800: [sf=0 ; Rm=1 ; op2=2 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x1ac12801: [sf=0 ; Rm=1 ; op2=2 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x1ac12820: [sf=0 ; Rm=1 ; op2=2 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x1ac12821: [sf=0 ; Rm=1 ; op2=2 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x1ac12c00: [sf=0 ; Rm=1 ; op2=3 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac12c01: [sf=0 ; Rm=1 ; op2=3 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac12c20: [sf=0 ; Rm=1 ; op2=3 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x1ac12c21: [sf=0 ; Rm=1 ; op2=3 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac02000: [sf=1 ; Rm=0 ; op2=0 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x9ac02001: [sf=1 ; Rm=0 ; op2=0 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x9ac02020: [sf=1 ; Rm=0 ; op2=0 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x9ac02021: [sf=1 ; Rm=0 ; op2=0 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x9ac02400: [sf=1 ; Rm=0 ; op2=1 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac02401: [sf=1 ; Rm=0 ; op2=1 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac02420: [sf=1 ; Rm=0 ; op2=1 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac02421: [sf=1 ; Rm=0 ; op2=1 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac02800: [sf=1 ; Rm=0 ; op2=2 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x9ac02801: [sf=1 ; Rm=0 ; op2=2 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x9ac02820: [sf=1 ; Rm=0 ; op2=2 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x9ac02821: [sf=1 ; Rm=0 ; op2=2 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x9ac02c00: [sf=1 ; Rm=0 ; op2=3 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac02c01: [sf=1 ; Rm=0 ; op2=3 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac02c20: [sf=1 ; Rm=0 ; op2=3 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac02c21: [sf=1 ; Rm=0 ; op2=3 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac12000: [sf=1 ; Rm=1 ; op2=0 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x9ac12001: [sf=1 ; Rm=1 ; op2=0 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x9ac12020: [sf=1 ; Rm=1 ; op2=0 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x9ac12021: [sf=1 ; Rm=1 ; op2=0 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 4400 char 11 - line 4401 char 0: getFun ge_int.0
-0x9ac12400: [sf=1 ; Rm=1 ; op2=1 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac12401: [sf=1 ; Rm=1 ; op2=1 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac12420: [sf=1 ; Rm=1 ; op2=1 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac12421: [sf=1 ; Rm=1 ; op2=1 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac12800: [sf=1 ; Rm=1 ; op2=2 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x9ac12801: [sf=1 ; Rm=1 ; op2=2 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x9ac12820: [sf=1 ; Rm=1 ; op2=2 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x9ac12821: [sf=1 ; Rm=1 ; op2=2 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 14473 char 11 - line 14474 char 0: getFun ge_int.0
-0x9ac12c00: [sf=1 ; Rm=1 ; op2=3 ; Rn=0 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac12c01: [sf=1 ; Rm=1 ; op2=3 ; Rn=0 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac12c20: [sf=1 ; Rm=1 ; op2=3 ; Rn=1 ; Rd=0] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
-0x9ac12c21: [sf=1 ; Rm=1 ; op2=3 ; Rn=1 ; Rd=1] --> [3] Dissassembled evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8746 char 11 - line 8747 char 0: getFun ge_int.0
+0x1ac02000: [sf=0 ; Rm=0 ; op2=0 ; Rn=0 ; Rd=0] --> OK
+0x1ac02001: [sf=0 ; Rm=0 ; op2=0 ; Rn=0 ; Rd=1] --> OK
+0x1ac02020: [sf=0 ; Rm=0 ; op2=0 ; Rn=1 ; Rd=0] --> OK
+0x1ac02021: [sf=0 ; Rm=0 ; op2=0 ; Rn=1 ; Rd=1] --> OK
+0x1ac02400: [sf=0 ; Rm=0 ; op2=1 ; Rn=0 ; Rd=0] --> OK
+0x1ac02401: [sf=0 ; Rm=0 ; op2=1 ; Rn=0 ; Rd=1] --> OK
+0x1ac02420: [sf=0 ; Rm=0 ; op2=1 ; Rn=1 ; Rd=0] --> OK
+0x1ac02421: [sf=0 ; Rm=0 ; op2=1 ; Rn=1 ; Rd=1] --> OK
+0x1ac02800: [sf=0 ; Rm=0 ; op2=2 ; Rn=0 ; Rd=0] --> OK
+0x1ac02801: [sf=0 ; Rm=0 ; op2=2 ; Rn=0 ; Rd=1] --> OK
+0x1ac02820: [sf=0 ; Rm=0 ; op2=2 ; Rn=1 ; Rd=0] --> OK
+0x1ac02821: [sf=0 ; Rm=0 ; op2=2 ; Rn=1 ; Rd=1] --> OK
+0x1ac02c00: [sf=0 ; Rm=0 ; op2=3 ; Rn=0 ; Rd=0] --> OK
+0x1ac02c01: [sf=0 ; Rm=0 ; op2=3 ; Rn=0 ; Rd=1] --> OK
+0x1ac02c20: [sf=0 ; Rm=0 ; op2=3 ; Rn=1 ; Rd=0] --> OK
+0x1ac02c21: [sf=0 ; Rm=0 ; op2=3 ; Rn=1 ; Rd=1] --> OK
+0x1ac12000: [sf=0 ; Rm=1 ; op2=0 ; Rn=0 ; Rd=0] --> OK
+0x1ac12001: [sf=0 ; Rm=1 ; op2=0 ; Rn=0 ; Rd=1] --> OK
+0x1ac12020: [sf=0 ; Rm=1 ; op2=0 ; Rn=1 ; Rd=0] --> OK
+0x1ac12021: [sf=0 ; Rm=1 ; op2=0 ; Rn=1 ; Rd=1] --> OK
+0x1ac12400: [sf=0 ; Rm=1 ; op2=1 ; Rn=0 ; Rd=0] --> OK
+0x1ac12401: [sf=0 ; Rm=1 ; op2=1 ; Rn=0 ; Rd=1] --> OK
+0x1ac12420: [sf=0 ; Rm=1 ; op2=1 ; Rn=1 ; Rd=0] --> OK
+0x1ac12421: [sf=0 ; Rm=1 ; op2=1 ; Rn=1 ; Rd=1] --> OK
+0x1ac12800: [sf=0 ; Rm=1 ; op2=2 ; Rn=0 ; Rd=0] --> OK
+0x1ac12801: [sf=0 ; Rm=1 ; op2=2 ; Rn=0 ; Rd=1] --> OK
+0x1ac12820: [sf=0 ; Rm=1 ; op2=2 ; Rn=1 ; Rd=0] --> OK
+0x1ac12821: [sf=0 ; Rm=1 ; op2=2 ; Rn=1 ; Rd=1] --> OK
+0x1ac12c00: [sf=0 ; Rm=1 ; op2=3 ; Rn=0 ; Rd=0] --> OK
+0x1ac12c01: [sf=0 ; Rm=1 ; op2=3 ; Rn=0 ; Rd=1] --> OK
+0x1ac12c20: [sf=0 ; Rm=1 ; op2=3 ; Rn=1 ; Rd=0] --> OK
+0x1ac12c21: [sf=0 ; Rm=1 ; op2=3 ; Rn=1 ; Rd=1] --> OK
+0x9ac02000: [sf=1 ; Rm=0 ; op2=0 ; Rn=0 ; Rd=0] --> OK
+0x9ac02001: [sf=1 ; Rm=0 ; op2=0 ; Rn=0 ; Rd=1] --> OK
+0x9ac02020: [sf=1 ; Rm=0 ; op2=0 ; Rn=1 ; Rd=0] --> OK
+0x9ac02021: [sf=1 ; Rm=0 ; op2=0 ; Rn=1 ; Rd=1] --> OK
+0x9ac02400: [sf=1 ; Rm=0 ; op2=1 ; Rn=0 ; Rd=0] --> OK
+0x9ac02401: [sf=1 ; Rm=0 ; op2=1 ; Rn=0 ; Rd=1] --> OK
+0x9ac02420: [sf=1 ; Rm=0 ; op2=1 ; Rn=1 ; Rd=0] --> OK
+0x9ac02421: [sf=1 ; Rm=0 ; op2=1 ; Rn=1 ; Rd=1] --> OK
+0x9ac02800: [sf=1 ; Rm=0 ; op2=2 ; Rn=0 ; Rd=0] --> OK
+0x9ac02801: [sf=1 ; Rm=0 ; op2=2 ; Rn=0 ; Rd=1] --> OK
+0x9ac02820: [sf=1 ; Rm=0 ; op2=2 ; Rn=1 ; Rd=0] --> OK
+0x9ac02821: [sf=1 ; Rm=0 ; op2=2 ; Rn=1 ; Rd=1] --> OK
+0x9ac02c00: [sf=1 ; Rm=0 ; op2=3 ; Rn=0 ; Rd=0] --> OK
+0x9ac02c01: [sf=1 ; Rm=0 ; op2=3 ; Rn=0 ; Rd=1] --> OK
+0x9ac02c20: [sf=1 ; Rm=0 ; op2=3 ; Rn=1 ; Rd=0] --> OK
+0x9ac02c21: [sf=1 ; Rm=0 ; op2=3 ; Rn=1 ; Rd=1] --> OK
+0x9ac12000: [sf=1 ; Rm=1 ; op2=0 ; Rn=0 ; Rd=0] --> OK
+0x9ac12001: [sf=1 ; Rm=1 ; op2=0 ; Rn=0 ; Rd=1] --> OK
+0x9ac12020: [sf=1 ; Rm=1 ; op2=0 ; Rn=1 ; Rd=0] --> OK
+0x9ac12021: [sf=1 ; Rm=1 ; op2=0 ; Rn=1 ; Rd=1] --> OK
+0x9ac12400: [sf=1 ; Rm=1 ; op2=1 ; Rn=0 ; Rd=0] --> OK
+0x9ac12401: [sf=1 ; Rm=1 ; op2=1 ; Rn=0 ; Rd=1] --> OK
+0x9ac12420: [sf=1 ; Rm=1 ; op2=1 ; Rn=1 ; Rd=0] --> OK
+0x9ac12421: [sf=1 ; Rm=1 ; op2=1 ; Rn=1 ; Rd=1] --> OK
+0x9ac12800: [sf=1 ; Rm=1 ; op2=2 ; Rn=0 ; Rd=0] --> OK
+0x9ac12801: [sf=1 ; Rm=1 ; op2=2 ; Rn=0 ; Rd=1] --> OK
+0x9ac12820: [sf=1 ; Rm=1 ; op2=2 ; Rn=1 ; Rd=0] --> OK
+0x9ac12821: [sf=1 ; Rm=1 ; op2=2 ; Rn=1 ; Rd=1] --> OK
+0x9ac12c00: [sf=1 ; Rm=1 ; op2=3 ; Rn=0 ; Rd=0] --> OK
+0x9ac12c01: [sf=1 ; Rm=1 ; op2=3 ; Rn=0 ; Rd=1] --> OK
+0x9ac12c20: [sf=1 ; Rm=1 ; op2=3 ; Rn=1 ; Rd=0] --> OK
+0x9ac12c21: [sf=1 ; Rm=1 ; op2=3 ; Rn=1 ; Rd=1] --> OK
 
 ENCODING: aarch64_integer_tags_mcaddtag
 0x91810421: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
