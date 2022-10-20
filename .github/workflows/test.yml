@@ -34,7 +34,8 @@ jobs:
           ./coverage.sh test
 
       - name: Upload new coverage results
+        if: always()
         uses: actions/upload-artifact@v3
         with:
-          name: coverage-output
+          name: coverage-output-${{ github.run_id }}
           path: ${{ steps.test.outputs.OUTPUT }}
