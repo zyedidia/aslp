@@ -1,9 +1,5 @@
 ===== FAILURES =====
 
-round_tozero_real not implemented:
-aarch64_integer_arithmetic_div
-0x1ac00800
-
 BAP doesn't recognise instructions:
 aarch64_integer_arithmetic_mcsubtracttaggedaddress[setflags]
 0xbac10021
@@ -45,12 +41,5 @@ aarch64_integer_shift_variable
 replicate_bits not defined:
 aarch64_integer_bitfield
 0x13000000
-
-hangs:
-aarch64_memory_atomicops_cas_pair
-0x8207c00
-
-Lifter things to implement:
-Lifters failed with a conflict: A64_lifter.Unhandled_expr("__array _Z [ 0 ]")
-Lifters failed with a conflict: A64_lifter.Unhandled_expr("Mem.read.0 {{ 4 }} ( add_bits.0 {{ 64 }} ( Exp4__5,SignExtend.0 {{ 21,64 }} ( '000000000000000000000',64 ) ),4,0 )")
-Lifters failed with a conflict: A64_lifter.Unhandled_stmt("Mem.set.0 {{ 4 }} ( add_bits.0 {{ 64 }} ( Exp10__5 [ 0 +: 64 ],LSL.0 {{ 64 }} ( SignExtend.0 {{ 7,64 }} ( '0000000',64 ),2 ) ),4,0,Exp12__5 [ 0 +: 32 ] ) ;")
+aarch64_memory_vector_single_post_inc
+(unsure what the opcode is)
