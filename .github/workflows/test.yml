@@ -23,8 +23,14 @@ jobs:
         run: |
           opam switch create new 4.09.0
           wget https://github.com/katrinafyi/pac-environment/releases/download/opam/new.tar.gz
+          cd ~/.opam
           tar xzf new.tar.gz
-          mv new ~/.opam
+
+      - name: Install dependencies
+        run: |
+          opam switch new
+          eval `opam env`
+          opam install . --deps-only --with-test
 
       - name: Extract encodings
         run: tar xzf encodings.tar.gz
