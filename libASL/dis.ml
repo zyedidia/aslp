@@ -765,7 +765,8 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
 
 (** Disassemble call to function *)
 and dis_funcall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): sym rws =
-    let no_inline_pure = ["LSL"; "LSR"; "ASR"; "SignExtend"; "ZeroExtend"] in
+    let no_inline_pure = List.map (fun (x,y) -> FIdent(x,y))
+        ["LSL",0; "LSR",0; "ASR",0; "SignExtend",0; "ZeroExtend",0] in
     let+ ret = DisEnv.catcherror (dis_call loc f tvs vs) in
     (* we always want to reduce to values if possible, but exceptions may be thrown while
         disassembling functions. *)
@@ -773,7 +774,7 @@ and dis_funcall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): sym rws =
     | Ok None -> internal_error loc "function call finished without returning a value"
     | Ok (Some (Val v)) -> Val v
     | Error _
-    | Ok (Some (Exp _)) when List.mem (name_of_FIdent f) no_inline_pure -> 
+    | Ok (Some (Exp _)) when List.mem f no_inline_pure -> 
         (* this case is reached when a no_inline_pure function cannot be fully evaluated. *)
         (* in this case, simply emit the primitive. *)
         let expr = Exp (Expr_TApply (f, List.map sym_expr tvs, List.map sym_expr vs)) in
@@ -796,7 +797,8 @@ and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws 
 
 and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws =
     let@ fn = DisEnv.getFun loc f in
-    let no_inline_impure = List.map (fun x -> FIdent (x, 0)) (["Mem.read"; "Mem.set"]) in
+    let no_inline_impure = List.map (fun (x,y) -> FIdent (x,y)) 
+        ["Mem.read",0; "Mem.set",0] in
     (match fn with
     | Some (rty, _, targs, _, _, _) when List.mem f no_inline_impure -> 
         (* impure functions are not visited. *)
