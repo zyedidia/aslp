@@ -3,7 +3,7 @@ name: Test partial eval
 on:
   push:
     branches:
-      - partial_eval
+      - partial_eval 
   workflow_dispatch:
 
 jobs:
@@ -20,17 +20,7 @@ jobs:
           dune-cache: true
 
       - name: Opam install
-        run: |
-          opam switch create new 4.09.0
-          wget https://github.com/katrinafyi/pac-environment/releases/download/opam/new.tar.gz
-          cd ~/.opam
-          tar xzf new.tar.gz
-
-      - name: Install dependencies
-        run: |
-          opam switch new
-          eval `opam env`
-          opam install . --deps-only --with-test
+        run: opam install . --deps-only --with-test
 
       - name: Extract encodings
         run: tar xzf encodings.tar.gz
@@ -38,7 +28,6 @@ jobs:
       - name: Build and test
         id: test
         run: |
-          opam switch new
           eval `opam config env`
           export LD_LIBRARY_PATH=`opam config var z3:lib`
           dune build
