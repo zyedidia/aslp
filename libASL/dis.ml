@@ -18,6 +18,7 @@ open Value
 open Symbolic
 
 let debug_level = ref 0
+let debug_show_trace = ref false
 
 (** (name, arg, location) tuple for tracing disassembly calls.
     For example: ("dis_expr", "1+1", loc).
@@ -43,7 +44,7 @@ let () = Printexc.register_printer
     (function
     | DisTrace (trace, exn) ->
         let trace' =
-            if !debug_level >= 1
+            if !debug_level >= 1 || !debug_show_trace
             then "\n" ^ print_dis_trace trace
             else ""
         in
@@ -54,6 +55,8 @@ let () = Printexc.register_printer
         Some ("DisInternalError: " ^ pp_loc loc ^ ": " ^ s)
     | Value.Throw (loc, e) ->
         Some ("LibASL.Value.Throw(" ^ Primops.pp_exc e ^ ") at " ^ pp_loc loc)
+    | Value.EvalError (loc, e) ->
+        Some ("LibASL.Value.EvalError(\"" ^ e ^ "\") at " ^ pp_loc loc)
     | _ -> None)
 
 
@@ -346,7 +349,7 @@ module DisEnv = struct
         (* run computation but obtain state and writer to output in debugging. *)
         let* (result,s',w') = locally (catcherror x) in
         let x' = (match result with
-        | Error ((DisTrace _) as e, bt) -> Printexc.raise_with_backtrace e bt
+        | Error ((DisTrace _) as e, bt) -> raise e
         | Error (exn, bt) -> Printexc.raise_with_backtrace (DisTrace (trace, exn)) bt
         | Ok x' -> x') in
         (* restore state and writer. *)
@@ -782,7 +785,7 @@ and dis_funcall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): sym rws =
         | Some x -> x 
         | None -> expr)
     | Ok (Some (Exp e)) -> Exp e
-    | Error (exn,_) -> raise exn (* it is an error if a non-primitive function cannot be disassembled. *)
+    | Error (exn,bt) -> raise exn (* it is an error if a non-primitive function cannot be disassembled. *)
 
 (** Evaluate call to procedure *)
 and dis_proccall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): unit rws =
