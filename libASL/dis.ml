@@ -1108,7 +1108,9 @@ and dis_stmt' (x: AST.stmt): unit rws =
         (match e' with
         | Val v ->
             if not (to_bool loc v) then
-                raise (EvalError (loc, "assertion failure during symbolic phase"))
+                (* We don't actually know whether this point is reachable, so we shouldn't error out *)
+                DisEnv.write [Stmt_Assert(expr_false, loc)]
+                (* raise (EvalError (loc, "assertion failure during symbolic phase")) *)
             else
                 DisEnv.unit
         | Exp e'' ->
@@ -1163,14 +1165,16 @@ and dis_stmt' (x: AST.stmt): unit rws =
             dis_for startval
         | _, _ ->
             raise (DisUnsupported (loc, "for loop bounds not statically known: " ^ pp_stmt x)))
+    | Stmt_Dep_Undefined loc
+    | Stmt_Undefined loc ->
+        (* We don't actually know whether this point is reachable, so we shouldn't error out *)
+        DisEnv.write [Stmt_Assert(expr_false, loc)]
     | Stmt_Unpred _
     | Stmt_ConstrainedUnpred _
     | Stmt_ImpDef (_, _)
-    | Stmt_Undefined _
     | Stmt_ExceptionTaken _
     | Stmt_Dep_Unpred _
     | Stmt_Dep_ImpDef (_, _)
-    | Stmt_Dep_Undefined _
     | Stmt_See (_, _)
     | Stmt_Throw (_, _)
     | Stmt_DecodeExecute (_, _, _)
