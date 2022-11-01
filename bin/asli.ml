@@ -185,6 +185,23 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         let op = Z.of_int (int_of_string opcode) in
         Printf.printf "Decoding instruction %s %s\n" iset (Z.format "%x" op);
         cpu'.sem iset op
+    | ":dump" :: iset :: opcode :: rest ->
+        let fname = 
+            (match rest with 
+            | [] -> "sem.aslb"
+            | [x] -> x 
+            | _ -> invalid_arg "expected at most 3 arguments to :dump")
+        in
+        let cpu' = Cpu.mkCPU (Eval.Env.copy cpu.env) in
+        let op = Z.of_int (int_of_string opcode) in
+        let bits = VBits (Primops.prim_cvt_int_bits (Z.of_int 32) op) in
+        let decoder = Eval.Env.getDecoder cpu'.env (Ident iset) in
+        let stmts = Dis.dis_decode_entry cpu'.env decoder bits in
+        let chan = open_out_bin fname in
+        Printf.printf "Dumping instruction semantics for %s %s" iset (Z.format "%x" op);
+        Printf.printf " to file %s\n" fname;
+        (* NOTE: .aslb file is a marshalled `stmt list` *)
+        Marshal.to_channel chan (stmts : stmt list) []
     | (":set" :: "impdef" :: rest) ->
         let cmd = String.concat " " rest in
         let loc = mkLoc fname cmd in
