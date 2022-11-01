@@ -1,4 +1,6 @@
-bap ../../cntlm -d bir:cntlm.bir --primus-lisp-semantics=disable \
+#!/bin/bash
+
+bap ${1:-../../cntlm} -d bir:cntlm.bir --primus-lisp-semantics=disable \
 --a64-main-throw-errors=true \
 --a64-main-prelude=$HOME/asl-interpreter/prelude.asl \
 --a64-main-specs=$HOME/mra_tools/arch/regs.asl \
