@@ -1273,7 +1273,9 @@ and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: 
 
                     let opost' = (match opost with
                     | Some post ->
-                        Printf.printf "also disassembling __postdecode...\n";
+                        if !debug_level >= 2 then begin
+                          Printf.printf "also disassembling __postdecode...\n"
+                        end;
                         post
                     | None -> []
                     ) in
