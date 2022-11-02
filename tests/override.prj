@@ -7,4 +7,3 @@
 
 :set impdef "OS Double Lock is implemented" = TRUE
 :set impdef "Has MPAM extension" = FALSE
-// __TakeColdReset();

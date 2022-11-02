@@ -4711,14 +4711,14 @@ ENCODING: aarch64_integer_pac_pacdb_dp_1src
 0xdac12c21: [Z=1 ; Rn=1 ; Rd=1] --> (invalid)
 
 ENCODING: aarch64_integer_pac_pacga_dp_2src
-0x9ac03000: [Rm=0 ; Rn=0 ; Rd=0] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 2949 char 11 - line 2951 char 0: Unknown value for IMPLEMENTATION_DEFINED "Has Implicit Error Synchronization Barrier"
-0x9ac03001: [Rm=0 ; Rn=0 ; Rd=1] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 2949 char 11 - line 2951 char 0: Unknown value for IMPLEMENTATION_DEFINED "Has Implicit Error Synchronization Barrier"
-0x9ac03020: [Rm=0 ; Rn=1 ; Rd=0] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 2949 char 11 - line 2951 char 0: Unknown value for IMPLEMENTATION_DEFINED "Has Implicit Error Synchronization Barrier"
-0x9ac03021: [Rm=0 ; Rn=1 ; Rd=1] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 2949 char 11 - line 2951 char 0: Unknown value for IMPLEMENTATION_DEFINED "Has Implicit Error Synchronization Barrier"
-0x9ac13000: [Rm=1 ; Rn=0 ; Rd=0] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 2949 char 11 - line 2951 char 0: Unknown value for IMPLEMENTATION_DEFINED "Has Implicit Error Synchronization Barrier"
-0x9ac13001: [Rm=1 ; Rn=0 ; Rd=1] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 2949 char 11 - line 2951 char 0: Unknown value for IMPLEMENTATION_DEFINED "Has Implicit Error Synchronization Barrier"
-0x9ac13020: [Rm=1 ; Rn=1 ; Rd=0] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 2949 char 11 - line 2951 char 0: Unknown value for IMPLEMENTATION_DEFINED "Has Implicit Error Synchronization Barrier"
-0x9ac13021: [Rm=1 ; Rn=1 ; Rd=1] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 2949 char 11 - line 2951 char 0: Unknown value for IMPLEMENTATION_DEFINED "Has Implicit Error Synchronization Barrier"
+0x9ac03000: [Rm=0 ; Rn=0 ; Rd=0] --> [1] Evaluation failure: LibASL.Value.Throw(ExceptionTaken) at file "./mra_tools/support/fetchdecode.asl" line 9 char 20 - line 10 char 0
+0x9ac03001: [Rm=0 ; Rn=0 ; Rd=1] --> [1] Evaluation failure: LibASL.Value.Throw(ExceptionTaken) at file "./mra_tools/support/fetchdecode.asl" line 9 char 20 - line 10 char 0
+0x9ac03020: [Rm=0 ; Rn=1 ; Rd=0] --> [1] Evaluation failure: LibASL.Value.Throw(ExceptionTaken) at file "./mra_tools/support/fetchdecode.asl" line 9 char 20 - line 10 char 0
+0x9ac03021: [Rm=0 ; Rn=1 ; Rd=1] --> [1] Evaluation failure: LibASL.Value.Throw(ExceptionTaken) at file "./mra_tools/support/fetchdecode.asl" line 9 char 20 - line 10 char 0
+0x9ac13000: [Rm=1 ; Rn=0 ; Rd=0] --> [1] Evaluation failure: LibASL.Value.Throw(ExceptionTaken) at file "./mra_tools/support/fetchdecode.asl" line 9 char 20 - line 10 char 0
+0x9ac13001: [Rm=1 ; Rn=0 ; Rd=1] --> [1] Evaluation failure: LibASL.Value.Throw(ExceptionTaken) at file "./mra_tools/support/fetchdecode.asl" line 9 char 20 - line 10 char 0
+0x9ac13020: [Rm=1 ; Rn=1 ; Rd=0] --> [1] Evaluation failure: LibASL.Value.Throw(ExceptionTaken) at file "./mra_tools/support/fetchdecode.asl" line 9 char 20 - line 10 char 0
+0x9ac13021: [Rm=1 ; Rn=1 ; Rd=1] --> [1] Evaluation failure: LibASL.Value.Throw(ExceptionTaken) at file "./mra_tools/support/fetchdecode.asl" line 9 char 20 - line 10 char 0
 
 ENCODING: aarch64_integer_pac_pacia_dp_1src
 0xdac10000: [Z=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
@@ -4868,8 +4868,8 @@ tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
 
 
 ENCODING: aarch64_integer_tags_mcgettag
-0xd9600021: [imm9=0 ; Xn=1 ; Xt=1] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 2651 char 11 - line 2652 char 0: Unknown value for IMPLEMENTATION_DEFINED "Has Nested Virtualization"
-0xd9601021: [imm9=1 ; Xn=1 ; Xt=1] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 2651 char 11 - line 2652 char 0: Unknown value for IMPLEMENTATION_DEFINED "Has Nested Virtualization"
+0xd9600021: [imm9=0 ; Xn=1 ; Xt=1] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8117 char 11 - line 8118 char 0: assertion failure
+0xd9601021: [imm9=1 ; Xn=1 ; Xt=1] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8117 char 11 - line 8118 char 0: assertion failure
 
 ENCODING: aarch64_integer_tags_mcgettagarray
 0xd9e00021: [Xn=1 ; Xt=1] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 28760 char 21 - line 28761 char 0)

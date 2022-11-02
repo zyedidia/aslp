@@ -314,6 +314,8 @@ let main () =
                 LoadASL.read_spec filename !opt_verbose
             end else if Utils.endswith filename ".asl" then begin
                 LoadASL.read_file filename false !opt_verbose
+            end else if Utils.endswith filename ".prj" then begin
+                [] (* ignore project files here and process later *)
             end else begin
                 failwith ("Unrecognized file suffix on "^filename)
             end
@@ -333,7 +335,11 @@ let main () =
 
         LNoise.history_load ~filename:"asl_history" |> ignore;
         LNoise.history_set ~max_length:100 |> ignore;
-        repl (TC.Env.mkEnv TC.env0) (Cpu.mkCPU env)
+        
+        let prj_files = List.filter (fun f -> Utils.endswith f ".prj") !opt_filenames in
+        let tcenv = TC.Env.mkEnv TC.env0 and cpu = Cpu.mkCPU env in
+        List.iter (fun f -> process_command tcenv cpu "<args>" (":project " ^ f)) prj_files;
+        repl tcenv cpu
     end
 
 let _ =ignore(main ())

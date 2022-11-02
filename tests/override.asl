@@ -319,3 +319,35 @@ integer LowestSetBit(bits(N) x)
         return 63;
     else
         return -1;
+
+
+
+// bits(8*size) _Mem[AddressDescriptor desc, integer size, AccessDescriptor accdesc];
+// _Mem[AddressDescriptor desc, integer size, AccessDescriptor accdesc] = bits(8*size) value;
+
+// very basic replacements for memory load operations.
+// SKIPS address translation, alignment check, non-atomicity, and much more.
+bits(size*8) AArch64.MemSingle[bits(64) vaddress, integer size, AccType acctype, boolean wasaligned]
+    AccessDescriptor access;
+    access.acctype = acctype;
+    //access.mpam = GenMPAMcurEL(acctype IN {AccType_IFETCH, AccType_IC});
+    access.page_table_walk = FALSE;
+
+    AddressDescriptor address;
+    address.paddress.address = Align(vaddress[51:0], size);
+    address.paddress.NS = '1';
+
+    return _Mem[address, size, access];
+
+
+AArch64.MemSingle[bits(64) vaddress, integer size, AccType acctype, boolean wasaligned] = bits(size*8) value
+    AccessDescriptor access;
+    access.acctype = acctype;
+    //access.mpam = GenMPAMcurEL(acctype IN {AccType_IFETCH, AccType_IC});
+    access.page_table_walk = FALSE;
+
+    AddressDescriptor address;
+    address.paddress.address = Align(vaddress[51:0], size);
+    address.paddress.NS = '1';
+
+    _Mem[address, size, access] = value;
