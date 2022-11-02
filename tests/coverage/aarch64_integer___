@@ -4875,7 +4875,9 @@ ENCODING: aarch64_integer_tags_mcgettagarray
 0xd9e00021: [Xn=1 ; Xt=1] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 28760 char 21 - line 28761 char 0)
 
 ENCODING: aarch64_integer_tags_mcinsertrandomtag
-0x9ac11021: [Xm=1 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: EvalError at file "./mra_tools/support/memory.asl" line 100 char 11 - line 101 char 0: assertion failure during symbolic phase
+0x9ac11021: [Xm=1 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
+tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
+}
 
 
 ENCODING: aarch64_integer_tags_mcinserttagmask
