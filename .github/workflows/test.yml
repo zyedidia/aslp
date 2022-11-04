@@ -1,6 +1,9 @@
 name: Test partial eval
 
 on:
+  push:
+    branches:
+      - partial_eval 
   workflow_dispatch:
 
 jobs:
@@ -9,14 +12,30 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
-      - name: Set up OCaml
-        uses: ocaml/setup-ocaml@v1.1.11
-        with:
-          ocaml-version: 4.09.0
 
-      - name: Do the test!
+      - name: Use OCaml
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: 4.09.0
+          dune-cache: true
+
+      - name: Opam install
+        run: opam install . --deps-only --with-test
+
+      - name: Extract encodings
+        run: tar xzf encodings.tar.gz
+
+      - name: Build and test
+        id: test
         run: |
-          opam install . --deps-only --with-test
-          opam exec -- dune build
-          opam exec -- dune runtest
+          eval `opam config env`
+          export LD_LIBRARY_PATH=`opam config var z3:lib`
+          dune build
+          ./coverage.sh test
+
+      - name: Upload new coverage results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-output-${{ github.run_id }}
+          path: ${{ steps.test.outputs.OUTPUT }}

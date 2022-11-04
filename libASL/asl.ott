@@ -10,10 +10,13 @@ metavar typeid    ::= {{ ocaml string }} {{ ocamllex ['a'-'z' 'A'-'Z' '_'] ['a'-
 metavar qualifier ::= {{ phantom }} {{ ocaml string }} {{ ocamllex-remove }} %{{ ocamllex ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*  }}
 metavar intLit    ::= {{ ocaml string }}  {{ ocamllex ['0'-'9']+  }}
 metavar bitsLit   ::= {{ ocaml string }}  {{ ocamllex '\'' ['0' '1'     ' ']* '\''  }}
+    {{ pp x = string ("'" ^ x ^ "'") }}
 metavar maskLit   ::= {{ ocaml string }}  {{ ocamllex '\'' ['0' '1' 'x' ' ']* '\''  }}
+    {{ pp x = string ("'" ^ x ^ "'") }}
 metavar realLit   ::= {{ ocaml string }}  {{ ocamllex ['0'-'9']+ '.' ['0'-'9']+ }}
 metavar hexLit    ::= {{ ocaml string }}  {{ ocamllex '0''x'['0'-'9' 'A' - 'F' 'a'-'f' '_']+  }}
 metavar stringLit ::= {{ ocaml string }}  {{ ocamllex '"' [^'"']* '"'  }} {{ phantom }}
+    {{ pp x = string ("\"" ^ x ^ "\"") }}
 
 indexvar i, m, n ::= {{ ocaml int }}
 
@@ -345,8 +348,8 @@ instr_field :: 'IField_' ::=
 % because intLit is a terminal not a non-terminal
 offset :: 'Offset_' ::=
     {{ phantom }} {{ ocaml int }}
-    {{ pp-raw x = string "??" }}
-    {{ pp     x = string "??" }}
+    {{ pp-raw x = string (string_of_int x) }}
+    {{ pp     x = string (string_of_int x) }}
     | intLit :: :: Int {{ ocaml int_of_string [[intLit]] }}
 
 opcode_value :: 'Opcode_' ::=
@@ -630,8 +633,8 @@ optional_else :: 'S_Else' ::=
     {{ pp-raw x = match x with [] -> string ""
                              | ys -> string "(else " ^^ separate (string "\n") (List.map pp_raw_stmt ys) ^^ string ")" }}
     {{ pp     x = match x with [] -> string ""
-                             | ys -> string "else" ^^ hardline
-                                         ^^ (nest 4 (separate (string "\n") (List.map pp_stmt ys)))
+                             | ys -> string "else {" ^^ hardline
+                                         ^^ (nest 4 (separate (string "\n") (List.map pp_stmt ys @ [string "}"])))
     }}
     | else opt_indented_block :: :: ElseBlock  {{ ocaml [[opt_indented_block]] }}
     | else simple_stmts                  :: :: ElseSimple {{ ocaml [[simple_stmts]] }}
@@ -704,7 +707,7 @@ expr :: 'Expr_' ::=
 
 % dexpr in hand parser
 conditional_expression :: 'Expr_' ::= {{ quotient-with expr }}
-    | if cexpr1 then expr1 e_elsif1 .. e_elsifn else expr2   :: :: If
+    | if cexpr1 then expr1 e_elsif1 .. e_elsifn else expr2   :: S :: TIf {{ ocaml Expr_If(Type_Constructor(Ident("unknown")), [[cexpr1]], [[expr1]], [[e_elsif1 .. e_elsifn]], [[expr2]]) }}
     | cexpr                                                  :: :: CExpr  {{ quotient-remove }} {{ ocaml [[cexpr]] }}
 
 e_elsif :: 'E_Elsif_' ::= {{ ocaml expr * expr }}
@@ -776,6 +779,7 @@ aexpr :: 'Expr_' ::= {{ quotient-with expr }}
 
 expr_spice :: 'Expr_' ::= {{ quotient-with expr }}
     | qualident {{ expr1' , .. , exprm' }} ( expr1 , .. , exprn ) ::   :: TApply  {{ com spice for desugaring function call with explicit type parameters }}
+    | if {{ ty }} cexpr1 then expr1 e_elsif1 .. e_elsifn else expr2 :: :: If {{ com spice for desugaring expression ifs }}
     | __array expr1 [ expr2 ]                    ::   :: Array     {{ com spice for desugaring array accesses }}
 
 opt_stringLit :: 'String_' ::=
@@ -798,7 +802,7 @@ slice :: 'Slice_' ::=
 % almost identical to conditional_expression except that it omits : binop
 sexpr :: 'Expr_' ::= {{ quotient-with expr }}
     | scexpr                                                 :: :: CExpr2  {{ quotient-remove }} {{ ocaml [[scexpr]] }}
-    | if cexpr1 then expr1 e_elsif1 .. e_elsifn else scexpr2 :: :: If2  {{ quotient-remove }} {{ ocaml Expr_If([[cexpr1]], [[expr1]], [[e_elsif1 .. e_elsifn]], [[scexpr2]]) }}
+    | if cexpr1 then expr1 e_elsif1 .. e_elsifn else scexpr2 :: :: If2  {{ quotient-remove }} {{ ocaml Expr_If(Type_Constructor(Ident("unknown")), [[cexpr1]], [[expr1]], [[e_elsif1 .. e_elsifn]], [[scexpr2]]) }}
 
 scexpr :: 'Expr_' ::= {{ quotient-with expr }}
     | bexpr sfactor1 .. sfactorn :: :: Binop2  {{ quotient-remove }} {{ ocaml buildExpression [[bexpr]] [[sfactor1..sfactorn]] (Range($startpos([[bexpr]]),$endpos([[sfactor1..sfactorn]]))) }}

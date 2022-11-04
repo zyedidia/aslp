@@ -217,6 +217,11 @@ let fv_stmts stmts =
     ignore (visit_stmts (fvs :> aslVisitor) stmts);
     fvs#result
 
+let fv_stmt stmt =
+    let fvs = new freevarClass in
+    ignore (visit_stmt (fvs :> aslVisitor) stmt);
+    fvs#result
+
 let fv_decl decl =
     let fvs = new freevarClass in
     ignore (visit_decl (fvs :> aslVisitor) decl);
@@ -409,6 +414,10 @@ let subst_type (s: expr Bindings.t) (x: ty): ty =
     let subst = new substClass s in
     visit_type subst x
 
+let subst_stmt (s: expr Bindings.t) (x: stmt): stmt =
+    let subst = new substClass s in
+    visit_stmt subst x
+
 
 (** More flexible substitution class - takes a function instead
     of a binding set.
@@ -479,7 +488,7 @@ class resugarClass (ops: AST.binop Bindings.t) = object (self)
         | Expr_TApply(f, tys, args) ->
                 let args' = List.map (visit_expr (self :> aslVisitor)) args in
                 (match (Bindings.find_opt f ops, args') with
-                | (Some op, [a; b]) -> ChangeTo (Expr_Binop(a, op, b))
+                | (Some op, [a; b]) -> ChangeTo (Expr_Parens(Expr_Binop(a, op, b)))
                 (* | (Some op, [a]) -> ChangeTo (Expr_Unop(op, a)) *)
                 | _ -> ChangeTo (Expr_TApply(f, [], args'))
                 )
@@ -504,6 +513,15 @@ let pp_type  (x: ty):    string = Utils.to_string (PP.pp_ty    x)
 let pp_expr  (x: expr):  string = Utils.to_string (PP.pp_expr  x)
 let pp_lexpr (x: lexpr): string = Utils.to_string (PP.pp_lexpr x)
 let pp_stmt  (x: stmt):  string = Utils.to_string (PP.pp_stmt  x)
+
+let pp_decode_pattern (x: decode_pattern) = Utils.to_string (PP.pp_decode_pattern x)
+
+let pp_decode_slice (x: decode_slice) = Utils.to_string (PP.pp_decode_slice x)
+
+let pp_decode_alt (DecoderAlt_Alt(ps, _): decode_alt) = "when (" ^ String.concat ", " (List.map pp_decode_pattern ps) ^ ")"
+let pp_decode_case (DecoderCase_Case(slices,_,_): decode_case) = "case (" ^ String.concat ", " (List.map pp_decode_slice slices) ^ ")"
+
+let pp_instr_field (IField_Field(name,_,_)) = pprint_ident name
 
 
 (****************************************************************)

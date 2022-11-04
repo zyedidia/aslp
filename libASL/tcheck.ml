@@ -1387,14 +1387,14 @@ and tc_slice_expr (env: Env.t) (u: unifier) (loc: AST.l) (x: expr) (ss: (AST.sli
 (** Typecheck expression *)
 and tc_expr (env: Env.t) (u: unifier) (loc: AST.l) (x: AST.expr): (AST.expr * AST.ty) =
     (match x with
-    | Expr_If(c, t, els, e) ->
+    | Expr_If(_, c, t, els, e) ->
             let c'        = check_expr env loc type_bool c in
             let (t', tty)     = tc_expr env u loc t in
             let (els', eltys) = List.split (List.map (tc_e_elsif env u loc) els) in
             let (e', ety)     = tc_expr env u loc e in
             List.iter (fun elty -> check_type env u loc tty elty) eltys;
             check_type env u loc tty ety;
-            (Expr_If(c', t', els', e'), tty)
+            (Expr_If(tty, c', t', els', e'), tty)
     | Expr_Binop(x, Binop_Eq, Expr_LitMask(y)) ->
             (* syntactic sugar *)
             tc_expr env u loc (Expr_In(x, Pat_LitMask y))

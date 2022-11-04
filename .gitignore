@@ -11,3 +11,11 @@ asl_parser_pp.ml
 
 _build
 _opam
+
+*.aslb
+encodings/
+scripts/errors.txt
+scripts/result.txt
+scripts/output.txt
+scripts/cntlm.bir
+scripts/total.txt
