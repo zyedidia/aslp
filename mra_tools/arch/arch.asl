@@ -3119,7 +3119,7 @@ integer VL
 
 constant integer MAX_PL = 256;
 
-constant integer MAX_VL = 2048;
+constant integer MAX_VL = 128;
 
 array bits(MAX_VL) _Z[0..31];
 array bits(MAX_PL) _P[0..15];
