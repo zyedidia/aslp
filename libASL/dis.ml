@@ -953,12 +953,12 @@ and dis_lexpr_chain (loc: l) (x: lexpr) (ref: access_chain list) (r: sym): unit 
                    cannot store expressions. *)
                 
                 (* mark all pstate.el or pstate.sp writes as unsupported and die when we see them.
-                   this basically "fixes" us in EL0 and eliminates a bunch of branches.
+                   this basically "fixes" us to EL0 and eliminates a bunch of branches.
                    fun fact - the only instructions i'm aware of that can actually do this don't
                    work anyway *)
                 let () = (match var, ref with
                 | Var(0, Ident("PSTATE")), ([Field(Ident("EL"))] | [Field(Ident("SP"))]) ->
-                  unsupported loc @@ "Update to PSTATE EL/SP" ^ pp_lexpr x;
+                  unsupported loc @@ "Update to PSTATE EL/SP while disassembling" ^ pp_lexpr x;
                 | _, _ ->
                   ()
                 ) in
@@ -1334,15 +1334,15 @@ let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt l
     let lenv = LocalEnv.init env in
 
     (* get the pstate, then construct a new pstate where EL=0 & SP=0, then set the pstate *)
-    let (_, pstate) = LocalEnv.getVar Unknown (Var(0, Ident("PSTATE"))) lenv in
-    let lenv = (match pstate with
+    let (_, pstate) = LocalEnv.getVar loc (Var(0, Ident("PSTATE"))) lenv in
+    let pstate = (match pstate with
     | Val(pstate_v) ->
-      let pstate_v = set_access_chain Unknown pstate_v [Field(Ident("EL"))] (VBits({n=2; v=Z.zero;})) in
-      let pstate_v = set_access_chain Unknown pstate_v [Field(Ident("SP"))] (VBits({n=1; v=Z.zero;})) in
-      LocalEnv.setVar Unknown (Var(0, Ident("PSTATE"))) (Val(pstate_v)) lenv;
+      let pstate_v = set_access_chain loc pstate_v [Field(Ident("EL"))] (VBits({n=2; v=Z.zero;})) in
+      set_access_chain loc pstate_v [Field(Ident("SP"))] (VBits({n=1; v=Z.zero;}))
     | _ -> 
-      unsupported loc @@ "hmmm";
+      unsupported loc @@ "Initial env value of PSTATE is not a Value";
     ) in
+    let lenv = LocalEnv.setVar loc (Var(0, Ident("PSTATE"))) (Val(pstate)) lenv in
   
     let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
