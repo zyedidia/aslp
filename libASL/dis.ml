@@ -951,6 +951,18 @@ and dis_lexpr_chain (loc: l) (x: lexpr) (ref: access_chain list) (r: sym): unit 
                 (* this loses propagation of pure expressions when they are assigned
                    into structures, but this is unavoidable since the structure value types
                    cannot store expressions. *)
+                
+                (* mark all pstate.el or pstate.sp writes as unsupported and die when we see them.
+                   this basically "fixes" us to EL0 and eliminates a bunch of branches.
+                   fun fact - the only instructions i'm aware of that can actually do this don't
+                   work anyway *)
+                let () = (match var, ref with
+                | Var(0, Ident("PSTATE")), ([Field(Ident("EL" | "SP"))]) ->
+                  unsupported loc @@ "Update to PSTATE EL/SP while disassembling" ^ pp_lexpr x;
+                | _, _ ->
+                  ()
+                ) in
+
                 DisEnv.modify (LocalEnv.setVar loc var (Val vv'))
             | [] ->
                 (* if accessing bare variable, just set its variable in local store. *)
@@ -1320,6 +1332,18 @@ let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt l
     let env = Eval.Env.freeze env in
     let globals = IdentSet.of_list @@ List.map fst @@ Bindings.bindings (Eval.Env.readGlobals env) in
     let lenv = LocalEnv.init env in
+
+    (* get the pstate, then construct a new pstate where EL=0 & SP=0, then set the pstate *)
+    let (_, pstate) = LocalEnv.getVar loc (Var(0, Ident("PSTATE"))) lenv in
+    let pstate = (match pstate with
+    | Val(pstate_v) ->
+      let pstate_v = set_access_chain loc pstate_v [Field(Ident("EL"))] (VBits({n=2; v=Z.zero;})) in
+      set_access_chain loc pstate_v [Field(Ident("SP"))] (VBits({n=1; v=Z.zero;}))
+    | _ -> 
+      unsupported loc @@ "Initial env value of PSTATE is not a Value";
+    ) in
+    let lenv = LocalEnv.setVar loc (Var(0, Ident("PSTATE"))) (Val(pstate)) lenv in
+  
     let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
     (* let stmts' = Transforms.Bits.bitvec_conversion stmts' in *)
