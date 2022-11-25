@@ -957,7 +957,7 @@ and dis_lexpr_chain (loc: l) (x: lexpr) (ref: access_chain list) (r: sym): unit 
                    fun fact - the only instructions i'm aware of that can actually do this don't
                    work anyway *)
                 let () = (match var, ref with
-                | Var(0, Ident("PSTATE")), ([Field(Ident("EL"))] | [Field(Ident("SP"))]) ->
+                | Var(0, Ident("PSTATE")), ([Field(Ident("EL" | "SP"))]) ->
                   unsupported loc @@ "Update to PSTATE EL/SP while disassembling" ^ pp_lexpr x;
                 | _, _ ->
                   ()
