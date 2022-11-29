@@ -579,3 +579,130 @@ module IntToBits = struct
     |> Asl_visitor.visit_stmts (new bits_coerce_narrow)
 
 end
+
+module CopyProp = struct
+  type st = expr Bindings.t
+  let debug_cp = true
+
+  let remove (i: ident) (copies: st): st =
+    try 
+      Bindings.remove i copies
+    with _ -> copies
+
+  let removeAll (i: ident list) (copies: st): st =
+    List.fold_right remove i copies
+
+  let add (i: ident) (e: expr) (copies: st): st =
+    Bindings.add i e copies
+
+  let rec candidateExpr (e: expr): bool =
+    match e with
+    | Expr_Var v -> true
+    | Expr_Field (e,_) -> candidateExpr e
+    | Expr_Array (e,_) -> candidateExpr e
+    | Expr_TApply (f,_,_) -> (name_of_FIdent f = "Mem.read")
+    | _ -> false
+
+  let candidateIdent (i: ident) =
+    match i with
+    | Ident s -> String.starts_with ~prefix:"Exp" s
+    | _ -> false
+
+  let rec get_lexpr_ac (le: lexpr): (lexpr * access_chain list)  =
+    match le with
+    | LExpr_Field (l, f) -> let (l',c) = get_lexpr_ac l in (l',c@[Field f])
+    | LExpr_Array (l, Expr_LitInt i) -> let (l',c) = get_lexpr_ac l in (l',c@[Index (VInt (Z.of_string i))])
+    | _ -> (le, [])
+
+  let rec get_expr_ac (e: expr): (expr * access_chain list)  =
+    match e with
+    | Expr_Field (l, f) -> let (l',c) = get_expr_ac l in (l',c@[Field f])
+    | Expr_Array (l, Expr_LitInt i) -> let (l',c) = get_expr_ac l in (l',c@[Index (VInt (Z.of_string i))])
+    | _ -> (e, [])
+
+  let rec overlaps (p: 'a list) (l: 'a list): bool =
+    match p, l with
+    | x::xs, y::ys -> x = y && overlaps xs ys
+    | _ -> true
+
+  (* TODO: could clobber sub-expressions in e *)
+  let clobber (le: lexpr) (e: expr): bool =
+    let (lv,lc) = get_lexpr_ac le in
+    let (v,c) = get_expr_ac e in
+    match lv, v with
+      (* clobber if they are the same base variables and lc is a prefix of c *)
+    | LExpr_Var lv, Expr_Var v -> lv = v && overlaps lc c
+      (* Do not clobber if memory load instead *)
+    | _, Expr_TApply (f,_,_) when name_of_FIdent f = "Mem.read" -> false
+      (* clobber if either lv or v are not base variables (who knows whats going on) *)
+    | _ -> true
+
+  let load (e: expr): bool =
+    match e with 
+    | Expr_TApply (f,_,_) -> true
+    | _ -> false
+
+  let removeClobbers (le: lexpr) (copies: st): st =
+    Bindings.filter (fun k e -> not (clobber le e)) copies
+
+  let removeMemory (copies: st): st =
+    Bindings.filter (fun k e -> not (load e)) copies
+
+  let merge (l: st) (r: st): st =
+    Bindings.union (fun k l r -> if l = r then Some l else None) l r
+
+  let rec copyProp' (xs: stmt list) (copies: st): (stmt list * st) =
+    List.fold_left (fun (acc, copies) stmt ->
+      match stmt with
+      | Stmt_VarDeclsNoInit(ty, vs, loc) -> 
+          (* Clear any redefinitions *)
+          (acc@[stmt], removeAll vs copies)
+
+      | Stmt_ConstDecl(_, v, e, loc) 
+      | Stmt_VarDecl(_, v, e, loc) ->
+          (* Introduce propagations for local decls *)
+          let stmt = subst_stmt copies stmt in
+          let e = subst_expr copies e in
+          let copies = if candidateExpr e then add v e copies else remove v copies in
+          (acc@[stmt], copies)
+
+          (*
+      | Stmt_Assign(LExpr_Var v, e, loc) ->
+          (* Introduce propagations for assignments to known locals *)
+          let stmt = subst_stmt copies stmt in
+          let e = subst_expr copies e in
+          let copies = if candidateExpr e then add v e copies else remove v copies in
+          (acc@[stmt], copies)
+          *)
+
+      | Stmt_Assign(le, e, loc) ->
+          (* Remove all clobbers *)
+          let stmt = subst_stmt copies stmt in
+          let copies = removeClobbers le copies in
+          (acc@[stmt], copies)
+
+      | Stmt_If (e, tstmts, [], fstmts, loc) ->
+          (* Merge if result *)
+          let e = subst_expr copies e in
+          let (tstmts, tcopies) = copyProp' tstmts copies in
+          let (fstmts, fcopies) = copyProp' fstmts copies in
+          (acc@[Stmt_If (e, tstmts, [], fstmts, loc)], merge tcopies fcopies)
+
+      | Stmt_Assert (_, _)  ->
+          (* Statements that shouldn't clobber *)
+          (acc@[subst_stmt copies stmt], copies)
+
+      | Stmt_TCall (FIdent("Mem.set", 0), _, _, _) ->
+          (acc@[subst_stmt copies stmt], removeMemory copies)
+
+      | _ -> 
+          (* Over-approximate all other situations for soundness *)
+          if debug_cp then Printf.printf "Over-approx: %s\n" (pp_stmt stmt);
+          (acc@[stmt],Bindings.empty)) 
+    ([], copies) xs
+
+  let copyProp (xs: stmt list): stmt list =
+    let (acc, _) = copyProp' xs Bindings.empty in
+    acc
+
+end
