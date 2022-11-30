@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - partial_eval 
+  pull_request:
+    types: []
   workflow_dispatch:
 
 jobs:
