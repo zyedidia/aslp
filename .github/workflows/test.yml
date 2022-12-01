@@ -8,31 +8,40 @@ on:
     types: []
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    container: 
+      image: ghcr.io/uq-pac/asli-base:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.github_token }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Use OCaml
-        uses: ocaml/setup-ocaml@v2
-        with:
-          ocaml-compiler: 4.09.0
-          dune-cache: true
-
-      - name: Opam install
-        run: opam install . --deps-only --with-test
-
+        
       - name: Extract encodings
-        run: tar xzf encodings.tar.gz
+        run: tar xzf encodings.tar.gz 
+      
+      - name: opam install
+        run: |
+          eval `opam env`
+          opam install . --deps-only --with-test
 
-      - name: Build and test
+      - name: Build
+        run: |
+          eval `opam env`
+          dune build
+
+      - name: Test
         id: test
         run: |
-          eval `opam config env`
+          eval `opam env`
           export LD_LIBRARY_PATH=`opam config var z3:lib`
-          dune build
           ./coverage.sh test
 
       - name: Upload new coverage results
