@@ -404,11 +404,15 @@ module IntToBits = struct
             failwith @@ "unsupported integer function: " ^ pp_expr e'
           in
           match e' with
-
           | Expr_TApply (FIdent ("cvt_bits_uint", 0), [t], [e]) ->
             sym_expr @@ sym_zero_extend 1 (int_of_expr t) (bits_coerce_of_expr e)
           | Expr_TApply (FIdent ("cvt_bits_sint", 0), [t], [e]) ->
+            (* seemingly unnecessary slices allow inferring the size of 'e'.
+               without this, it is impossible in some cases (e.g. if 'e' is a bare variable). *)
             sym_expr @@ sym_slice Unknown (bits_coerce_of_expr e) 0 (int_of_expr t)
+          | Expr_TApply (FIdent ("cvt_int_bits", 0), [t], [e;_]) -> 
+            let e' = bits_coerce_of_expr e in
+            sym_expr @@ bits_sign_extend (int_of_expr t) e'
           | Expr_TApply (FIdent ("add_int", 0), [], [x;y]) ->
             let (x,xsize) = bits_with_size_of_expr x in
             let (y,ysize) = bits_with_size_of_expr y in
