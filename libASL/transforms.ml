@@ -277,7 +277,7 @@ module IntToBits = struct
 
   (** Returns the bit-width of the given expression.
       Requires expression to evaluate to a bit-vector type. *)
-  let rec bits_size_of_expr (vars: ty Bindings.t) (e: expr): int =
+  let rec bits_size_of_expr (vars: ident -> int option) (e: expr): int =
     match e with
     | Expr_TApply (fn, tes, es) ->
       (match (fn, tes, es) with
@@ -307,12 +307,9 @@ module IntToBits = struct
       let wds = List.map (function | Slice_LoWd (_,Expr_LitInt n) -> int_of_string n | _ -> assert false) slice_list in
       List.fold_left (+) 0 wds
     | Expr_Var nm ->
-      (match Bindings.find_opt nm vars with
-      | Some (Type_Bits (Expr_LitInt n)) -> int_of_string n
-      | Some t ->
-        failwith @@ "bits_size_of_expr: expected bits type but got " ^
-        pp_type t ^ " for " ^ pp_expr e
-      | None -> failwith @@ "bits_size_of_expr: no type known for " ^ pp_expr e
+      (match vars nm with
+      | Some w -> w
+      | None -> failwith @@ "bits_size_of_expr: no width known for " ^ pp_expr e
       )
     | _ -> failwith @@ "bits_size_of_expr: unhandled " ^ pp_expr e
 
@@ -324,14 +321,14 @@ module IntToBits = struct
     | _ -> failwith @@ "bits_size_of_val: unhandled " ^ pp_value v
 
   (** Returns the bit-width of the given symbolic. *)
-  let bits_size_of_sym ?(vars = Bindings.empty)= function
+  let bits_size_of_sym vars = function
     | Val v -> bits_size_of_val v
     | Exp e -> bits_size_of_expr vars e
 
   (** Extends the given symbolic to the given size,
       treating it as a signed two's complement expression. *)
-  let bits_sign_extend (size: int) (e: sym) =
-    let old = bits_size_of_sym e in
+  let bits_sign_extend vars (size: int) (e: sym) =
+    let old = bits_size_of_sym vars e in
     assert (old <= size);
     if old = size
       then e
@@ -354,9 +351,9 @@ module IntToBits = struct
       along with the bit width,
       including coercing integers to two's complement bits where
       needed. *)
-  let bits_with_size_of_expr e =
+  let bits_with_size_of_expr vars e =
     let e' = bits_coerce_of_expr e in
-    e', bits_size_of_sym e'
+    e', bits_size_of_sym vars e'
 
   let is_power_of_2 n = 
     n <> 0 && 0 = Int.logand n (n-1)
@@ -366,6 +363,55 @@ module IntToBits = struct
       are applied. *)
   class bits_coerce_widening = object (self)
     inherit Asl_visitor.nopAslVisitor
+
+    val mutable state : (bool * int) Bindings.t = Bindings.empty
+
+    method tracked (i: ident): bool =
+      Bindings.mem i state
+
+    method addConstraint (i: ident) (w: int): unit =
+      match Bindings.find_opt i state with
+      | None ->
+          (* Introduce new width *)
+          state <- Bindings.add i (false,w) state
+      | Some (false, w') ->
+          (* Take max width of existing and new *)
+          state <- Bindings.add i (false,max w w') state
+      | Some (true, w') when w > w' ->
+          (* Width has been fixed by a use but new value won't fit *)
+          (* Assumption to avoid widening uses of i in a subsquent pass *)
+          failwith @@ "bits_coerce_widening: Reassignment of larger width post use: " ^ (pprint_ident i)
+      | _ -> ()
+
+    method useVar (i: ident): int option =
+      match Bindings.find_opt i state with
+      | None -> None
+      | Some (_,w) ->
+          state <- Bindings.add i (true,w) state;
+          Some w
+
+    method getWidth = bits_with_size_of_expr self#useVar
+
+    method signExtend = bits_sign_extend self#useVar
+
+    method dump = Bindings.iter (fun k (f,v) -> Printf.printf "%s : %d\n" (pprint_ident k) v) state
+
+    method! vstmt s =
+      ChangeDoChildrenPost (s, fun s ->
+        match s with
+        | Stmt_VarDeclsNoInit(ty, [v], loc) when ty = type_integer ->
+            self#addConstraint v 0;
+            s
+        | Stmt_ConstDecl(ty, v, e, loc)
+        | Stmt_VarDecl(ty, v, e, loc) when ty = type_integer ->
+            let (_,w) = self#getWidth e in
+            self#addConstraint v w;
+            s
+        | Stmt_Assign(LExpr_Var(v), e, loc) when self#tracked v ->
+            let (_,w) = self#getWidth e in
+            self#addConstraint v w;
+            s
+        | _ -> s)
 
     val no_int_conversion = List.map (fun f -> FIdent (f, 0)) 
       []
@@ -390,10 +436,10 @@ module IntToBits = struct
         ChangeDoChildrenPost (Expr_Tuple args, fun e' -> 
           match e' with 
           | Expr_Tuple [x; y] -> 
-            let (x,xsize) = bits_with_size_of_expr x in
-            let (y,ysize) = bits_with_size_of_expr y in
+            let (x,xsize) = self#getWidth x in
+            let (y,ysize) = self#getWidth y in
             let size = max xsize ysize + 1 in
-            let ex = bits_sign_extend size in
+            let ex = self#signExtend size in
             sym_expr @@ sym_prim (FIdent ("sdiv_bits", 0)) [sym_of_int size] [ex x; ex y]
           | _ -> failwith "expected tuple in round divide real case."
         )
@@ -413,60 +459,60 @@ module IntToBits = struct
             sym_expr @@ sym_slice Unknown (bits_coerce_of_expr e) 0 (int_of_expr t)
           | Expr_TApply (FIdent ("cvt_int_bits", 0), [t], [e;_]) -> 
             let e' = bits_coerce_of_expr e in
-            sym_expr @@ bits_sign_extend (int_of_expr t) e'
+            sym_expr @@ self#signExtend (int_of_expr t) e'
           | Expr_TApply (FIdent ("add_int", 0), [], [x;y]) ->
-            let (x,xsize) = bits_with_size_of_expr x in
-            let (y,ysize) = bits_with_size_of_expr y in
+            let (x,xsize) = self#getWidth x in
+            let (y,ysize) = self#getWidth y in
             let size = max xsize ysize + 1 in
-            let ex = bits_sign_extend size in
+            let ex = self#signExtend size in
             (* Printf.printf "x %s\ny %s\n" (pp_expr x) (pp_expr y) ; *)
             sym_expr @@ sym_prim (FIdent ("add_bits", 0)) [sym_of_int size] [ex x;ex y]
 
           | Expr_TApply (FIdent ("sub_int", 0), [], [x;y]) ->
-            let (x,xsize) = bits_with_size_of_expr x in
-            let (y,ysize) = bits_with_size_of_expr y in
+            let (x,xsize) = self#getWidth x in
+            let (y,ysize) = self#getWidth y in
             let size = max xsize ysize + 1 in
-            let ex = bits_sign_extend size in
+            let ex = self#signExtend size in
             (* Printf.printf "x %s\ny %s\n" (pp_expr x) (pp_expr y) ; *)
             sym_expr @@ sym_prim (FIdent ("sub_bits", 0)) [sym_of_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("eq_int", 0), [], [x;y]) ->
-            let (x,xsize) = bits_with_size_of_expr x in
-            let (y,ysize) = bits_with_size_of_expr y in
+            let (x,xsize) = self#getWidth x in
+            let (y,ysize) = self#getWidth y in
             let size = max xsize ysize in
-            let ex = bits_sign_extend size in
+            let ex = self#signExtend size in
             sym_expr @@ sym_prim (FIdent ("eq_bits", 0)) [sym_of_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("ne_int", 0), [], [x;y]) ->
-            let (x,xsize) = bits_with_size_of_expr x in
-            let (y,ysize) = bits_with_size_of_expr y in
+            let (x,xsize) = self#getWidth x in
+            let (y,ysize) = self#getWidth y in
             let size = max xsize ysize in
-            let ex = bits_sign_extend size in
+            let ex = self#signExtend size in
             sym_expr @@ sym_prim (FIdent ("ne_bits", 0)) [sym_of_int size] [ex x; ex y]
 
           | Expr_TApply (FIdent ("mul_int", 0), [], [x;y]) ->
-            let (x,xsize) = bits_with_size_of_expr x in
-            let (y,ysize) = bits_with_size_of_expr y in
+            let (x,xsize) = self#getWidth x in
+            let (y,ysize) = self#getWidth y in
             let size = xsize + ysize in
-            let ex = bits_sign_extend size in
+            let ex = self#signExtend size in
             sym_expr @@ sym_prim (FIdent ("mul_bits", 0)) [sym_of_int size] [ex x; ex y]
 
             (* x >= y  iff  y <= x  iff  x - y >= 0*)
           | Expr_TApply (FIdent ("ge_int", 0), [], [x;y])
           | Expr_TApply (FIdent ("le_int", 0), [], [y;x]) ->
-            let (x,xsize) = bits_with_size_of_expr x in
-            let (y,ysize) = bits_with_size_of_expr y in
+            let (x,xsize) = self#getWidth x in
+            let (y,ysize) = self#getWidth y in
             let size = max xsize ysize in
-            let ex x = sym_expr (bits_sign_extend size x) in
+            let ex x = sym_expr (self#signExtend size x) in
             expr_prim' "sle_bits" [expr_of_int size] [ex y;ex x]
 
             (* x < y  iff  y > x  iff x - y < 0 *)
           | Expr_TApply (FIdent ("lt_int", 0), [], [x;y])
           | Expr_TApply (FIdent ("gt_int", 0), [], [y;x]) ->
-            let (x,xsize) = bits_with_size_of_expr x in
-            let (y,ysize) = bits_with_size_of_expr y in
+            let (x,xsize) = self#getWidth x in
+            let (y,ysize) = self#getWidth y in
             let size = max xsize ysize in
-            let ex x = sym_expr (bits_sign_extend size x) in
+            let ex x = sym_expr (self#signExtend size x) in
             expr_prim' "slt_bits" [expr_of_int size] [ex x;ex y]
           (* NOTE: sle_bits and slt_bits are signed less or equal,
              and signed less than.
@@ -474,17 +520,17 @@ module IntToBits = struct
              we take advantage of them. *)
 
           | Expr_TApply (FIdent ("neg_int", 0), [], [x]) ->
-            let (x,xsize) = bits_with_size_of_expr x in
+            let (x,xsize) = self#getWidth x in
             let size = xsize + 1 in
-            let ex x = sym_expr (bits_sign_extend size x) in
+            let ex x = sym_expr (self#signExtend size x) in
             expr_prim' "neg_bits" [expr_of_int size] [ex x]
 
           | Expr_TApply (FIdent ("shl_int", 0), [], [x; y]) -> 
-            let (x,xsize) = bits_with_size_of_expr x in
-            let (y,ysize) = bits_with_size_of_expr y in
+            let (x,xsize) = self#getWidth x in
+            let (y,ysize) = self#getWidth y in
             (* in worst case, could shift by 2^(ysize-1)-1 bits, assuming y >= 0. *)
             let size = xsize + Int.shift_left 2 (ysize - 1) - 1 in
-            let ex x = sym_expr (bits_sign_extend size x) in
+            let ex x = sym_expr (self#signExtend size x) in
             (match y with 
             | Val (VBits bv) -> 
               (* if shift is statically known, simply append zeros. *)
@@ -494,27 +540,27 @@ module IntToBits = struct
             )
 
           | Expr_TApply (FIdent ("shr_int", 0), [], [x; y]) -> 
-            let (x,xsize) = bits_with_size_of_expr x in
-            let (y,ysize) = bits_with_size_of_expr y in
+            let (x,xsize) = self#getWidth x in
+            let (y,ysize) = self#getWidth y in
             let size = xsize in
-            let ex x = sym_expr (bits_sign_extend size x) in
+            let ex x = sym_expr (self#signExtend size x) in
             expr_prim' "asr_bits" [expr_of_int size; expr_of_int ysize] [ex x;sym_expr y]
 
             (* these functions take bits as first argument and integer as second. just coerce second to bits. *)
           | Expr_TApply (FIdent ("LSL", 0), [size], [x; n]) -> 
-            let (n,nsize) = bits_with_size_of_expr n in
+            let (n,nsize) = self#getWidth n in
             expr_prim' "lsl_bits" [size; expr_of_int nsize] [x;sym_expr n]
           | Expr_TApply (FIdent ("LSR", 0), [size], [x; n]) -> 
-            let (n,nsize) = bits_with_size_of_expr n in
+            let (n,nsize) = self#getWidth n in
             expr_prim' "lsr_bits" [size; expr_of_int nsize] [x;sym_expr n]
           | Expr_TApply (FIdent ("ASR", 0), [size], [x; n]) -> 
-            let (n,nsize) = bits_with_size_of_expr n in
+            let (n,nsize) = self#getWidth n in
             expr_prim' "asr_bits" [size; expr_of_int nsize] [x;sym_expr n]
 
             (* when the divisor is a power of 2, mod can be implemented by truncating. *)
           | Expr_TApply (FIdent ("frem_int", 0), [], [n;Expr_LitInt d]) when is_power_of_2 (int_of_string d) ->
             let digits = Z.log2 (Z.of_string d) in
-            let n,_ = bits_with_size_of_expr n in
+            let n,_ = self#getWidth n in
             sym_expr @@ sym_zero_extend 1 digits (sym_slice Unknown n 0 digits)
 
             (* very carefully coerce a signed integer to a "real" by just using its signed representation *)
@@ -538,6 +584,11 @@ module IntToBits = struct
 
     val mutable var_types : ty Bindings.t = Bindings.empty;
 
+    method varWidth (i: ident): int option =
+      match Bindings.find_opt i var_types with
+      | Some (Type_Bits (Expr_LitInt n)) -> Some (int_of_string n)
+      | _ -> None
+
     method! vstmt s =
       match s with
       | Stmt_ConstDecl(ty, nm, _, _) ->
@@ -555,7 +606,7 @@ module IntToBits = struct
         let narrow e =
           (* Printf.printf "slicing %s\n" (pp_expr e); *)
           let e' = sym_of_expr e in
-          let size = bits_size_of_sym ~vars:var_types e' in
+          let size = bits_size_of_sym self#varWidth e' in
           let ext = wd' - size in
           (* if expression is shorter than slice, extend it as needed. *)
           let e' = if ext > 0 then (sym_sign_extend ext size e') else e' in
@@ -578,10 +629,45 @@ module IntToBits = struct
 
   end
 
+  class redecl_integers (widths: ident -> int option) = object (self)
+    inherit Asl_visitor.nopAslVisitor
+
+    method cast (e: expr) (w: int) =
+      let e = bits_coerce_of_expr e in
+      sym_expr (bits_sign_extend widths w e)
+
+    method tracked (i: ident): bool =
+      match widths i with
+      | Some v -> true
+      | _ -> false
+
+    method! vstmt s =
+      match s with
+      | Stmt_VarDeclsNoInit(ty, [v], loc) when ty = type_integer ->
+          (match widths v with
+          | Some w -> ChangeTo (Stmt_VarDeclsNoInit (type_bits (string_of_int w), [v], loc))
+          | None -> SkipChildren)
+      | Stmt_ConstDecl(ty, v, e, loc)  when ty = type_integer ->
+          (match widths v with
+          | Some w -> ChangeTo (Stmt_ConstDecl (type_bits (string_of_int w), v, self#cast e w, loc))
+          | None -> SkipChildren)
+      | Stmt_VarDecl(ty, v, e, loc) when ty = type_integer ->
+          (match widths v with
+          | Some w -> ChangeTo (Stmt_VarDecl (type_bits (string_of_int w), v, self#cast e w, loc))
+          | None -> SkipChildren)
+      | Stmt_Assign(LExpr_Var(v), e, loc) ->
+          (match widths v with
+          | Some w -> ChangeTo (Stmt_Assign (LExpr_Var(v), self#cast e w, loc))
+          | None -> SkipChildren)
+      | _ -> DoChildren
+
+  end
+
   let ints_to_bits xs =
-    xs
-    |> Asl_visitor.visit_stmts (new bits_coerce_widening)
-    |> Asl_visitor.visit_stmts (new bits_coerce_narrow)
+    let w = new bits_coerce_widening in
+    let xs = Asl_visitor.visit_stmts w xs in
+    let xs = Asl_visitor.visit_stmts (new redecl_integers w#useVar) xs in
+    Asl_visitor.visit_stmts (new bits_coerce_narrow) xs
 
 end
 
