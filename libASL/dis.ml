@@ -466,13 +466,14 @@ let sym_val_or_uninit (t: ty) (x: sym): value rws =
 
 (** Symbolic implementation of an if statement that returns an expression
  *)
-let sym_if (loc: l) (t: ty) (test: sym rws) (tcase: sym rws) (fcase: sym rws): sym rws =
+let rec sym_if (loc: l) (t: ty) (test: sym rws) (tcase: sym rws) (fcase: sym rws): sym rws =
   let@ r = test in
   (match r with
   | Val (VBool (true))  -> tcase
   | Val (VBool (false)) -> fcase
   | Val _ -> failwith ("Split on non-boolean value")
   | Exp e ->
+      let@ t = dis_type loc t in
       let@ tmp = declare_fresh_named_var loc "If" t in
       (* Evaluate true branch statements. *)
       let@ (tenv,tstmts) = DisEnv.locally_
@@ -487,7 +488,7 @@ let sym_if (loc: l) (t: ty) (test: sym rws) (tcase: sym rws) (fcase: sym rws): s
       Exp (var_expr tmp))
 
 (** Symbolic implementation of an if statement with no return *)
-let unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit rws =
+and unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit rws =
   let@ r = test in
   (match r with
   | Val (VBool (true))  -> tcase
@@ -502,32 +503,32 @@ let unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit r
       let@ () = DisEnv.join_locals tenv fenv in
       DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)])
 
-let sym_and (loc: l) (x: sym rws) (y: sym rws): sym rws =
+and sym_and (loc: l) (x: sym rws) (y: sym rws): sym rws =
     sym_if loc type_bool x y (DisEnv.pure sym_false)
 
-let sym_or (loc: l) (x: sym rws) (y: sym rws): sym rws =
+and sym_or (loc: l) (x: sym rws) (y: sym rws): sym rws =
     sym_if loc type_bool x (DisEnv.pure sym_true) y
 
 (** Symbolic implementation of List.for_all2 *)
-let rec sym_for_all2 p l1 l2 =
+and sym_for_all2 p l1 l2 =
   match (l1, l2) with
   | ([], []) -> DisEnv.pure sym_true
   | (a1::l1, a2::l2) -> sym_if Unknown (type_bool) (p a1 a2) (sym_for_all2 p l1 l2) (DisEnv.pure sym_false)
   | (_, _) -> invalid_arg "sym_for_all2"
 
 (** Symbolic implementation of List.exists *)
-let rec sym_exists p = function
+and sym_exists p = function
   | [] -> DisEnv.pure sym_false
   | [a] -> p a
   | a::l -> sym_or Unknown (p a) (sym_exists p l)
 
-let width_of_type (loc: l) (t: ty): int =
+and width_of_type (loc: l) (t: ty): int =
   match t with
   | Type_Bits (Expr_LitInt wd) -> int_of_string wd
   | Type_Register (wd, _) -> int_of_string wd
   | _ -> unsupported loc @@ "Can't get bit width of type: " ^ pp_type t
 
-let width_of_field (loc: l) (t: ty) (f: ident): int =
+and width_of_field (loc: l) (t: ty) (f: ident): int =
   let env = Tcheck.env0 in
   let ft =
     (match Tcheck.typeFields env loc t with
@@ -539,7 +540,7 @@ let width_of_field (loc: l) (t: ty) (f: ident): int =
 (** Disassembly Functions *)
 
 (** Determine the type of memory access expression (Var, Array, Field) *)
-let rec type_of_load (loc: l) (x: expr): ty rws =
+and type_of_load (loc: l) (x: expr): ty rws =
   let env = Tcheck.env0 in
   (match x with
   | Expr_Var(id) ->
