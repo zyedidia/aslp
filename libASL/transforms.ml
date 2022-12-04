@@ -223,6 +223,282 @@ module RefParams = struct
     Tcheck.tc_declarations false ds *)
 end
 
+module Test = struct
+  type interval = (Z.t * Z.t)
+  type abs = (int * interval)
+  type state = (bool * abs Bindings.t)
+
+  let width_of_interval ((u,l): interval): int =
+    let u' = if Z.gt u Z.zero then 1 + (Z.log2up (Z.succ u)) else 1 in
+    let l' = if Z.lt l Z.zero then 1 + (Z.log2up (Z.abs u)) else 1 in
+    (max u' l')
+
+  let abs_of_const (c: Z.t): abs =
+    let i = (c,c) in
+    (width_of_interval i,i) 
+
+  let abs_of_width (w: int): abs =
+    let t = Z.succ (Z.one) in
+    let u = Z.pred (Z.pow t (w - 1)) in
+    let l = Z.pow t (w - 1) in
+    (w, (u,l))
+
+  let maxAll (z: Z.t list): Z.t =
+    match z with
+    | x::xs -> List.fold_left Z.max x xs
+    | _ -> invalid_arg ""
+
+  let minAll (z: Z.t list): Z.t =
+    match z with
+    | x::xs -> List.fold_left Z.min x xs
+    | _ -> invalid_arg ""
+
+  let bopInterval ((l1,l2): interval) ((r1,r2): interval) (bop: Z.t -> Z.t -> Z.t) =
+    (maxAll [bop l1 r1;bop l1 r2;bop l2 r1;bop l2 r2],
+     minAll [bop l1 r1;bop l1 r2;bop l2 r1;bop l2 r2])
+
+  let uopInterval ((l1,l2): interval) (uop: Z.t -> Z.t) =
+    (maxAll [uop l1;uop l2],
+     minAll [uop l1;uop l2])
+
+  let drop_space x = Value.drop_chars x ' '
+
+  let abs_of_bop ((lw,li): abs) ((rw,ri): abs) (bop: Z.t -> Z.t -> Z.t): abs =
+    let i = bopInterval li ri bop in
+    let w = max lw rw in
+    (max w (width_of_interval i),i)
+
+  let abs_of_uop ((lw,li): abs) (uop: Z.t -> Z.t): abs =
+    let i = uopInterval li uop in
+    (max lw (width_of_interval i),i)
+
+  let get (v: ident) ((_,vars): state): abs =
+    match Bindings.find_opt v vars with
+    | Some v -> v
+    | _ -> failwith @@ "abs_of_expr: Unknown identifier: " ^ (pprint_ident v)
+
+  let get_width (v: ident) ((_,vars): state): int =
+    match Bindings.find_opt v vars with
+    | Some (w,_) -> w
+    | _ -> 0
+
+  let tracked (v: ident) ((_,vars): state): bool =
+    Bindings.mem v vars
+
+  let merge_abs ((lw,(l1,l2)): abs) ((rw,(r1,r2)): abs): abs =
+    (max lw rw,(Z.max r1 l1,Z.min r2 l2))
+
+  let add (v: ident) (i: abs) ((f,vars): state): state =
+    match Bindings.find_opt v vars with
+    | Some (w,_) -> 
+        if w = fst i then (f,vars)
+        else if w = fst i then (f,Bindings.add v i vars)
+        else (true,Bindings.add v (max w (fst i), snd i) vars)
+    | None -> (true,Bindings.add v i vars)
+
+  let extend (v: ident) (i: abs) ((f,vars): state): state =
+    match Bindings.find_opt v vars with
+    | Some j -> 
+        let m = merge_abs i j in
+        if m = j then (f,vars)
+        else if fst m = fst j then (f,Bindings.add v m vars)
+        else (true,Bindings.add v m vars)
+    | None -> (true,Bindings.add v i vars)
+
+  let merge (f1,vars1) (f2,vars2) =
+    (f1 || f2, Bindings.merge (fun k l r -> 
+      match l, r with
+      | Some l, Some r -> Some (merge_abs l r)
+      | Some l, None
+      | None, Some l -> Some l
+      | _, _ -> None) vars1 vars2)
+
+  let zero_range (r: abs Bindings.t) =
+    Bindings.map (fun (w,_) -> (w,(Z.zero,Z.zero))) r
+
+  let sym_of_abs ((size,_): abs): sym =
+    sym_of_int size
+
+  let sign_extend (size) ((e,(old,_)) : sym * abs) =
+    assert (old <= size);
+    if old = size
+      then e
+      else (sym_sign_extend (size - old) old e)
+
+  let rec bv_of_int_expr (vars: state) (e: expr): (sym * abs) =
+    match e with
+    | Expr_LitInt n
+    | Expr_LitHex n ->
+        let n = Z.of_string (drop_space n) in
+        let w = abs_of_const n in
+        let a = Z.extract n 0 (fst w) in
+        (sym_of_expr (Expr_LitBits (Z.format ("%0" ^ string_of_int (fst w) ^ "b") a)),w)
+    | Expr_Var i -> 
+        (sym_of_expr e,get i vars)
+    | Expr_TApply (FIdent ("cvt_bits_uint", 0), [t], [e]) ->
+        let n = int_of_expr t in
+        let w = abs_of_width (n + 1) in
+        (sym_zero_extend 1 n (sym_of_expr e),w)
+    | Expr_TApply (FIdent ("cvt_bits_sint", 0), [t], [e]) ->
+        let n = int_of_expr t in
+        let w = abs_of_width n in
+        (sym_of_expr e,w)
+    | Expr_TApply (FIdent ("add_int", 0), [], [x;y]) ->
+        let x = bv_of_int_expr vars x in
+        let y = bv_of_int_expr vars y in
+        let w = abs_of_bop (snd x) (snd y) Primops.prim_add_int in
+        let ex = sign_extend (fst w) in
+        let f = sym_prim (FIdent ("add_bits", 0)) [sym_of_abs w] [ex x;ex y] in
+        (f,w)
+    | Expr_TApply (FIdent ("sub_int", 0), [], [x;y]) ->
+        let x = bv_of_int_expr vars x in
+        let y = bv_of_int_expr vars y in
+        let w = abs_of_bop (snd x) (snd y) Primops.prim_sub_int in
+        let ex = sign_extend (fst w) in
+        let f = sym_prim (FIdent ("sub_bits", 0)) [sym_of_abs w] [ex x;ex y] in
+        (f,w)
+    | Expr_TApply (FIdent ("mul_int", 0), [], [x;y]) ->
+        let x = bv_of_int_expr vars x in
+        let y = bv_of_int_expr vars y in
+        let w = abs_of_bop (snd x) (snd y) Primops.prim_mul_int in
+        let ex = sign_extend (fst w) in
+        let f = sym_prim (FIdent ("mul_bits", 0)) [sym_of_abs w] [ex x;ex y] in
+        (f,w)
+    | Expr_TApply (FIdent ("neg_int", 0), [], [x]) ->
+        let x = bv_of_int_expr vars x in
+        let w = abs_of_uop (snd x) Primops.prim_neg_int in
+        let ex = sign_extend (fst w) in
+        let f = sym_prim (FIdent ("neg_bits", 0)) [sym_of_abs w] [ex x] in
+        (f,w)
+    | _ -> failwith @@ "bv_of_int_expr: Unknown integer expression: " ^ (pp_expr e)
+
+  let bv_of_int_expr_opt (vars: state) (e: expr): (sym * abs) option =
+    try
+      Some(bv_of_int_expr vars e)
+    with _ -> None
+
+  let expr_of_abs ((n,_)) =
+    Expr_LitInt (string_of_int n)
+
+  (** AST traversal to identify the roots of int expr and convert them to bv *)
+  class transform_int_expr (vars) = object (self)
+    inherit Asl_visitor.nopAslVisitor
+    method! vexpr e =
+      let e' = match e with
+      | Expr_Slices(x, [Slice_LoWd(l,w)]) ->
+          let l = int_of_expr l in
+          let w = int_of_expr w in
+          (match bv_of_int_expr_opt vars x with
+          | Some x -> 
+              let old = fst (snd x) in
+              let x = if old <= l + w then sign_extend (l+w) x else fst x in
+              sym_expr @@ sym_slice Unknown x l w
+          | None -> e)
+      | Expr_TApply (FIdent ("eq_int", 0), [], [x;y]) ->
+        let x = bv_of_int_expr vars x in
+        let y = bv_of_int_expr vars y in
+        let w = merge_abs (snd x) (snd y) in
+        let ex = sign_extend (fst w) in
+        sym_expr @@ sym_prim (FIdent ("eq_bits", 0)) [sym_of_abs w] [ex x; ex y]
+      | Expr_TApply (FIdent ("ne_int", 0), [], [x;y]) ->
+        let x = bv_of_int_expr vars x in
+        let y = bv_of_int_expr vars y in
+        let w = merge_abs (snd x) (snd y) in
+        let ex = sign_extend (fst w) in
+        sym_expr @@ sym_prim (FIdent ("ne_bits", 0)) [sym_of_abs w] [ex x; ex y]
+      | Expr_TApply (FIdent ("ge_int", 0), [], [x;y])
+      | Expr_TApply (FIdent ("le_int", 0), [], [y;x]) ->
+        let x = bv_of_int_expr vars x in
+        let y = bv_of_int_expr vars y in
+        let w = merge_abs (snd x) (snd y) in
+        let ex x = sym_expr (sign_extend (fst w) x) in
+        expr_prim' "sle_bits" [expr_of_abs w] [ex y;ex x]
+      | Expr_TApply (FIdent ("lt_int", 0), [], [x;y])
+      | Expr_TApply (FIdent ("gt_int", 0), [], [y;x]) ->
+        let x = bv_of_int_expr vars x in
+        let y = bv_of_int_expr vars y in
+        let w = merge_abs (snd x) (snd y) in
+        let ex x = sym_expr (sign_extend (fst w) x) in
+        expr_prim' "slt_bits" [expr_of_abs w] [ex x;ex y]
+      | Expr_TApply (FIdent ("LSL", 0), [size], [x; n]) -> 
+        let (n,w) = bv_of_int_expr vars n in
+        expr_prim' "lsl_bits" [size; expr_of_abs w] [x;sym_expr n]
+      | Expr_TApply (FIdent ("LSR", 0), [size], [x; n]) -> 
+        let (n,w) = bv_of_int_expr vars n in
+        expr_prim' "lsr_bits" [size; expr_of_abs w] [x;sym_expr n]
+      | Expr_TApply (FIdent ("ASR", 0), [size], [x; n]) -> 
+        let (n,w) = bv_of_int_expr vars n in
+        expr_prim' "asr_bits" [size; expr_of_abs w] [x;sym_expr n]
+      | e -> e
+      in
+      ChangeDoChildrenPost (e', fun e -> e)
+  end
+
+  (* 
+     TODO: Unique variable names or support multiple decls somehow
+      -> list with some notion of current
+      TODO: Something is wrong with these calcs
+  *)
+  let rec walk (vars: abs Bindings.t) (s: stmt list): (state * stmt list) =
+    List.fold_left (fun (st,acc) stmt ->
+      let stmt = Asl_visitor.visit_stmt (new transform_int_expr st) stmt in
+      let (st,stmt) = (match stmt with
+      | Stmt_VarDeclsNoInit(t, [v], loc) when t = type_integer ->
+          let w = get_width v st in
+          let e = Stmt_VarDeclsNoInit (type_bits (string_of_int w), [v], loc) in
+          let st = add v (abs_of_const Z.zero) st in
+          (st,e)
+      | Stmt_ConstDecl(t, v, e, loc) when t = type_integer ->
+          let w = get_width v st in
+          let e = bv_of_int_expr st e in
+          let w = merge_abs (w,(Z.zero,Z.zero)) (snd e) in
+          let s = sym_expr (sign_extend (fst w) e) in
+          let s = Stmt_ConstDecl (type_bits (string_of_int (fst w)), v, s, loc) in
+          let st = add v w st in
+          (st,s)
+      | Stmt_VarDecl(t, v, e, loc) when t = type_integer ->
+          let w = get_width v st in
+          let e = bv_of_int_expr st e in
+          let w = merge_abs (w,(Z.zero,Z.zero)) (snd e) in
+          let s = sym_expr (sign_extend (fst w) e) in
+          let s = Stmt_VarDecl (type_bits (string_of_int (fst w)), v, s, loc) in
+          let st = add v w st in
+          (st,s)
+      | Stmt_Assign(LExpr_Var(v), e, loc) when tracked v st ->
+          let w = get_width v st in
+          let e = bv_of_int_expr st e in
+          let s = sym_expr (sign_extend w e) in
+          let s = Stmt_Assign (LExpr_Var(v), s, loc) in
+          let st = extend v (snd e) st in
+          (st,s)
+      | Stmt_If (e, tstmts, [], fstmts, loc) ->
+          let (_,vars) = st in
+          let (t,tstmts) = walk vars tstmts in
+          let (f,fstmts) = walk vars fstmts in
+          (merge t f,Stmt_If(e, tstmts, [], fstmts, loc))
+      | Stmt_If _ -> failwith "walk: invalid if"
+
+      | Stmt_Assert _ 
+      | Stmt_TCall _
+      | Stmt_VarDeclsNoInit _ 
+      | Stmt_ConstDecl _
+      | Stmt_VarDecl _
+      | Stmt_Assign _ ->
+          (st,stmt)
+
+      | _ -> failwith "walk: invalid IR") in
+      (st,acc@[stmt])
+    ) ((false,vars),[]) s 
+
+  let rec fixedPoint (vars: abs Bindings.t) (s: stmt list): stmt list =
+    let ((changed,vars),res) = walk vars s in
+    if changed then fixedPoint (zero_range vars) s else res
+
+  let run (s: stmt list): stmt list =
+    fixedPoint Bindings.empty s
+
+end
+
 
 
 (** Transforms expressions of integers into equivalent expressions over
@@ -394,6 +670,10 @@ module IntToBits = struct
 
     method signExtend = bits_sign_extend self#useVar
 
+    method cast (e: expr) (w: int) =
+      let e = bits_coerce_of_expr e in
+      sym_expr (bits_sign_extend self#useVar w e)
+
     method dump = Bindings.iter (fun k (f,v) -> Printf.printf "%s : %d\n" (pprint_ident k) v) state
 
     method! vstmt s =
@@ -401,16 +681,22 @@ module IntToBits = struct
         match s with
         | Stmt_VarDeclsNoInit(ty, [v], loc) when ty = type_integer ->
             self#addConstraint v 0;
-            s
-        | Stmt_ConstDecl(ty, v, e, loc)
+            Stmt_VarDeclsNoInit (type_bits (string_of_int 0), [v], loc)
+
+        | Stmt_ConstDecl(ty, v, e, loc)  when ty = type_integer ->
+            let (_,w) = self#getWidth e in
+            self#addConstraint v w;
+            Stmt_ConstDecl (type_bits (string_of_int w), v, self#cast e w, loc)
+
         | Stmt_VarDecl(ty, v, e, loc) when ty = type_integer ->
             let (_,w) = self#getWidth e in
             self#addConstraint v w;
-            s
+            Stmt_VarDecl (type_bits (string_of_int w), v, self#cast e w, loc)
+
         | Stmt_Assign(LExpr_Var(v), e, loc) when self#tracked v ->
             let (_,w) = self#getWidth e in
             self#addConstraint v w;
-            s
+            Stmt_Assign (LExpr_Var(v), self#cast e w, loc)
         | _ -> s)
 
     val no_int_conversion = List.map (fun f -> FIdent (f, 0)) 
@@ -629,44 +915,11 @@ module IntToBits = struct
 
   end
 
-  class redecl_integers (widths: ident -> int option) = object (self)
-    inherit Asl_visitor.nopAslVisitor
 
-    method cast (e: expr) (w: int) =
-      let e = bits_coerce_of_expr e in
-      sym_expr (bits_sign_extend widths w e)
-
-    method tracked (i: ident): bool =
-      match widths i with
-      | Some v -> true
-      | _ -> false
-
-    method! vstmt s =
-      match s with
-      | Stmt_VarDeclsNoInit(ty, [v], loc) when ty = type_integer ->
-          (match widths v with
-          | Some w -> ChangeTo (Stmt_VarDeclsNoInit (type_bits (string_of_int w), [v], loc))
-          | None -> SkipChildren)
-      | Stmt_ConstDecl(ty, v, e, loc)  when ty = type_integer ->
-          (match widths v with
-          | Some w -> ChangeTo (Stmt_ConstDecl (type_bits (string_of_int w), v, self#cast e w, loc))
-          | None -> SkipChildren)
-      | Stmt_VarDecl(ty, v, e, loc) when ty = type_integer ->
-          (match widths v with
-          | Some w -> ChangeTo (Stmt_VarDecl (type_bits (string_of_int w), v, self#cast e w, loc))
-          | None -> SkipChildren)
-      | Stmt_Assign(LExpr_Var(v), e, loc) ->
-          (match widths v with
-          | Some w -> ChangeTo (Stmt_Assign (LExpr_Var(v), self#cast e w, loc))
-          | None -> SkipChildren)
-      | _ -> DoChildren
-
-  end
 
   let ints_to_bits xs =
     let w = new bits_coerce_widening in
     let xs = Asl_visitor.visit_stmts w xs in
-    let xs = Asl_visitor.visit_stmts (new redecl_integers w#useVar) xs in
     Asl_visitor.visit_stmts (new bits_coerce_narrow) xs
 
 end
