@@ -710,11 +710,10 @@ end
 module CommonSubExprElim = struct
   (* Basic common sub-expression elimination.
      (Theoretical) Pitfalls:
-     - Type inference of our factorised subexpressions is... dodgy. See large match statement in
-        infer_cse_expr_type
+     - Type inference of our factorised subexpressions isn't great. See large match statement in infer_cse_expr_type
      - Eliminating two connected expressions will depend entirely on which one it sees first.
-        i.e. trying to simultaneously factorise "add (mem (add (3+4)))" and "mem (add (3+4))"
-        ideal case is "x = mem (add (3+4)); add (x)" but this may not happen.
+        i.e. trying to simultaneously factorise "add (mem (add (3+4)))" and "mem (add (3+4))" - 
+        ideal case is "x = mem (add (3+4)); y = add (x)" but this may not happen.
      - We only attempt to eliminate TApplys. TApplys are our "primitive functions" and are the
         main goal of this transform but we could also eliminate many other things.
   *)
@@ -825,7 +824,7 @@ module CommonSubExprElim = struct
       | "asl_file_getc"      -> type_integer
       | _ -> raise (CSEError ("Can't infer type of strange primitive: " ^ (pp_expr e)))
       end
-    | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(tval) as num], _) -> begin
+    | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(_) as num], _) -> begin
       match name with
       | "ram_read"           -> Type_Bits(num)
       | "add_bits"           -> Type_Bits(num)
@@ -840,6 +839,19 @@ module CommonSubExprElim = struct
       | "replicate_bits"     -> Type_Bits(num)
       | "append_bits"        -> Type_Bits(num)
       | "cvt_int_bits"       -> Type_Bits(num)
+      | _ -> raise (CSEError ("Can't infer type of strange primitive: " ^ (pp_expr e)))
+      end
+    | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(v1) as num1; Expr_LitInt(v2) as num2], _) -> begin
+      (* These are... dubious. None appear in value.ml, so they're all based on what "looks correct". *)
+      match name with
+      | "ZeroExtend"         -> Type_Bits(num2)
+      | "SignExtend"         -> Type_Bits(num2)
+      | "lsl_bits"           -> Type_Bits(num1)
+      | "lsr_bits"           -> Type_Bits(num1)
+      | "asl_bits"           -> Type_Bits(num1)
+      | "asr_bits"           -> Type_Bits(num1)
+      | "append_bits"        -> 
+        Type_Bits(Expr_LitInt(string_of_int((int_of_string v1) + (int_of_string v2))))
       | _ -> raise (CSEError ("Can't infer type of strange primitive: " ^ (pp_expr e)))
       end
     | _ -> 
