@@ -1348,6 +1348,7 @@ let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt l
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
     (* let stmts' = Transforms.Bits.bitvec_conversion stmts' in *)
     let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
+    let stmts' = Transforms.CommonSubExprElim.do_cse stmts' in
     let stmts' = Transforms.CopyProp.copyProp stmts' in (* Can't run before IntToBits for some reason *)
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts' in
     if !debug_level >= 2 then begin

@@ -706,3 +706,115 @@ module CopyProp = struct
     acc
 
 end
+
+module CommonSubExprElim = struct
+  (* Basic common sub-expression elimination.
+     (Theoretical) Pitfalls:
+     - Can't infer the types of our "factorised" subexpressions. Assumes "bits (64)".
+     - Eliminating two connected expressions will depend entirely on which one it sees first.
+        i.e. trying to simultaneously factorise "add (mem (add (3+4)))" and "mem (add (3+4))"
+        ideal case is "x = mem (add (3+4)); add (x)" but this may not happen
+     - Eliminating 
+  *)
+
+  class gather_expressions = object
+    inherit Asl_visitor.nopAslVisitor
+
+    val mutable exprs: expr list = ([]: expr list);
+    val mutable cand_exprs: expr list = ([]: expr list);
+
+    method! vexpr (e: expr): expr visitAction = 
+      let () = match e with
+      (* For now, only gather TApply's that we've seen more than once
+         See eval_prim in value.ml for the list of what that covers. *)
+      | Expr_TApply(_) ->
+        if (List.mem e cand_exprs) && not (List.mem e exprs) then 
+          exprs <- e :: exprs
+        else cand_exprs <- e :: cand_exprs;
+      | _ ->
+        ()
+      in
+      DoChildren
+    
+    method get_info: expr list = 
+      exprs
+  end
+
+  class replace_all_instances = object
+    inherit Asl_visitor.nopAslVisitor
+
+    val mutable exp: expr option = None;
+    val mutable repl: expr option = None;
+
+    method! vexpr (e: expr): expr visitAction = 
+      match exp, repl with
+      | Some c, Some r ->
+        if e = c then
+          ChangeTo(r)
+        else
+          DoChildren
+      | _ ->
+        raise (EvalError (Unknown, "Uninitialised replacer!"))
+
+    method setup (a: expr) (b: expr) =
+      exp <- Some a;
+      match b with
+      | Expr_Var (_) ->
+        repl <- Some b;
+      | _ -> 
+        raise (EvalError (Unknown, "Can't replace with a non-var!"))
+  end 
+  
+  let insert_into_stmts (xs: stmt list) (x: stmt): (stmt list) =
+    let rec move_after_stmts (head: stmt list) (tail: stmt list) (targets: IdentSet.t) (found: IdentSet.t) = 
+      if IdentSet.subset targets found then 
+        (head, tail)
+      else 
+        match tail with
+          | [] -> ([], []) (* shouldn't happen *)
+          | next::all ->
+            (* "find" the sets of free variables *and* the sets of assigned variables.
+               theoretically assigned should be enough but i'm not sure if we might have the case
+               where we want to eliminate an expression that directly uses registers, which aren't assigned *)
+            let newfound = IdentSet.union found (IdentSet.union (assigned_vars_of_stmts [next]) (fv_stmt next)) in
+            move_after_stmts (head @ [next]) all targets newfound
+    in
+
+    let targets = IdentSet.filter (fun a -> 
+      match a with
+      | Ident(s) ->
+        not (Str.string_match (Str.regexp "Cse") s 0)
+      | _ -> false
+    ) (fv_stmt x) in
+    let lists = move_after_stmts [] xs targets (IdentSet.empty) in
+
+    (fst lists) @ [x] @ (snd lists)
+  
+  let apply_knowledge (xs: stmt list) (knowledge: expr list): (stmt list) = 
+    let rec add_exprs_num (xs: stmt list) (k: expr list) (id: int) = 
+      match k with
+      | [] -> xs
+      | head::tail -> 
+        let new_var_name = "Cse" ^ string_of_int id ^ "__5" in
+        (* It would be nice to infer the type of the new CSE constant *)
+        let new_stmt = Stmt_ConstDecl(Type_Bits(Expr_LitInt("64")), Ident(new_var_name), head, Unknown) in
+        
+        let remove_cands = new replace_all_instances in
+        let () = remove_cands#setup head (Expr_Var(Ident(new_var_name))) in
+        let xs = visit_stmts remove_cands xs in
+
+        add_exprs_num (insert_into_stmts xs new_stmt) (tail) (id+1)
+    in
+    add_exprs_num xs knowledge 0
+
+  let rec gain_info_pass (xs: stmt list) (knowledge: expr list) (n: int): (expr list) = 
+    if (n >= List.length xs) then knowledge else (
+      gain_info_pass xs knowledge (n+1)
+    )
+  
+  let do_cse (xs: stmt list): stmt list = 
+    let expression_visitor = new gather_expressions in
+    let xs = visit_stmts expression_visitor xs in
+    let xs = apply_knowledge xs expression_visitor#get_info in
+    xs
+end
