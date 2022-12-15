@@ -710,12 +710,15 @@ end
 module CommonSubExprElim = struct
   (* Basic common sub-expression elimination.
      (Theoretical) Pitfalls:
-     - Can't infer the types of our "factorised" subexpressions. Assumes "bits (64)".
+     - Type inference of our factorised subexpressions is... dodgy. See large match statement in
+        infer_cse_expr_type
      - Eliminating two connected expressions will depend entirely on which one it sees first.
         i.e. trying to simultaneously factorise "add (mem (add (3+4)))" and "mem (add (3+4))"
-        ideal case is "x = mem (add (3+4)); add (x)" but this may not happen
-     - Eliminating 
+        ideal case is "x = mem (add (3+4)); add (x)" but this may not happen.
+     - We only attempt to eliminate TApplys. TApplys are our "primitive functions" and are the
+        main goal of this transform but we could also eliminate many other things.
   *)
+  exception CSEError of string
 
   class gather_expressions = object
     inherit Asl_visitor.nopAslVisitor
@@ -754,7 +757,7 @@ module CommonSubExprElim = struct
         else
           DoChildren
       | _ ->
-        raise (EvalError (Unknown, "Uninitialised replacer!"))
+        raise (CSEError "Uninitialised replacer class!")
 
     method setup (a: expr) (b: expr) =
       exp <- Some a;
@@ -762,8 +765,85 @@ module CommonSubExprElim = struct
       | Expr_Var (_) ->
         repl <- Some b;
       | _ -> 
-        raise (EvalError (Unknown, "Can't replace with a non-var!"))
+        raise (CSEError "Can't replace with a non-var!")
   end 
+
+  let infer_cse_expr_type (e: expr): ty = 
+    match e with
+    | Expr_TApply((FIdent(name, _) | Ident(name)), [], _) -> begin
+      match name with
+      | "eq_enum"            -> type_bool
+      | "ne_enum"            -> type_bool
+      | "eq_bool"            -> type_bool
+      | "ne_bool"            -> type_bool
+      | "equiv_bool"         -> type_bool
+      | "not_bool"           -> type_bool
+      | "eq_int"             -> type_bool
+      | "ne_int"             -> type_bool
+      | "le_int"             -> type_bool
+      | "lt_int"             -> type_bool
+      | "ge_int"             -> type_bool
+      | "gt_int"             -> type_bool
+      | "is_pow2_int"        -> type_bool
+      | "neg_int"            -> type_integer
+      | "add_int"            -> type_integer
+      | "sub_int"            -> type_integer
+      | "shl_int"            -> type_integer
+      | "shr_int"            -> type_integer
+      | "mul_int"            -> type_integer
+      | "zdiv_int"           -> type_integer
+      | "zrem_int"           -> type_integer
+      | "fdiv_int"           -> type_integer
+      | "frem_int"           -> type_integer
+      | "mod_pow2_int"       -> type_integer
+      | "align_int"          -> type_integer
+      | "pow2_int"           -> type_integer
+      | "pow_int_int"        -> type_integer
+      | "eq_real"            -> type_bool
+      | "ne_real"            -> type_bool
+      | "le_real"            -> type_bool
+      | "lt_real"            -> type_bool
+      | "ge_real"            -> type_bool
+      | "round_tozero_real"  -> type_integer
+      | "round_down_real"    -> type_integer
+      | "round_up_real"      -> type_integer
+      | "cvt_bits_sint"      -> type_integer
+      | "cvt_bits_uint"      -> type_integer
+      | "in_mask"            -> type_bool
+      | "notin_mask"         -> type_bool
+      | "eq_bits"            -> type_bool
+      | "ne_bits"            -> type_bool
+      | "eq_str"             -> type_bool
+      | "ne_str"             -> type_bool
+      | "is_cunpred_exc"     -> type_bool
+      | "is_exctaken_exc"    -> type_bool
+      | "is_impdef_exc"      -> type_bool
+      | "is_see_exc"         -> type_bool
+      | "is_undefined_exc"   -> type_bool
+      | "is_unpred_exc"      -> type_bool
+      | "asl_file_open"      -> type_integer
+      | "asl_file_getc"      -> type_integer
+      | _ -> raise (CSEError ("Can't infer type of strange primitive: " ^ (pp_expr e)))
+      end
+    | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(tval) as num], _) -> begin
+      match name with
+      | "ram_read"           -> Type_Bits(num)
+      | "add_bits"           -> Type_Bits(num)
+      | "sub_bits"           -> Type_Bits(num)
+      | "mul_bits"           -> Type_Bits(num)
+      | "and_bits"           -> Type_Bits(num)
+      | "or_bits"            -> Type_Bits(num)
+      | "eor_bits"           -> Type_Bits(num)
+      | "not_bits"           -> Type_Bits(num)
+      | "zeros_bits"         -> Type_Bits(num)
+      | "ones_bits"          -> Type_Bits(num)
+      | "replicate_bits"     -> Type_Bits(num)
+      | "append_bits"        -> Type_Bits(num)
+      | "cvt_int_bits"       -> Type_Bits(num)
+      | _ -> raise (CSEError ("Can't infer type of strange primitive: " ^ (pp_expr e)))
+      end
+    | _ -> 
+      raise (CSEError ("Can't infer type of strange expr: " ^ (pp_expr e)))
   
   let insert_into_stmts (xs: stmt list) (x: stmt): (stmt list) =
     let rec move_after_stmts (head: stmt list) (tail: stmt list) (targets: IdentSet.t) (found: IdentSet.t) = 
@@ -771,7 +851,7 @@ module CommonSubExprElim = struct
         (head, tail)
       else 
         match tail with
-          | [] -> ([], []) (* shouldn't happen *)
+          | [] -> raise (CSEError "Couldn't find all vars from CSE target!")
           | next::all ->
             (* "find" the sets of free variables *and* the sets of assigned variables.
                theoretically assigned should be enough but i'm not sure if we might have the case
@@ -783,6 +863,7 @@ module CommonSubExprElim = struct
     let targets = IdentSet.filter (fun a -> 
       match a with
       | Ident(s) ->
+        (* make sure we're not looking for the actual name of our CSE value *)
         not (Str.string_match (Str.regexp "Cse") s 0)
       | _ -> false
     ) (fv_stmt x) in
@@ -796,8 +877,8 @@ module CommonSubExprElim = struct
       | [] -> xs
       | head::tail -> 
         let new_var_name = "Cse" ^ string_of_int id ^ "__5" in
-        (* It would be nice to infer the type of the new CSE constant *)
-        let new_stmt = Stmt_ConstDecl(Type_Bits(Expr_LitInt("64")), Ident(new_var_name), head, Unknown) in
+        (* It would be nice to infer the type of the new CSE value *)
+        let new_stmt = Stmt_ConstDecl(infer_cse_expr_type head, Ident(new_var_name), head, Unknown) in
         
         let remove_cands = new replace_all_instances in
         let () = remove_cands#setup head (Expr_Var(Ident(new_var_name))) in
