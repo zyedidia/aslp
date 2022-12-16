@@ -1357,6 +1357,9 @@ let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt l
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
     (* let stmts' = Transforms.Bits.bitvec_conversion stmts' in *)
     let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
+    let stmts' = Transforms.CommonSubExprElim.do_cse stmts' in
+    let stmts' = Transforms.CopyProp.copyProp stmts' in (* Can't run before IntToBits for some reason *)
+    let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts' in
     if !debug_level >= 2 then begin
         let stmts' = Asl_visitor.visit_stmts (new Asl_utils.resugarClass (!TC.binop_table)) stmts' in
         Printf.printf "===========\n";
@@ -1364,22 +1367,22 @@ let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt l
         Printf.printf "===========\n";
     end;
     stmts'
-
+    
 (** Instruction behaviour may be dependent on its PC. When lifting this information may be statically known. 
     If this is the case, we benefit from setting a PC initially and propagating its value through partial evaluation.
     Assumes variable is named _PC and its represented as a bitvector. *)
-let setPC (env: Eval.Env.t) (address: Z.t): unit =
-    let loc = Unknown in
-    let pc = Ident "_PC" in
-    let width = (match Eval.Env.getVar loc env pc with
-    | VUninitialized ty -> width_of_type loc ty
-    | VBits b -> b.n
-    | _ -> unsupported loc @@ "Initial env contains PC with unexpected type") in
-    let addr = VBits (Primops.mkBits width address) in
-    Eval.Env.setVar loc env pc addr
-
-let retrieveDisassembly ?(address:string option) (env: Eval.Env.t) (opcode: string) : stmt list =
-    let decoder = Eval.Env.getDecoder env (Ident "A64") in
-    let DecoderCase_Case (_,_,loc) = decoder in
-    Option.iter (fun v -> setPC env (Z.of_string v)) address;
-    dis_decode_entry env decoder (Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))))
+    let setPC (env: Eval.Env.t) (address: Z.t): unit =
+      let loc = Unknown in
+      let pc = Ident "_PC" in
+      let width = (match Eval.Env.getVar loc env pc with
+      | VUninitialized ty -> width_of_type loc ty
+      | VBits b -> b.n
+      | _ -> unsupported loc @@ "Initial env contains PC with unexpected type") in
+      let addr = VBits (Primops.mkBits width address) in
+      Eval.Env.setVar loc env pc addr
+  
+  let retrieveDisassembly ?(address:string option) (env: Eval.Env.t) (opcode: string) : stmt list =
+      let decoder = Eval.Env.getDecoder env (Ident "A64") in
+      let DecoderCase_Case (_,_,loc) = decoder in
+      Option.iter (fun v -> setPC env (Z.of_string v)) address;
+      dis_decode_entry env decoder (Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))))

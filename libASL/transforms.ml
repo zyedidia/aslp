@@ -583,3 +583,335 @@ module IntToBits = struct
     |> Asl_visitor.visit_stmts (new bits_coerce_narrow)
 
 end
+
+module CopyProp = struct
+  type st = expr Bindings.t
+  let debug_cp = true
+
+  let remove (i: ident) (copies: st): st =
+    try 
+      Bindings.remove i copies
+    with _ -> copies
+
+  let removeAll (i: ident list) (copies: st): st =
+    List.fold_right remove i copies
+
+  let add (i: ident) (e: expr) (copies: st): st =
+    Bindings.add i e copies
+
+  let rec candidateExpr (e: expr): bool =
+    match e with
+    | Expr_Var v -> true
+    | Expr_Field (e,_) -> candidateExpr e
+    | Expr_Array (e,_) -> candidateExpr e
+    | Expr_TApply (f,_,_) -> (name_of_FIdent f = "Mem.read")
+    | _ -> false
+
+  let candidateIdent (i: ident) =
+    match i with
+    | Ident s -> String.starts_with ~prefix:"Exp" s
+    | _ -> false
+
+  let rec get_lexpr_ac (le: lexpr): (lexpr * access_chain list)  =
+    match le with
+    | LExpr_Field (l, f) -> let (l',c) = get_lexpr_ac l in (l',c@[Field f])
+    | LExpr_Array (l, Expr_LitInt i) -> let (l',c) = get_lexpr_ac l in (l',c@[Index (VInt (Z.of_string i))])
+    | _ -> (le, [])
+
+  let rec get_expr_ac (e: expr): (expr * access_chain list)  =
+    match e with
+    | Expr_Field (l, f) -> let (l',c) = get_expr_ac l in (l',c@[Field f])
+    | Expr_Array (l, Expr_LitInt i) -> let (l',c) = get_expr_ac l in (l',c@[Index (VInt (Z.of_string i))])
+    | _ -> (e, [])
+
+  let rec overlaps (p: 'a list) (l: 'a list): bool =
+    match p, l with
+    | x::xs, y::ys -> x = y && overlaps xs ys
+    | _ -> true
+
+  (* TODO: could clobber sub-expressions in e *)
+  let clobber (le: lexpr) (e: expr): bool =
+    let (lv,lc) = get_lexpr_ac le in
+    let (v,c) = get_expr_ac e in
+    match lv, v with
+      (* clobber if they are the same base variables and lc is a prefix of c *)
+    | LExpr_Var lv, Expr_Var v -> lv = v && overlaps lc c
+      (* Do not clobber if memory load instead *)
+    | _, Expr_TApply (f,_,_) when name_of_FIdent f = "Mem.read" -> false
+      (* clobber if either lv or v are not base variables (who knows whats going on) *)
+    | _ -> true
+
+  let load (e: expr): bool =
+    match e with 
+    | Expr_TApply (f,_,_) -> true
+    | _ -> false
+
+  let removeClobbers (le: lexpr) (copies: st): st =
+    Bindings.filter (fun k e -> not (clobber le e)) copies
+
+  let removeMemory (copies: st): st =
+    Bindings.filter (fun k e -> not (load e)) copies
+
+  let merge (l: st) (r: st): st =
+    Bindings.union (fun k l r -> if l = r then Some l else None) l r
+
+  let rec copyProp' (xs: stmt list) (copies: st): (stmt list * st) =
+    List.fold_left (fun (acc, copies) stmt ->
+      match stmt with
+      | Stmt_VarDeclsNoInit(ty, vs, loc) -> 
+          (* Clear any redefinitions *)
+          (acc@[stmt], removeAll vs copies)
+
+      | Stmt_ConstDecl(_, v, e, loc) 
+      | Stmt_VarDecl(_, v, e, loc) ->
+          (* Introduce propagations for local decls *)
+          let stmt = subst_stmt copies stmt in
+          let e = subst_expr copies e in
+          let copies = if candidateExpr e then add v e copies else remove v copies in
+          (acc@[stmt], copies)
+
+          (*
+      | Stmt_Assign(LExpr_Var v, e, loc) ->
+          (* Introduce propagations for assignments to known locals *)
+          let stmt = subst_stmt copies stmt in
+          let e = subst_expr copies e in
+          let copies = if candidateExpr e then add v e copies else remove v copies in
+          (acc@[stmt], copies)
+          *)
+
+      | Stmt_Assign(le, e, loc) ->
+          (* Remove all clobbers *)
+          let stmt = subst_stmt copies stmt in
+          let copies = removeClobbers le copies in
+          (acc@[stmt], copies)
+
+      | Stmt_If (e, tstmts, [], fstmts, loc) ->
+          (* Merge if result *)
+          let e = subst_expr copies e in
+          let (tstmts, tcopies) = copyProp' tstmts copies in
+          let (fstmts, fcopies) = copyProp' fstmts copies in
+          (acc@[Stmt_If (e, tstmts, [], fstmts, loc)], merge tcopies fcopies)
+
+      | Stmt_Assert (_, _)  ->
+          (* Statements that shouldn't clobber *)
+          (acc@[subst_stmt copies stmt], copies)
+
+      | Stmt_TCall (FIdent("Mem.set", 0), _, _, _) ->
+          (acc@[subst_stmt copies stmt], removeMemory copies)
+
+      | _ -> 
+          (* Over-approximate all other situations for soundness *)
+          if debug_cp then Printf.printf "Over-approx: %s\n" (pp_stmt stmt);
+          (acc@[stmt],Bindings.empty)) 
+    ([], copies) xs
+
+  let copyProp (xs: stmt list): stmt list =
+    let (acc, _) = copyProp' xs Bindings.empty in
+    acc
+
+end
+
+module CommonSubExprElim = struct
+  (* Basic common sub-expression elimination.
+     (Theoretical) Pitfalls:
+     - Type inference of our factorised subexpressions isn't great. See large match statement in infer_cse_expr_type
+     - Eliminating two connected expressions will depend entirely on which one it sees first.
+        i.e. trying to simultaneously factorise "add (mem (add (3+4)))" and "mem (add (3+4))" - 
+        ideal case is "x = mem (add (3+4)); y = add (x)" but this may not happen.
+     - We only attempt to eliminate TApplys. TApplys are our "primitive functions" and are the
+        main goal of this transform but we could also eliminate many other things.
+  *)
+  exception CSEError of string
+
+  class gather_expressions = object
+    inherit Asl_visitor.nopAslVisitor
+
+    val mutable exprs: expr list = ([]: expr list);
+    val mutable cand_exprs: expr list = ([]: expr list);
+
+    method! vexpr (e: expr): expr visitAction = 
+      let () = match e with
+      (* For now, only gather TApply's that we've seen more than once
+         See eval_prim in value.ml for the list of what that covers. *)
+      | Expr_TApply(_) ->
+        if (List.mem e cand_exprs) && not (List.mem e exprs) then 
+          exprs <- e :: exprs
+        else cand_exprs <- e :: cand_exprs;
+      | _ ->
+        ()
+      in
+      DoChildren
+    
+    method get_info: expr list = 
+      exprs
+  end
+
+  class replace_all_instances = object
+    inherit Asl_visitor.nopAslVisitor
+
+    val mutable exp: expr option = None;
+    val mutable repl: expr option = None;
+
+    method! vexpr (e: expr): expr visitAction = 
+      match exp, repl with
+      | Some c, Some r ->
+        if e = c then
+          ChangeTo(r)
+        else
+          DoChildren
+      | _ ->
+        raise (CSEError "Uninitialised replacer class!")
+
+    method setup (a: expr) (b: expr) =
+      exp <- Some a;
+      match b with
+      | Expr_Var (_) ->
+        repl <- Some b;
+      | _ -> 
+        raise (CSEError "Can't replace with a non-var!")
+  end 
+
+  let infer_cse_expr_type (e: expr): ty = 
+    match e with
+    | Expr_TApply((FIdent(name, _) | Ident(name)), [], _) -> begin
+      match name with
+      | "eq_enum"            -> type_bool
+      | "ne_enum"            -> type_bool
+      | "eq_bool"            -> type_bool
+      | "ne_bool"            -> type_bool
+      | "equiv_bool"         -> type_bool
+      | "not_bool"           -> type_bool
+      | "eq_int"             -> type_bool
+      | "ne_int"             -> type_bool
+      | "le_int"             -> type_bool
+      | "lt_int"             -> type_bool
+      | "ge_int"             -> type_bool
+      | "gt_int"             -> type_bool
+      | "is_pow2_int"        -> type_bool
+      | "neg_int"            -> type_integer
+      | "add_int"            -> type_integer
+      | "sub_int"            -> type_integer
+      | "shl_int"            -> type_integer
+      | "shr_int"            -> type_integer
+      | "mul_int"            -> type_integer
+      | "zdiv_int"           -> type_integer
+      | "zrem_int"           -> type_integer
+      | "fdiv_int"           -> type_integer
+      | "frem_int"           -> type_integer
+      | "mod_pow2_int"       -> type_integer
+      | "align_int"          -> type_integer
+      | "pow2_int"           -> type_integer
+      | "pow_int_int"        -> type_integer
+      | "eq_real"            -> type_bool
+      | "ne_real"            -> type_bool
+      | "le_real"            -> type_bool
+      | "lt_real"            -> type_bool
+      | "ge_real"            -> type_bool
+      | "round_tozero_real"  -> type_integer
+      | "round_down_real"    -> type_integer
+      | "round_up_real"      -> type_integer
+      | "cvt_bits_sint"      -> type_integer
+      | "cvt_bits_uint"      -> type_integer
+      | "in_mask"            -> type_bool
+      | "notin_mask"         -> type_bool
+      | "eq_bits"            -> type_bool
+      | "ne_bits"            -> type_bool
+      | "eq_str"             -> type_bool
+      | "ne_str"             -> type_bool
+      | "is_cunpred_exc"     -> type_bool
+      | "is_exctaken_exc"    -> type_bool
+      | "is_impdef_exc"      -> type_bool
+      | "is_see_exc"         -> type_bool
+      | "is_undefined_exc"   -> type_bool
+      | "is_unpred_exc"      -> type_bool
+      | "asl_file_open"      -> type_integer
+      | "asl_file_getc"      -> type_integer
+      | _ -> raise (CSEError ("Can't infer type of strange primitive: " ^ (pp_expr e)))
+      end
+    | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(_) as num], _) -> begin
+      match name with
+      | "ram_read"           -> Type_Bits(num)
+      | "add_bits"           -> Type_Bits(num)
+      | "sub_bits"           -> Type_Bits(num)
+      | "mul_bits"           -> Type_Bits(num)
+      | "and_bits"           -> Type_Bits(num)
+      | "or_bits"            -> Type_Bits(num)
+      | "eor_bits"           -> Type_Bits(num)
+      | "not_bits"           -> Type_Bits(num)
+      | "zeros_bits"         -> Type_Bits(num)
+      | "ones_bits"          -> Type_Bits(num)
+      | "replicate_bits"     -> Type_Bits(num)
+      | "append_bits"        -> Type_Bits(num)
+      | "cvt_int_bits"       -> Type_Bits(num)
+      | _ -> raise (CSEError ("Can't infer type of strange primitive: " ^ (pp_expr e)))
+      end
+    | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(v1) as num1; Expr_LitInt(v2) as num2], _) -> begin
+      (* These are... dubious. None appear in value.ml, so they're all based on what "looks correct". *)
+      match name with
+      | "ZeroExtend"         -> Type_Bits(num2)
+      | "SignExtend"         -> Type_Bits(num2)
+      | "lsl_bits"           -> Type_Bits(num1)
+      | "lsr_bits"           -> Type_Bits(num1)
+      | "asl_bits"           -> Type_Bits(num1)
+      | "asr_bits"           -> Type_Bits(num1)
+      | "append_bits"        -> 
+        Type_Bits(Expr_LitInt(string_of_int((int_of_string v1) + (int_of_string v2))))
+      | _ -> raise (CSEError ("Can't infer type of strange primitive: " ^ (pp_expr e)))
+      end
+    | _ -> 
+      raise (CSEError ("Can't infer type of strange expr: " ^ (pp_expr e)))
+  
+  let insert_into_stmts (xs: stmt list) (x: stmt): (stmt list) =
+    let rec move_after_stmts (head: stmt list) (tail: stmt list) (targets: IdentSet.t) (found: IdentSet.t) = 
+      if IdentSet.subset targets found then 
+        (head, tail)
+      else 
+        match tail with
+          | [] -> raise (CSEError "Couldn't find all vars from CSE target!")
+          | next::all ->
+            (* "find" the sets of free variables *and* the sets of assigned variables.
+               theoretically assigned should be enough but i'm not sure if we might have the case
+               where we want to eliminate an expression that directly uses registers, which aren't assigned *)
+            let newfound = IdentSet.union found (IdentSet.union (assigned_vars_of_stmts [next]) (fv_stmt next)) in
+            move_after_stmts (head @ [next]) all targets newfound
+    in
+
+    let targets = IdentSet.filter (fun a -> 
+      match a with
+      | Ident(s) ->
+        (* make sure we're not looking for the actual name of our CSE value *)
+        not (Str.string_match (Str.regexp "Cse") s 0)
+      | _ -> false
+    ) (fv_stmt x) in
+    let lists = move_after_stmts [] xs targets (IdentSet.empty) in
+
+    (fst lists) @ [x] @ (snd lists)
+  
+  let apply_knowledge (xs: stmt list) (knowledge: expr list): (stmt list) = 
+    let rec add_exprs_num (xs: stmt list) (k: expr list) (id: int) = 
+      match k with
+      | [] -> xs
+      | head::tail -> 
+        let new_var_name = "Cse" ^ string_of_int id ^ "__5" in
+        (* It would be nice to infer the type of the new CSE value *)
+        let new_stmt = Stmt_ConstDecl(infer_cse_expr_type head, Ident(new_var_name), head, Unknown) in
+        
+        let remove_cands = new replace_all_instances in
+        let () = remove_cands#setup head (Expr_Var(Ident(new_var_name))) in
+        let xs = visit_stmts remove_cands xs in
+
+        add_exprs_num (insert_into_stmts xs new_stmt) (tail) (id+1)
+    in
+    add_exprs_num xs knowledge 0
+
+  let rec gain_info_pass (xs: stmt list) (knowledge: expr list) (n: int): (expr list) = 
+    if (n >= List.length xs) then knowledge else (
+      gain_info_pass xs knowledge (n+1)
+    )
+  
+  let do_cse (xs: stmt list): stmt list = 
+    let expression_visitor = new gather_expressions in
+    let xs = visit_stmts expression_visitor xs in
+    let xs = apply_knowledge xs expression_visitor#get_info in
+    xs
+end
