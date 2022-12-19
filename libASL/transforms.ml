@@ -609,7 +609,7 @@ module CopyProp = struct
 
   let candidateIdent (i: ident) =
     match i with
-    | Ident s -> String.starts_with ~prefix:"Exp" s
+    | Ident s -> Str.string_match (Str.regexp "Exp") s 0
     | _ -> false
 
   let rec get_lexpr_ac (le: lexpr): (lexpr * access_chain list)  =
