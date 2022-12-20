@@ -364,8 +364,8 @@ let eval_prim (f: string) (tvs: value list) (vs: value list): value option =
         Some (raise (EvalError (Unknown, "eval_prim: failed to invoke " ^ f ^ " {{ " ^ Utils.pp_list pp_value tvs ^ " }} ( " ^ Utils.pp_list pp_value vs ^ " )"))) *)
 
     (* Converter primitives to reduce if-statements in instructions like `add` *)
-    | ("cvt_bv_bool",       [VInt n], [VBits({n=1; _} as x)]) -> Some (VBool (prim_cvt_bv_bool x))
-    | ("cvt_bool_bv",       [VInt n], [VBool x             ]) -> Some (VBits (prim_cvt_bool_bv x))
+    | ("cvt_bv_bool",       _, [VBits({n=1; _} as x)]) -> Some (VBool (prim_cvt_bv_bool x))
+    | ("cvt_bool_bv",       _, [VBool x             ]) -> Some (VBits (prim_cvt_bool_bv x))
 
     (* No function matches *)
     | _ -> None
