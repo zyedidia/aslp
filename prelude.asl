@@ -82,7 +82,7 @@ __builtin bits(N)   not_bits(bits(N) x);
 __builtin bits(N)   zeros_bits();
 __builtin bits(N)   ones_bits();
 __builtin boolean   cvt_bv_bool(bit x);
-__builtin bits(N)   cvt_bool_bv(boolean x); // this needs to be bits(N), not 'bit'
+__builtin bit       cvt_bool_bv(boolean x);
 
 bits(N) add_bits_int(bits(N) x, integer y)
     return add_bits(x, cvt_int_bits(y, N));
