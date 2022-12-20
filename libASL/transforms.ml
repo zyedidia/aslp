@@ -281,6 +281,7 @@ module IntToBits = struct
     match e with
     | Expr_TApply (fn, tes, es) ->
       (match (fn, tes, es) with
+      | FIdent ("cvt_bool_bv", 0), _, _ -> 1
       | FIdent ("add_bits", 0), [Expr_LitInt n], _
       | FIdent ("sub_bits", 0), [Expr_LitInt n], _
       | FIdent ("mul_bits", 0), [Expr_LitInt n], _
@@ -826,6 +827,8 @@ module CommonSubExprElim = struct
       | "is_unpred_exc"      -> type_bool
       | "asl_file_open"      -> type_integer
       | "asl_file_getc"      -> type_integer
+      | "cvt_bool_bv"        -> Type_Bits(Expr_LitInt("1"))
+      | "cvt_bv_bool"        -> type_bool
       | _ -> raise (CSEError ("Can't infer type of strange primitive: " ^ (pp_expr e)))
       end
     | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(_) as num], _) -> begin
