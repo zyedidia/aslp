@@ -140,6 +140,11 @@ let mkBits2 (n1: int) (n2: int) (v: bigint): bitvector = (
     { n = n1; v = z_extract v 0 n1 }
 )
 
+(* bool/bv converter primops *)
+let prim_cvt_bv_bool (x: bitvector): bool = x.v = Z.one
+
+let prim_cvt_bool_bv (x: bool): bitvector = if x then (mkBits 1 Z.one) else (mkBits 1 Z.zero)
+
 let prim_length_bits (x: bitvector): int = x.n
 
 let prim_cvt_int_bits (n: bigint) (i: bigint): bitvector = (

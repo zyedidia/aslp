@@ -17078,9 +17078,15 @@ bits(N) VFPExpandImm(bits(8) imm8)
     integer signed_sum = SInt(x) + SInt(y) + UInt(carry_in);
     bits(N) result = unsigned_sum[N-1:0]; // same value as signed_sum[N-1:0]
     bit n = result[N-1];
-    bit z = if IsZero(result) then '1' else '0';
-    bit c = if UInt(result) == unsigned_sum then '0' else '1';
-    bit v = if SInt(result) == signed_sum then '0' else '1';
+    bit z = cvt_bool_bv(IsZero(result));
+    bit c = cvt_bool_bv(UInt(result) != unsigned_sum);
+    bit v = cvt_bool_bv(SInt(result) != signed_sum);
+
+//  original semantics:
+//  bit z = if IsZero(result) then '1' else '0';
+//  bit c = if UInt(result) == unsigned_sum then '0' else '1';
+//  bit v = if SInt(result) == signed_sum then '0' else '1';
+
     return (result, n:z:c:v);
 
 enumeration MBReqDomain    {MBReqDomain_Nonshareable, MBReqDomain_InnerShareable,
