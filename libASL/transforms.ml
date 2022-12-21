@@ -912,7 +912,7 @@ module CommonSubExprElim = struct
       gain_info_pass xs knowledge (n+1)
     )
   
-  let do_cse (xs: stmt list): stmt list = 
+  let do_transform (xs: stmt list): stmt list = 
     let expression_visitor = new gather_expressions in
     let xs = visit_stmts expression_visitor xs in
     let xs = apply_knowledge xs expression_visitor#get_info in

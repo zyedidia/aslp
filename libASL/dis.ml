@@ -681,6 +681,15 @@ and dis_expr loc x =
 
 and dis_expr' (loc: l) (x: AST.expr): sym rws =
     (match x with
+    | Expr_If(Type_Bits(Expr_LitInt("1")), c, ((Expr_LitBits("1" as v) | Expr_LitBits("0" as v)) as t), [], ((Expr_LitBits("1") | Expr_LitBits("0")) as f)) -> 
+      begin match t, f with 
+      | Expr_LitBits("1"), Expr_LitBits("0") ->
+        dis_expr loc (Expr_TApply(FIdent("cvt_bool_bv", 0), [], [c]))
+      | Expr_LitBits("0"), Expr_LitBits("1") ->
+        dis_expr loc (Expr_TApply(FIdent("cvt_bool_bv", 0), [], [Expr_TApply((FIdent("not_bool", 0)), [], [c])]))
+      | _ ->
+        DisEnv.pure (Val(from_bitsLit v))
+      end
     | Expr_If(ty, c, t, els, e) ->
             let rec eval_if xs d : sym rws = match xs with
                 | [] -> dis_expr loc d
@@ -1357,7 +1366,7 @@ let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt l
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
     (* let stmts' = Transforms.Bits.bitvec_conversion stmts' in *)
     let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
-    let stmts' = Transforms.CommonSubExprElim.do_cse stmts' in
+    let stmts' = Transforms.CommonSubExprElim.do_transform stmts' in
     let stmts' = Transforms.CopyProp.copyProp stmts' in (* Can't run before IntToBits for some reason *)
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts' in
     if !debug_level >= 2 then begin
