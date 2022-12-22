@@ -648,13 +648,13 @@ module CopyProp = struct
     | _ -> false
 
   let removeClobbers (le: lexpr) (copies: st): st =
-    Bindings.filter (fun k e -> not (clobber le e)) copies
+    Bindings.filter (fun k e -> not (clobber le e) && not (clobber le (Expr_Var k))) copies
 
   let removeMemory (copies: st): st =
     Bindings.filter (fun k e -> not (load e)) copies
 
   let merge (l: st) (r: st): st =
-    Bindings.union (fun k l r -> if l = r then Some l else None) l r
+    Bindings.merge (fun k l r -> match l, r with Some l,Some r -> if l = r then Some l else None | _ -> None) l r
 
   let rec copyProp' (xs: stmt list) (copies: st): (stmt list * st) =
     List.fold_left (fun (acc, copies) stmt ->
@@ -684,6 +684,9 @@ module CopyProp = struct
           (* Remove all clobbers *)
           let stmt = subst_stmt copies stmt in
           let copies = removeClobbers le copies in
+          let copies = (match le with
+          | LExpr_Var(i) -> remove i copies
+          | _ -> copies ) in
           (acc@[stmt], copies)
 
       | Stmt_If (e, tstmts, [], fstmts, loc) ->
@@ -750,26 +753,36 @@ module CommonSubExprElim = struct
   class replace_all_instances = object
     inherit Asl_visitor.nopAslVisitor
 
-    val mutable exp: expr option = None;
-    val mutable repl: expr option = None;
-
+    val mutable candidates: (expr * ident) list = []
+    val mutable do_replace: bool = true
+    
     method! vexpr (e: expr): expr visitAction = 
-      match exp, repl with
-      | Some c, Some r ->
-        if e = c then
-          ChangeTo(r)
+      let valid_replacement (e: expr): ident option =
+        let found = List.filter (fun a -> fst a = e) candidates in
+        if List.length found = 1 then
+          Some (snd (List.nth found 0))
         else
-          DoChildren
-      | _ ->
-        raise (CSEError "Uninitialised replacer class!")
+          None
+      in
 
-    method setup (a: expr) (b: expr) =
-      exp <- Some a;
-      match b with
-      | Expr_Var (_) ->
-        repl <- Some b;
-      | _ -> 
-        raise (CSEError "Can't replace with a non-var!")
+      let result = match (valid_replacement e) with
+      | Some i ->
+        if do_replace then ChangeTo(Expr_Var(i)) else DoChildren
+      | None ->
+        DoChildren
+      in
+      result
+      
+    method! vstmt (s: stmt): stmt visitAction = 
+      let () = match s with
+      | Stmt_ConstDecl(_, Ident(n), _, Unknown) when (Str.string_match (Str.regexp "Cse") n 0) ->
+        do_replace <- false
+      | _ ->
+        do_replace <- true
+      in DoChildren
+
+    method add (name: ident) (value: expr) =
+      candidates <- (value, name)::candidates
   end 
 
   let infer_cse_expr_type (e: expr): ty = 
@@ -812,7 +825,6 @@ module CommonSubExprElim = struct
       | "round_down_real"    -> type_integer
       | "round_up_real"      -> type_integer
       | "cvt_bits_sint"      -> type_integer
-      | "cvt_bits_uint"      -> type_integer
       | "in_mask"            -> type_bool
       | "notin_mask"         -> type_bool
       | "eq_bits"            -> type_bool
@@ -846,6 +858,7 @@ module CommonSubExprElim = struct
       | "replicate_bits"     -> Type_Bits(num)
       | "append_bits"        -> Type_Bits(num)
       | "cvt_int_bits"       -> Type_Bits(num)
+      | "cvt_bits_uint"      -> type_integer
       | _ -> raise (CSEError ("Can't infer type of strange primitive: " ^ (pp_expr e)))
       end
     | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(v1) as num1; Expr_LitInt(v2) as num2], _) -> begin
@@ -890,7 +903,7 @@ module CommonSubExprElim = struct
 
     (fst lists) @ [x] @ (snd lists)
   
-  let apply_knowledge (xs: stmt list) (knowledge: expr list): (stmt list) = 
+  let apply_knowledge (xs: stmt list) (knowledge: expr list) (repl): (stmt list) = 
     let rec add_exprs_num (xs: stmt list) (k: expr list) (id: int) = 
       match k with
       | [] -> xs
@@ -898,11 +911,8 @@ module CommonSubExprElim = struct
         let new_var_name = "Cse" ^ string_of_int id ^ "__5" in
         (* It would be nice to infer the type of the new CSE value *)
         let new_stmt = Stmt_ConstDecl(infer_cse_expr_type head, Ident(new_var_name), head, Unknown) in
-        
-        let remove_cands = new replace_all_instances in
-        let () = remove_cands#setup head (Expr_Var(Ident(new_var_name))) in
-        let xs = visit_stmts remove_cands xs in
 
+        let () = repl#add (Ident(new_var_name)) head in
         add_exprs_num (insert_into_stmts xs new_stmt) (tail) (id+1)
     in
     add_exprs_num xs knowledge 0
@@ -914,7 +924,10 @@ module CommonSubExprElim = struct
   
   let do_transform (xs: stmt list): stmt list = 
     let expression_visitor = new gather_expressions in
+    let expression_replacer = new replace_all_instances in
+
     let xs = visit_stmts expression_visitor xs in
-    let xs = apply_knowledge xs expression_visitor#get_info in
+    let xs = apply_knowledge xs expression_visitor#get_info expression_replacer in
+    let xs = visit_stmts expression_replacer xs in
     xs
 end
