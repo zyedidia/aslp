@@ -363,6 +363,10 @@ let eval_prim (f: string) (tvs: value list) (vs: value list): value option =
     | "print_str" | "print_char" | "program_end") , _, _ ->
         Some (raise (EvalError (Unknown, "eval_prim: failed to invoke " ^ f ^ " {{ " ^ Utils.pp_list pp_value tvs ^ " }} ( " ^ Utils.pp_list pp_value vs ^ " )"))) *)
 
+    (* Converter primitives to reduce if-statements in instructions like `add` *)
+    | ("cvt_bv_bool",       _, [VBits({n=1; _} as x)]) -> Some (VBool (prim_cvt_bv_bool x))
+    | ("cvt_bool_bv",       _, [VBool x             ]) -> Some (VBits (prim_cvt_bool_bv x))
+
     (* No function matches *)
     | _ -> None
     )
@@ -376,7 +380,7 @@ let prims_pure = [
     "cvt_bits_uint"; "in_mask"; "notin_mask"; "eq_bits"; "ne_bits"; "add_bits"; "sub_bits"; "mul_bits"; "and_bits"; "or_bits";
     "eor_bits"; "not_bits"; "zeros_bits"; "ones_bits"; "replicate_bits"; "append_bits"; "eq_str"; "ne_str"; "append_str_str";
     "cvt_int_hexstr"; "cvt_int_decstr"; "cvt_bool_str"; "cvt_bits_str"; "cvt_real_str"; "is_cunpred_exc"; "is_exctaken_exc";
-    "is_impdef_exc"; "is_see_exc"; "is_undefined_exc"; "is_unpred_exc"]
+    "is_impdef_exc"; "is_see_exc"; "is_undefined_exc"; "is_unpred_exc"; "cvt_bv_bool"; "cvt_bool_bv"]
 and prims_impure = ["ram_init"; "ram_read"; "ram_write"; "trace_memory_read"; "trace_memory_write"; "trace_event";
     "asl_file_open"; "asl_file_write"; "asl_file_getc"; "print_str"; "print_char"; "program_end"]
 
