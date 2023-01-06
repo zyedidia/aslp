@@ -201,7 +201,8 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         Printf.printf "Dumping instruction semantics for %s %s" iset (Z.format "%x" op);
         Printf.printf " to file %s\n" fname;
         (* NOTE: .aslb file is a marshalled `stmt list` *)
-        Marshal.to_channel chan (stmts : stmt list) []
+        Marshal.to_channel chan (stmts : stmt list) [];
+        close_out chan
     | (":set" :: "impdef" :: rest) ->
         let cmd = String.concat " " rest in
         let loc = mkLoc fname cmd in
