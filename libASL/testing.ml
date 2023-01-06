@@ -328,9 +328,10 @@ let field_vals_flags_only (enc: encoding) (name: string) (wd: int): int list =
   | Ident "aarch64_branch_unconditional_register", "Rn" -> [0; 1; 0b11111]
   | _, "cond" -> [1]
   | _ when Utils.startswith name "R" && name <> "R" -> [0;1]
-  | _ when Utils.startswith name "X" && name <> "R" -> [1]
+  | _ when Utils.startswith name "X" && name <> "X" -> [1]
   | _ when Utils.startswith name "imm" -> [0;1]
   | _ when Utils.startswith name "uimm" -> [1]
+  | _, ("b40") -> [0;1; Int.shift_left 1 wd - 1 ]
   | _ -> List.init (Int.shift_left 1 wd) (fun x -> x)
 
 let enumerate_encoding (enc: encoding) (field_vals: string -> int -> int list): encoding_tree =
