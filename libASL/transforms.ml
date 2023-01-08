@@ -1225,11 +1225,8 @@ module CommonSubExprElim = struct
       | "round_tozero_real"  -> type_integer
       | "round_down_real"    -> type_integer
       | "round_up_real"      -> type_integer
-      | "cvt_bits_sint"      -> type_integer
       | "in_mask"            -> type_bool
       | "notin_mask"         -> type_bool
-      | "eq_bits"            -> type_bool
-      | "ne_bits"            -> type_bool
       | "eq_str"             -> type_bool
       | "ne_str"             -> type_bool
       | "is_cunpred_exc"     -> type_bool
@@ -1260,6 +1257,9 @@ module CommonSubExprElim = struct
       | "append_bits"        -> Type_Bits(num)
       | "cvt_int_bits"       -> Type_Bits(num)
       | "cvt_bits_uint"      -> type_integer
+      | "cvt_bits_sint"      -> type_integer
+      | "eq_bits"            -> type_bool
+      | "ne_bits"            -> type_bool
       | _ -> raise (CSEError ("Can't infer type of strange primitive: " ^ (pp_expr e)))
       end
     | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(v1) as num1; Expr_LitInt(v2) as num2], _) -> begin
