@@ -235,7 +235,7 @@ module StatefulIntToBits = struct
       (i,false)
     else
       let u' = if Z.gt u Z.zero then 1 + (Z.log2up (Z.succ u)) else 1 in
-      let l' = if Z.lt l Z.zero then 1 + (Z.log2up (Z.abs u)) else 1 in
+      let l' = if Z.lt l Z.zero then 1 + (Z.log2up (Z.neg l)) else 1 in
       (max u' l',true)
 
   (** Build an abstract point to represent a constant integer *)
@@ -248,7 +248,7 @@ module StatefulIntToBits = struct
   let abs_of_width (w: int): abs =
     let t = Z.succ (Z.one) in
     let u = Z.pred (Z.pow t (w - 1)) in
-    let l = Z.pow t (w - 1) in
+    let l = Z.neg (Z.pow t (w - 1)) in
     (w, true, (u,l))
 
   (** Build an abstract point for unsigned integer in signed representation *)
@@ -426,21 +426,29 @@ module StatefulIntToBits = struct
         let y = force_signed (bv_of_int_expr vars y) in
         (sym_prim (FIdent ("asr_bits", 0)) [sym_of_abs (snd x); sym_of_abs (snd y)] [fst x;fst y],snd x)
 
-    (* truncated division with detour via floats *)
-    | Expr_TApply (FIdent ("round_tozero_real",0), [], 
-        [Expr_TApply (FIdent ("divide_real",0), [], 
-          [Expr_TApply (FIdent ("cvt_int_real", 0), [], [x]); 
-            Expr_TApply (FIdent ("cvt_int_real", 0), [], [y])])]) -> 
-          (* Force a signed representation for use with sdiv *)
-          let x = force_signed (bv_of_int_expr vars x) in
-          let y = force_signed (bv_of_int_expr vars y) in
-          (* Assume result fits within merge of both widths *)
-          let w = merge_abs (snd x) (snd y) in
-          let ex = extend w in
-          let f = sym_prim (FIdent ("sdiv_bits", 0)) [sym_of_abs w] [ex x; ex y] in
-          (f,w)
+    | Expr_TApply (FIdent ("round_tozero_real",0), [], [x]) ->
+        bv_of_real_expr vars x
 
     | _ -> failwith @@ "bv_of_int_expr: Unknown integer expression: " ^ (pp_expr e)
+
+  and bv_of_real_expr (vars: state) (e: expr): sym * abs =
+    match e with
+    | Expr_LitReal n ->
+        (* Assume it can be parsed as an integer. TODO: Haven't actually got a bv rep. of a float *)
+        bv_of_int_expr vars (Expr_LitInt n)
+
+    | Expr_TApply (FIdent ("divide_real",0), [], [x; y]) ->
+        let x = force_signed (bv_of_real_expr vars x) in
+        let y = force_signed (bv_of_real_expr vars y) in
+        let w = merge_abs (snd x) (snd y) in
+        let ex = extend w in
+        let f = sym_prim (FIdent ("sdiv_bits", 0)) [sym_of_abs w] [ex x; ex y] in
+        (f,w)
+
+    | Expr_TApply (FIdent ("cvt_int_real", 0), [], [x]) ->
+        bv_of_int_expr vars x
+
+    | _ -> failwith @@ "bv_of_real_expr: Unknown real expression: " ^ (pp_expr e)
 
   let bv_of_int_expr_opt (vars: state) (e: expr): (sym * abs) option =
     try
@@ -453,11 +461,13 @@ module StatefulIntToBits = struct
     method! vexpr e =
       let e' = match e with
       (* Slice may take bitvector or integer as first argument, allow for failure in bv case *)
+      (* TODO: Would prefer to type check x, rather than allowing for failure *)
       | Expr_Slices(x, [Slice_LoWd(l,w)]) ->
           let l = int_of_expr l in
           let w = int_of_expr w in
           (match bv_of_int_expr_opt vars x with
           | Some (e,a) -> 
+              if width a = l + w && l = 0 then sym_expr e else
               let x = if width a <= l + w then extend (l+w,signed a,interval a) (e,a) else e in
               sym_expr @@ sym_slice Unknown x l w
           | None -> e)
@@ -1256,6 +1266,9 @@ module CommonSubExprElim = struct
       | "replicate_bits"     -> Type_Bits(num)
       | "append_bits"        -> Type_Bits(num)
       | "cvt_int_bits"       -> Type_Bits(num)
+      | "LSL"                -> Type_Bits(num)
+      | "LSR"                -> Type_Bits(num)
+      | "ASR"                -> Type_Bits(num)
       | "cvt_bits_uint"      -> type_integer
       | "cvt_bits_sint"      -> type_integer
       | "eq_bits"            -> type_bool
