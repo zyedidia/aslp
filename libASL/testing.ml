@@ -323,15 +323,18 @@ let int_of_opcode: opcode_value -> int =
 
 let field_vals_flags_only (enc: encoding) (name: string) (wd: int): int list =
   let Encoding_Block (instr, _, _, _, _, _, _, _) = enc in
+  let bound = Int.shift_left 1 wd in
+  let ones = bound - 1 in
   match (instr, name) with
   | Ident "aarch64_branch_unconditional_eret", "Rn" -> [0b11111]
   | Ident "aarch64_branch_unconditional_register", "Rn" -> [0; 1; 0b11111]
   | _, "cond" -> [1]
-  | _ when Utils.startswith name "R" && name <> "R" -> [0;1]
-  | _ when Utils.startswith name "X" && name <> "R" -> [1]
-  | _ when Utils.startswith name "imm" -> [0;1]
+  | _ when Utils.startswith name "R" && name <> "R" -> [0;1;ones]
+  | _ when Utils.startswith name "X" && name <> "X" -> [0;1;ones]
+  | _ when Utils.startswith name "imm" -> [0;1;ones]
   | _ when Utils.startswith name "uimm" -> [1]
-  | _ -> List.init (Int.shift_left 1 wd) (fun x -> x)
+  | _, ("b40") -> [0;1;ones]
+  | _ -> List.init bound (fun x -> x)
 
 let enumerate_encoding (enc: encoding) (field_vals: string -> int -> int list): encoding_tree =
   let Encoding_Block(name, iset, fields, opcode, guard, unpreds, stmts, loc) = enc in
