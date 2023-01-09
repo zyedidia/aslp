@@ -21101,60 +21101,33 @@ tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
 
 
 ENCODING: aarch64_integer_tags_mcinserttagmask
-0x9ac01400: [Xm=0 ; Xn=0 ; Xd=0] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac01401: [Xm=0 ; Xn=0 ; Xd=1] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac0141f: [Xm=0 ; Xn=0 ; Xd=31] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac01420: [Xm=0 ; Xn=1 ; Xd=0] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac01421: [Xm=0 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac0143f: [Xm=0 ; Xn=1 ; Xd=31] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac017e0: [Xm=0 ; Xn=31 ; Xd=0] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac017e1: [Xm=0 ; Xn=31 ; Xd=1] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac017ff: [Xm=0 ; Xn=31 ; Xd=31] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac11400: [Xm=1 ; Xn=0 ; Xd=0] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac11401: [Xm=1 ; Xn=0 ; Xd=1] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac1141f: [Xm=1 ; Xn=0 ; Xd=31] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac11420: [Xm=1 ; Xn=1 ; Xd=0] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac11421: [Xm=1 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac1143f: [Xm=1 ; Xn=1 ; Xd=31] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac117e0: [Xm=1 ; Xn=31 ; Xd=0] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac117e1: [Xm=1 ; Xn=31 ; Xd=1] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9ac117ff: [Xm=1 ; Xn=31 ; Xd=31] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9adf1400: [Xm=31 ; Xn=0 ; Xd=0] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9adf1401: [Xm=31 ; Xn=0 ; Xd=1] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9adf141f: [Xm=31 ; Xn=0 ; Xd=31] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9adf1420: [Xm=31 ; Xn=1 ; Xd=0] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9adf1421: [Xm=31 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9adf143f: [Xm=31 ; Xn=1 ; Xd=31] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9adf17e0: [Xm=31 ; Xn=31 ; Xd=0] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9adf17e1: [Xm=31 ; Xn=31 ; Xd=1] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
-0x9adf17ff: [Xm=31 ; Xn=31 ; Xd=31] --> [2] Disassembly failure: Failure("sym_insert_bits")
-
+0x9ac01400: [Xm=0 ; Xn=0 ; Xd=0] --> OK
+0x9ac01401: [Xm=0 ; Xn=0 ; Xd=1] --> OK
+0x9ac0141f: [Xm=0 ; Xn=0 ; Xd=31] --> OK
+0x9ac01420: [Xm=0 ; Xn=1 ; Xd=0] --> OK
+0x9ac01421: [Xm=0 ; Xn=1 ; Xd=1] --> OK
+0x9ac0143f: [Xm=0 ; Xn=1 ; Xd=31] --> OK
+0x9ac017e0: [Xm=0 ; Xn=31 ; Xd=0] --> OK
+0x9ac017e1: [Xm=0 ; Xn=31 ; Xd=1] --> OK
+0x9ac017ff: [Xm=0 ; Xn=31 ; Xd=31] --> OK
+0x9ac11400: [Xm=1 ; Xn=0 ; Xd=0] --> OK
+0x9ac11401: [Xm=1 ; Xn=0 ; Xd=1] --> OK
+0x9ac1141f: [Xm=1 ; Xn=0 ; Xd=31] --> OK
+0x9ac11420: [Xm=1 ; Xn=1 ; Xd=0] --> OK
+0x9ac11421: [Xm=1 ; Xn=1 ; Xd=1] --> OK
+0x9ac1143f: [Xm=1 ; Xn=1 ; Xd=31] --> OK
+0x9ac117e0: [Xm=1 ; Xn=31 ; Xd=0] --> OK
+0x9ac117e1: [Xm=1 ; Xn=31 ; Xd=1] --> OK
+0x9ac117ff: [Xm=1 ; Xn=31 ; Xd=31] --> OK
+0x9adf1400: [Xm=31 ; Xn=0 ; Xd=0] --> OK
+0x9adf1401: [Xm=31 ; Xn=0 ; Xd=1] --> OK
+0x9adf141f: [Xm=31 ; Xn=0 ; Xd=31] --> OK
+0x9adf1420: [Xm=31 ; Xn=1 ; Xd=0] --> OK
+0x9adf1421: [Xm=31 ; Xn=1 ; Xd=1] --> OK
+0x9adf143f: [Xm=31 ; Xn=1 ; Xd=31] --> OK
+0x9adf17e0: [Xm=31 ; Xn=31 ; Xd=0] --> OK
+0x9adf17e1: [Xm=31 ; Xn=31 ; Xd=1] --> OK
+0x9adf17ff: [Xm=31 ; Xn=31 ; Xd=31] --> OK
 
 ENCODING: aarch64_integer_tags_mcsettag
 0xd9200800: [imm9=0 ; Xn=0 ; Xt=0] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch_instrs.asl" line 56217 char 32 - line 56218 char 0: getFun SetTagCheckedInstruction.0
