@@ -462,7 +462,22 @@ let sym_val_or_uninit (t: ty) (x: sym): value rws =
   | Val v -> DisEnv.pure v
   | Exp e -> DisEnv.mkUninit t
 
+(** Identify constants suitable for the ITE transform *)
+let ite_const e =
+  match e with
+  | Expr_Var(Ident "FALSE") -> Val (VBool false)
+  | Expr_Var(Ident "TRUE") ->  Val (VBool true)
+  | Expr_LitBits "1" -> Val (VBits {n=1; v=Z.one})
+  | Expr_LitBits "0" -> Val (VBits {n=1; v=Z.zero})
+  | _ -> Exp e
 
+(** Identify a series of stmts that could be considered pure for the ITE transform *)
+let rec ite_body stmts result =
+  match stmts with
+  | [Stmt_Assign(LExpr_Var tl, te, _)] ->
+      if (tl = var_ident result) then Some (ite_const te) else None
+  | (Stmt_ConstDecl _ )::es -> ite_body es result
+  | _ -> None
 
 (** Symbolic implementation of an if statement that returns an expression
  *)
@@ -484,8 +499,17 @@ let rec sym_if (loc: l) (t: ty) (test: sym rws) (tcase: sym rws) (fcase: sym rws
       let@ (fenv,fstmts) = DisEnv.locally_
           (DisEnv.put env' >> fcase >>= assign_var loc tmp) in
       let@ () = DisEnv.join_locals tenv fenv in
-      let+ () = DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)] in
-      Exp (var_expr tmp))
+      match ite_body tstmts tmp, ite_body fstmts tmp with
+      | Some (Val _ as te), Some fe
+      | Some te, Some (Val _ as fe) ->
+          let@ () = DisEnv.write (Utils.butlast tstmts) in
+          let+ () = DisEnv.write (Utils.butlast fstmts) in
+          (match t with
+          | Type_Bits _ -> sym_ite_bits loc (Exp e) te fe
+          | _ -> sym_ite_bool loc (Exp e) te fe)
+      | _ ->
+          let+ () = DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)] in
+          Exp (var_expr tmp))
 
 (** Symbolic implementation of an if statement with no return *)
 and unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit rws =
@@ -682,15 +706,6 @@ and dis_expr loc x =
 
 and dis_expr' (loc: l) (x: AST.expr): sym rws =
     (match x with
-    | Expr_If(Type_Bits(Expr_LitInt("1")), c, ((Expr_LitBits("1" as v) | Expr_LitBits("0" as v)) as t), [], ((Expr_LitBits("1") | Expr_LitBits("0")) as f)) -> 
-      begin match t, f with 
-      | Expr_LitBits("1"), Expr_LitBits("0") ->
-        dis_expr loc (Expr_TApply(FIdent("cvt_bool_bv", 0), [], [c]))
-      | Expr_LitBits("0"), Expr_LitBits("1") ->
-        dis_expr loc (Expr_TApply(FIdent("cvt_bool_bv", 0), [], [Expr_TApply((FIdent("not_bool", 0)), [], [c])]))
-      | _ ->
-        DisEnv.pure (Val(from_bitsLit v))
-      end
     | Expr_If(ty, c, t, els, e) ->
             let rec eval_if xs d : sym rws = match xs with
                 | [] -> dis_expr loc d

@@ -81,6 +81,13 @@ let rec nth_modify (f: 'a -> 'a) (n: int) (xs: 'a list): 'a list =
     | 0, x::rest -> f x :: rest
     | n, x::rest -> x :: nth_modify f (n-1) rest
 
+(** All elements of a list except the last *)
+let rec butlast l =
+  match l with
+  | [] -> []
+  | [e] -> []
+  | e::es -> e::(butlast es)
+
 (****************************************************************
  * Option related
  ****************************************************************)
