@@ -450,6 +450,18 @@ let sym_sign_extend num_zeros old_width (e: sym): sym =
       let n' = expr_of_int (num_zeros + old_width) in
       Exp (expr_prim' "SignExtend" [expr_of_int old_width; n'] [sym_expr e; n'])
 
+(** Shift a bitvector x of width w to the left by y bits *)
+let sym_lsl_bits loc w x y =
+  match x, y with
+  | _, Val (VInt y) ->
+      let diff = w - (Z.to_int y) in
+      let slice = sym_slice loc x (Z.to_int y) diff in
+      let zeros = Val (VBits (prim_zeros_bits y)) in
+      let res = sym_append_bits loc diff (Z.to_int y) slice zeros in
+      res
+  | _ ->
+      sym_prim (FIdent ("LSL", 0)) [sym_of_int w] [x;y]
+
 (** Overwrite bits from position lo up to (lo+wd) exclusive of old with the value v.
     Needs to know the widths of both old and v to perform the operation.
     Assumes width of v is equal to wd.
@@ -467,8 +479,16 @@ let sym_insert_bits loc (old_width: int) (old: sym) (lo: sym) (wd: sym) (v: sym)
       else
         sym_append_bits loc (old_width - up) up (sym_slice loc old up (old_width - up))
           (sym_append_bits loc wd lo v (sym_slice loc old 0 lo))
+  | (_, _, Val wd', _) ->
+      (* Build an insert out of bitvector masking operations *)
+      let wd = to_int loc wd' in
+      let we = expr_of_int old_width in
+      let ones = Val (VBits (mkBits old_width (Z.pred (Z.pow (Z.succ (Z.one)) wd)))) in
+      let mask = sym_not_bits loc we (sym_lsl_bits loc old_width ones lo) in
+      let inject = sym_lsl_bits loc old_width (sym_zero_extend (old_width - wd) wd v) lo in
+      sym_or_bits loc we (sym_and_bits loc we old mask) inject
   | _ ->
-      failwith "sym_insert_bits" (* difficult because we need to know widths of each expression. *)
+      failwith "sym_insert_bits: Width of inserted bitvector is unknown"
 
 (** Append a list of bitvectors together
     TODO: Will inject invalid widths due to unsafe sym_append_bits call.
