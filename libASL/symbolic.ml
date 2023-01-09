@@ -311,7 +311,7 @@ let sym_and_bits loc w (x: sym) (y: sym) =
   | x, Val y when is_zero_bits y -> Val y
   | Val x, y when is_one_bits x -> y
   | x, Val y when is_one_bits y -> x
-  | _ -> Exp (Expr_TApply (FIdent ("or_bits", 0), [w], [sym_expr x; sym_expr y]) )
+  | _ -> Exp (Expr_TApply (FIdent ("and_bits", 0), [w], [sym_expr x; sym_expr y]) )
 
 let sym_or_bits loc w (x: sym) (y: sym) =
   match x, y with

@@ -468,7 +468,7 @@ let ite_const e =
   | Expr_Var(Ident "FALSE") -> Val (VBool false)
   | Expr_Var(Ident "TRUE") ->  Val (VBool true)
   | Expr_LitBits "1" -> Val (VBits {n=1; v=Z.one})
-  | Expr_LitBits "0" -> Val (VBits {n=0; v=Z.zero})
+  | Expr_LitBits "0" -> Val (VBits {n=1; v=Z.zero})
   | _ -> Exp e
 
 (** Identify a series of stmts that could be considered pure for the ITE transform *)
