@@ -51,9 +51,9 @@ ENCODING: aarch64_integer_arithmetic_add_sub_carry
 0x3a1f0020: [sf=0 ; op=0 ; S=1 ; Rm=31 ; Rn=1 ; Rd=0] --> OK
 0x3a1f0021: [sf=0 ; op=0 ; S=1 ; Rm=31 ; Rn=1 ; Rd=1] --> OK
 0x3a1f003f: [sf=0 ; op=0 ; S=1 ; Rm=31 ; Rn=1 ; Rd=31] --> OK
-0x3a1f03e0: [sf=0 ; op=0 ; S=1 ; Rm=31 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: File "libASL/primops.ml", line 194, characters 4-10: Assertion failed
-0x3a1f03e1: [sf=0 ; op=0 ; S=1 ; Rm=31 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: File "libASL/primops.ml", line 194, characters 4-10: Assertion failed
-0x3a1f03ff: [sf=0 ; op=0 ; S=1 ; Rm=31 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: File "libASL/primops.ml", line 194, characters 4-10: Assertion failed
+0x3a1f03e0: [sf=0 ; op=0 ; S=1 ; Rm=31 ; Rn=31 ; Rd=0] --> OK
+0x3a1f03e1: [sf=0 ; op=0 ; S=1 ; Rm=31 ; Rn=31 ; Rd=1] --> OK
+0x3a1f03ff: [sf=0 ; op=0 ; S=1 ; Rm=31 ; Rn=31 ; Rd=31] --> OK
 0x5a000000: [sf=0 ; op=1 ; S=0 ; Rm=0 ; Rn=0 ; Rd=0] --> OK
 0x5a000001: [sf=0 ; op=1 ; S=0 ; Rm=0 ; Rn=0 ; Rd=1] --> OK
 0x5a00001f: [sf=0 ; op=1 ; S=0 ; Rm=0 ; Rn=0 ; Rd=31] --> OK
@@ -105,9 +105,9 @@ ENCODING: aarch64_integer_arithmetic_add_sub_carry
 0x7a1f0020: [sf=0 ; op=1 ; S=1 ; Rm=31 ; Rn=1 ; Rd=0] --> OK
 0x7a1f0021: [sf=0 ; op=1 ; S=1 ; Rm=31 ; Rn=1 ; Rd=1] --> OK
 0x7a1f003f: [sf=0 ; op=1 ; S=1 ; Rm=31 ; Rn=1 ; Rd=31] --> OK
-0x7a1f03e0: [sf=0 ; op=1 ; S=1 ; Rm=31 ; Rn=31 ; Rd=0] --> OK
-0x7a1f03e1: [sf=0 ; op=1 ; S=1 ; Rm=31 ; Rn=31 ; Rd=1] --> OK
-0x7a1f03ff: [sf=0 ; op=1 ; S=1 ; Rm=31 ; Rn=31 ; Rd=31] --> OK
+0x7a1f03e0: [sf=0 ; op=1 ; S=1 ; Rm=31 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Invalid_argument("Z.log2up")
+0x7a1f03e1: [sf=0 ; op=1 ; S=1 ; Rm=31 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Invalid_argument("Z.log2up")
+0x7a1f03ff: [sf=0 ; op=1 ; S=1 ; Rm=31 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Invalid_argument("Z.log2up")
 0x9a000000: [sf=1 ; op=0 ; S=0 ; Rm=0 ; Rn=0 ; Rd=0] --> OK
 0x9a000001: [sf=1 ; op=0 ; S=0 ; Rm=0 ; Rn=0 ; Rd=1] --> OK
 0x9a00001f: [sf=1 ; op=0 ; S=0 ; Rm=0 ; Rn=0 ; Rd=31] --> OK
@@ -159,9 +159,9 @@ ENCODING: aarch64_integer_arithmetic_add_sub_carry
 0xba1f0020: [sf=1 ; op=0 ; S=1 ; Rm=31 ; Rn=1 ; Rd=0] --> OK
 0xba1f0021: [sf=1 ; op=0 ; S=1 ; Rm=31 ; Rn=1 ; Rd=1] --> OK
 0xba1f003f: [sf=1 ; op=0 ; S=1 ; Rm=31 ; Rn=1 ; Rd=31] --> OK
-0xba1f03e0: [sf=1 ; op=0 ; S=1 ; Rm=31 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: File "libASL/primops.ml", line 194, characters 4-10: Assertion failed
-0xba1f03e1: [sf=1 ; op=0 ; S=1 ; Rm=31 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: File "libASL/primops.ml", line 194, characters 4-10: Assertion failed
-0xba1f03ff: [sf=1 ; op=0 ; S=1 ; Rm=31 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: File "libASL/primops.ml", line 194, characters 4-10: Assertion failed
+0xba1f03e0: [sf=1 ; op=0 ; S=1 ; Rm=31 ; Rn=31 ; Rd=0] --> OK
+0xba1f03e1: [sf=1 ; op=0 ; S=1 ; Rm=31 ; Rn=31 ; Rd=1] --> OK
+0xba1f03ff: [sf=1 ; op=0 ; S=1 ; Rm=31 ; Rn=31 ; Rd=31] --> OK
 0xda000000: [sf=1 ; op=1 ; S=0 ; Rm=0 ; Rn=0 ; Rd=0] --> OK
 0xda000001: [sf=1 ; op=1 ; S=0 ; Rm=0 ; Rn=0 ; Rd=1] --> OK
 0xda00001f: [sf=1 ; op=1 ; S=0 ; Rm=0 ; Rn=0 ; Rd=31] --> OK
@@ -213,9 +213,9 @@ ENCODING: aarch64_integer_arithmetic_add_sub_carry
 0xfa1f0020: [sf=1 ; op=1 ; S=1 ; Rm=31 ; Rn=1 ; Rd=0] --> OK
 0xfa1f0021: [sf=1 ; op=1 ; S=1 ; Rm=31 ; Rn=1 ; Rd=1] --> OK
 0xfa1f003f: [sf=1 ; op=1 ; S=1 ; Rm=31 ; Rn=1 ; Rd=31] --> OK
-0xfa1f03e0: [sf=1 ; op=1 ; S=1 ; Rm=31 ; Rn=31 ; Rd=0] --> OK
-0xfa1f03e1: [sf=1 ; op=1 ; S=1 ; Rm=31 ; Rn=31 ; Rd=1] --> OK
-0xfa1f03ff: [sf=1 ; op=1 ; S=1 ; Rm=31 ; Rn=31 ; Rd=31] --> OK
+0xfa1f03e0: [sf=1 ; op=1 ; S=1 ; Rm=31 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Invalid_argument("Z.log2up")
+0xfa1f03e1: [sf=1 ; op=1 ; S=1 ; Rm=31 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Invalid_argument("Z.log2up")
+0xfa1f03ff: [sf=1 ; op=1 ; S=1 ; Rm=31 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Invalid_argument("Z.log2up")
 
 ENCODING: aarch64_integer_arithmetic_add_sub_extendedreg
 0x0b200000: [sf=0 ; op=0 ; S=0 ; Rm=0 ; option=0 ; imm3=0 ; Rn=0 ; Rd=0] --> OK
@@ -8488,38 +8488,38 @@ ENCODING: aarch64_integer_arithmetic_address_pc_rel
 0xf0ffffff: [op=1 ; immlo=3 ; immhi=524287 ; Rd=31] --> OK
 
 ENCODING: aarch64_integer_arithmetic_cnt
-0x5ac01000: [sf=0 ; op=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp7__6")
-0x5ac01001: [sf=0 ; op=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp7__6")
+0x5ac01000: [sf=0 ; op=0 ; Rn=0 ; Rd=0] --> OK
+0x5ac01001: [sf=0 ; op=0 ; Rn=0 ; Rd=1] --> OK
 0x5ac0101f: [sf=0 ; op=0 ; Rn=0 ; Rd=31] --> OK
-0x5ac01020: [sf=0 ; op=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp7__6")
-0x5ac01021: [sf=0 ; op=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp7__6")
+0x5ac01020: [sf=0 ; op=0 ; Rn=1 ; Rd=0] --> OK
+0x5ac01021: [sf=0 ; op=0 ; Rn=1 ; Rd=1] --> OK
 0x5ac0103f: [sf=0 ; op=0 ; Rn=1 ; Rd=31] --> OK
 0x5ac013e0: [sf=0 ; op=0 ; Rn=31 ; Rd=0] --> OK
 0x5ac013e1: [sf=0 ; op=0 ; Rn=31 ; Rd=1] --> OK
 0x5ac013ff: [sf=0 ; op=0 ; Rn=31 ; Rd=31] --> OK
-0x5ac01400: [sf=0 ; op=1 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp8__7")
-0x5ac01401: [sf=0 ; op=1 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp8__7")
+0x5ac01400: [sf=0 ; op=1 ; Rn=0 ; Rd=0] --> OK
+0x5ac01401: [sf=0 ; op=1 ; Rn=0 ; Rd=1] --> OK
 0x5ac0141f: [sf=0 ; op=1 ; Rn=0 ; Rd=31] --> OK
-0x5ac01420: [sf=0 ; op=1 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp8__7")
-0x5ac01421: [sf=0 ; op=1 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp8__7")
+0x5ac01420: [sf=0 ; op=1 ; Rn=1 ; Rd=0] --> OK
+0x5ac01421: [sf=0 ; op=1 ; Rn=1 ; Rd=1] --> OK
 0x5ac0143f: [sf=0 ; op=1 ; Rn=1 ; Rd=31] --> OK
 0x5ac017e0: [sf=0 ; op=1 ; Rn=31 ; Rd=0] --> OK
 0x5ac017e1: [sf=0 ; op=1 ; Rn=31 ; Rd=1] --> OK
 0x5ac017ff: [sf=0 ; op=1 ; Rn=31 ; Rd=31] --> OK
-0xdac01000: [sf=1 ; op=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp7__6")
-0xdac01001: [sf=1 ; op=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp7__6")
+0xdac01000: [sf=1 ; op=0 ; Rn=0 ; Rd=0] --> OK
+0xdac01001: [sf=1 ; op=0 ; Rn=0 ; Rd=1] --> OK
 0xdac0101f: [sf=1 ; op=0 ; Rn=0 ; Rd=31] --> OK
-0xdac01020: [sf=1 ; op=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp7__6")
-0xdac01021: [sf=1 ; op=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp7__6")
+0xdac01020: [sf=1 ; op=0 ; Rn=1 ; Rd=0] --> OK
+0xdac01021: [sf=1 ; op=0 ; Rn=1 ; Rd=1] --> OK
 0xdac0103f: [sf=1 ; op=0 ; Rn=1 ; Rd=31] --> OK
 0xdac013e0: [sf=1 ; op=0 ; Rn=31 ; Rd=0] --> OK
 0xdac013e1: [sf=1 ; op=0 ; Rn=31 ; Rd=1] --> OK
 0xdac013ff: [sf=1 ; op=0 ; Rn=31 ; Rd=31] --> OK
-0xdac01400: [sf=1 ; op=1 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp8__7")
-0xdac01401: [sf=1 ; op=1 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp8__7")
+0xdac01400: [sf=1 ; op=1 ; Rn=0 ; Rd=0] --> OK
+0xdac01401: [sf=1 ; op=1 ; Rn=0 ; Rd=1] --> OK
 0xdac0141f: [sf=1 ; op=1 ; Rn=0 ; Rd=31] --> OK
-0xdac01420: [sf=1 ; op=1 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp8__7")
-0xdac01421: [sf=1 ; op=1 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: no type known for Exp8__7")
+0xdac01420: [sf=1 ; op=1 ; Rn=1 ; Rd=0] --> OK
+0xdac01421: [sf=1 ; op=1 ; Rn=1 ; Rd=1] --> OK
 0xdac0143f: [sf=1 ; op=1 ; Rn=1 ; Rd=31] --> OK
 0xdac017e0: [sf=1 ; op=1 ; Rn=31 ; Rd=0] --> OK
 0xdac017e1: [sf=1 ; op=1 ; Rn=31 ; Rd=1] --> OK
@@ -8532,8 +8532,8 @@ ENCODING: aarch64_integer_arithmetic_div
 0x1ac00820: [sf=0 ; Rm=0 ; o1=0 ; Rn=1 ; Rd=0] --> OK
 0x1ac00821: [sf=0 ; Rm=0 ; o1=0 ; Rn=1 ; Rd=1] --> OK
 0x1ac0083f: [sf=0 ; Rm=0 ; o1=0 ; Rn=1 ; Rd=31] --> OK
-0x1ac00be0: [sf=0 ; Rm=0 ; o1=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Not_found
-0x1ac00be1: [sf=0 ; Rm=0 ; o1=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Not_found
+0x1ac00be0: [sf=0 ; Rm=0 ; o1=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp7__5 [ 0 +: 32 ] ) ) ) )")
+0x1ac00be1: [sf=0 ; Rm=0 ; o1=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp7__5 [ 0 +: 32 ] ) ) ) )")
 0x1ac00bff: [sf=0 ; Rm=0 ; o1=0 ; Rn=31 ; Rd=31] --> OK
 0x1ac00c00: [sf=0 ; Rm=0 ; o1=1 ; Rn=0 ; Rd=0] --> OK
 0x1ac00c01: [sf=0 ; Rm=0 ; o1=1 ; Rn=0 ; Rd=1] --> OK
@@ -8541,8 +8541,8 @@ ENCODING: aarch64_integer_arithmetic_div
 0x1ac00c20: [sf=0 ; Rm=0 ; o1=1 ; Rn=1 ; Rd=0] --> OK
 0x1ac00c21: [sf=0 ; Rm=0 ; o1=1 ; Rn=1 ; Rd=1] --> OK
 0x1ac00c3f: [sf=0 ; Rm=0 ; o1=1 ; Rn=1 ; Rd=31] --> OK
-0x1ac00fe0: [sf=0 ; Rm=0 ; o1=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Not_found
-0x1ac00fe1: [sf=0 ; Rm=0 ; o1=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Not_found
+0x1ac00fe0: [sf=0 ; Rm=0 ; o1=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_sint.0 {{ 32 }} ( Exp7__5 [ 0 +: 32 ] ) ) ) )")
+0x1ac00fe1: [sf=0 ; Rm=0 ; o1=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_sint.0 {{ 32 }} ( Exp7__5 [ 0 +: 32 ] ) ) ) )")
 0x1ac00fff: [sf=0 ; Rm=0 ; o1=1 ; Rn=31 ; Rd=31] --> OK
 0x1ac10800: [sf=0 ; Rm=1 ; o1=0 ; Rn=0 ; Rd=0] --> OK
 0x1ac10801: [sf=0 ; Rm=1 ; o1=0 ; Rn=0 ; Rd=1] --> OK
@@ -8550,8 +8550,8 @@ ENCODING: aarch64_integer_arithmetic_div
 0x1ac10820: [sf=0 ; Rm=1 ; o1=0 ; Rn=1 ; Rd=0] --> OK
 0x1ac10821: [sf=0 ; Rm=1 ; o1=0 ; Rn=1 ; Rd=1] --> OK
 0x1ac1083f: [sf=0 ; Rm=1 ; o1=0 ; Rn=1 ; Rd=31] --> OK
-0x1ac10be0: [sf=0 ; Rm=1 ; o1=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Not_found
-0x1ac10be1: [sf=0 ; Rm=1 ; o1=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Not_found
+0x1ac10be0: [sf=0 ; Rm=1 ; o1=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp7__5 [ 0 +: 32 ] ) ) ) )")
+0x1ac10be1: [sf=0 ; Rm=1 ; o1=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp7__5 [ 0 +: 32 ] ) ) ) )")
 0x1ac10bff: [sf=0 ; Rm=1 ; o1=0 ; Rn=31 ; Rd=31] --> OK
 0x1ac10c00: [sf=0 ; Rm=1 ; o1=1 ; Rn=0 ; Rd=0] --> OK
 0x1ac10c01: [sf=0 ; Rm=1 ; o1=1 ; Rn=0 ; Rd=1] --> OK
@@ -8559,8 +8559,8 @@ ENCODING: aarch64_integer_arithmetic_div
 0x1ac10c20: [sf=0 ; Rm=1 ; o1=1 ; Rn=1 ; Rd=0] --> OK
 0x1ac10c21: [sf=0 ; Rm=1 ; o1=1 ; Rn=1 ; Rd=1] --> OK
 0x1ac10c3f: [sf=0 ; Rm=1 ; o1=1 ; Rn=1 ; Rd=31] --> OK
-0x1ac10fe0: [sf=0 ; Rm=1 ; o1=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Not_found
-0x1ac10fe1: [sf=0 ; Rm=1 ; o1=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Not_found
+0x1ac10fe0: [sf=0 ; Rm=1 ; o1=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_sint.0 {{ 32 }} ( Exp7__5 [ 0 +: 32 ] ) ) ) )")
+0x1ac10fe1: [sf=0 ; Rm=1 ; o1=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_sint.0 {{ 32 }} ( Exp7__5 [ 0 +: 32 ] ) ) ) )")
 0x1ac10fff: [sf=0 ; Rm=1 ; o1=1 ; Rn=31 ; Rd=31] --> OK
 0x1adf0800: [sf=0 ; Rm=31 ; o1=0 ; Rn=0 ; Rd=0] --> OK
 0x1adf0801: [sf=0 ; Rm=31 ; o1=0 ; Rn=0 ; Rd=1] --> OK
@@ -8586,8 +8586,8 @@ ENCODING: aarch64_integer_arithmetic_div
 0x9ac00820: [sf=1 ; Rm=0 ; o1=0 ; Rn=1 ; Rd=0] --> OK
 0x9ac00821: [sf=1 ; Rm=0 ; o1=0 ; Rn=1 ; Rd=1] --> OK
 0x9ac0083f: [sf=1 ; Rm=0 ; o1=0 ; Rn=1 ; Rd=31] --> OK
-0x9ac00be0: [sf=1 ; Rm=0 ; o1=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Not_found
-0x9ac00be1: [sf=1 ; Rm=0 ; o1=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Not_found
+0x9ac00be0: [sf=1 ; Rm=0 ; o1=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_uint.0 {{ 64 }} ( Exp7__5 [ 0 +: 64 ] ) ) ) )")
+0x9ac00be1: [sf=1 ; Rm=0 ; o1=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_uint.0 {{ 64 }} ( Exp7__5 [ 0 +: 64 ] ) ) ) )")
 0x9ac00bff: [sf=1 ; Rm=0 ; o1=0 ; Rn=31 ; Rd=31] --> OK
 0x9ac00c00: [sf=1 ; Rm=0 ; o1=1 ; Rn=0 ; Rd=0] --> OK
 0x9ac00c01: [sf=1 ; Rm=0 ; o1=1 ; Rn=0 ; Rd=1] --> OK
@@ -8595,8 +8595,8 @@ ENCODING: aarch64_integer_arithmetic_div
 0x9ac00c20: [sf=1 ; Rm=0 ; o1=1 ; Rn=1 ; Rd=0] --> OK
 0x9ac00c21: [sf=1 ; Rm=0 ; o1=1 ; Rn=1 ; Rd=1] --> OK
 0x9ac00c3f: [sf=1 ; Rm=0 ; o1=1 ; Rn=1 ; Rd=31] --> OK
-0x9ac00fe0: [sf=1 ; Rm=0 ; o1=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Not_found
-0x9ac00fe1: [sf=1 ; Rm=0 ; o1=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Not_found
+0x9ac00fe0: [sf=1 ; Rm=0 ; o1=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_sint.0 {{ 64 }} ( Exp7__5 [ 0 +: 64 ] ) ) ) )")
+0x9ac00fe1: [sf=1 ; Rm=0 ; o1=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_sint.0 {{ 64 }} ( Exp7__5 [ 0 +: 64 ] ) ) ) )")
 0x9ac00fff: [sf=1 ; Rm=0 ; o1=1 ; Rn=31 ; Rd=31] --> OK
 0x9ac10800: [sf=1 ; Rm=1 ; o1=0 ; Rn=0 ; Rd=0] --> OK
 0x9ac10801: [sf=1 ; Rm=1 ; o1=0 ; Rn=0 ; Rd=1] --> OK
@@ -8604,8 +8604,8 @@ ENCODING: aarch64_integer_arithmetic_div
 0x9ac10820: [sf=1 ; Rm=1 ; o1=0 ; Rn=1 ; Rd=0] --> OK
 0x9ac10821: [sf=1 ; Rm=1 ; o1=0 ; Rn=1 ; Rd=1] --> OK
 0x9ac1083f: [sf=1 ; Rm=1 ; o1=0 ; Rn=1 ; Rd=31] --> OK
-0x9ac10be0: [sf=1 ; Rm=1 ; o1=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Not_found
-0x9ac10be1: [sf=1 ; Rm=1 ; o1=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Not_found
+0x9ac10be0: [sf=1 ; Rm=1 ; o1=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_uint.0 {{ 64 }} ( Exp7__5 [ 0 +: 64 ] ) ) ) )")
+0x9ac10be1: [sf=1 ; Rm=1 ; o1=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_uint.0 {{ 64 }} ( Exp7__5 [ 0 +: 64 ] ) ) ) )")
 0x9ac10bff: [sf=1 ; Rm=1 ; o1=0 ; Rn=31 ; Rd=31] --> OK
 0x9ac10c00: [sf=1 ; Rm=1 ; o1=1 ; Rn=0 ; Rd=0] --> OK
 0x9ac10c01: [sf=1 ; Rm=1 ; o1=1 ; Rn=0 ; Rd=1] --> OK
@@ -8613,8 +8613,8 @@ ENCODING: aarch64_integer_arithmetic_div
 0x9ac10c20: [sf=1 ; Rm=1 ; o1=1 ; Rn=1 ; Rd=0] --> OK
 0x9ac10c21: [sf=1 ; Rm=1 ; o1=1 ; Rn=1 ; Rd=1] --> OK
 0x9ac10c3f: [sf=1 ; Rm=1 ; o1=1 ; Rn=1 ; Rd=31] --> OK
-0x9ac10fe0: [sf=1 ; Rm=1 ; o1=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Not_found
-0x9ac10fe1: [sf=1 ; Rm=1 ; o1=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Not_found
+0x9ac10fe0: [sf=1 ; Rm=1 ; o1=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_sint.0 {{ 64 }} ( Exp7__5 [ 0 +: 64 ] ) ) ) )")
+0x9ac10fe1: [sf=1 ; Rm=1 ; o1=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled round_tozero_real.0 {{  }} ( divide_real.0 {{  }} ( 0,cvt_int_real.0 {{  }} ( cvt_bits_sint.0 {{ 64 }} ( Exp7__5 [ 0 +: 64 ] ) ) ) )")
 0x9ac10fff: [sf=1 ; Rm=1 ; o1=1 ; Rn=31 ; Rd=31] --> OK
 0x9adf0800: [sf=1 ; Rm=31 ; o1=0 ; Rn=0 ; Rd=0] --> OK
 0x9adf0801: [sf=1 ; Rm=31 ; o1=0 ; Rn=0 ; Rd=1] --> OK
@@ -8681,11 +8681,11 @@ ENCODING: aarch64_integer_arithmetic_mul_uniform_add_sub
 0x1b0087e0: [sf=0 ; Rm=0 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=0] --> OK
 0x1b0087e1: [sf=0 ; Rm=0 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=1] --> OK
 0x1b0087ff: [sf=0 ; Rm=0 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=31] --> OK
-0x1b00fc00: [sf=0 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=0] --> OK
-0x1b00fc01: [sf=0 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=1] --> OK
+0x1b00fc00: [sf=0 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
+0x1b00fc01: [sf=0 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
 0x1b00fc1f: [sf=0 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=31] --> OK
-0x1b00fc20: [sf=0 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=0] --> OK
-0x1b00fc21: [sf=0 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=1] --> OK
+0x1b00fc20: [sf=0 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
+0x1b00fc21: [sf=0 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
 0x1b00fc3f: [sf=0 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=31] --> OK
 0x1b00ffe0: [sf=0 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=31 ; Rd=0] --> OK
 0x1b00ffe1: [sf=0 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=31 ; Rd=1] --> OK
@@ -8735,11 +8735,11 @@ ENCODING: aarch64_integer_arithmetic_mul_uniform_add_sub
 0x1b0187e0: [sf=0 ; Rm=1 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=0] --> OK
 0x1b0187e1: [sf=0 ; Rm=1 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=1] --> OK
 0x1b0187ff: [sf=0 ; Rm=1 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=31] --> OK
-0x1b01fc00: [sf=0 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=0] --> OK
-0x1b01fc01: [sf=0 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=1] --> OK
+0x1b01fc00: [sf=0 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
+0x1b01fc01: [sf=0 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
 0x1b01fc1f: [sf=0 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=31] --> OK
-0x1b01fc20: [sf=0 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=0] --> OK
-0x1b01fc21: [sf=0 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=1] --> OK
+0x1b01fc20: [sf=0 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
+0x1b01fc21: [sf=0 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
 0x1b01fc3f: [sf=0 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=31] --> OK
 0x1b01ffe0: [sf=0 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=31 ; Rd=0] --> OK
 0x1b01ffe1: [sf=0 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=31 ; Rd=1] --> OK
@@ -8843,11 +8843,11 @@ ENCODING: aarch64_integer_arithmetic_mul_uniform_add_sub
 0x9b0087e0: [sf=1 ; Rm=0 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=0] --> OK
 0x9b0087e1: [sf=1 ; Rm=0 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=1] --> OK
 0x9b0087ff: [sf=1 ; Rm=0 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=31] --> OK
-0x9b00fc00: [sf=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=0] --> OK
-0x9b00fc01: [sf=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=1] --> OK
+0x9b00fc00: [sf=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 64 }} ( Exp6__5 [ 0 +: 64 ] ),cvt_bits_uint.0 {{ 64 }} ( Exp8__5 [ 0 +: 64 ] ) ) )")
+0x9b00fc01: [sf=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 64 }} ( Exp6__5 [ 0 +: 64 ] ),cvt_bits_uint.0 {{ 64 }} ( Exp8__5 [ 0 +: 64 ] ) ) )")
 0x9b00fc1f: [sf=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=31] --> OK
-0x9b00fc20: [sf=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=0] --> OK
-0x9b00fc21: [sf=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=1] --> OK
+0x9b00fc20: [sf=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 64 }} ( Exp6__5 [ 0 +: 64 ] ),cvt_bits_uint.0 {{ 64 }} ( Exp8__5 [ 0 +: 64 ] ) ) )")
+0x9b00fc21: [sf=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 64 }} ( Exp6__5 [ 0 +: 64 ] ),cvt_bits_uint.0 {{ 64 }} ( Exp8__5 [ 0 +: 64 ] ) ) )")
 0x9b00fc3f: [sf=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=31] --> OK
 0x9b00ffe0: [sf=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=31 ; Rd=0] --> OK
 0x9b00ffe1: [sf=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=31 ; Rd=1] --> OK
@@ -8897,11 +8897,11 @@ ENCODING: aarch64_integer_arithmetic_mul_uniform_add_sub
 0x9b0187e0: [sf=1 ; Rm=1 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=0] --> OK
 0x9b0187e1: [sf=1 ; Rm=1 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=1] --> OK
 0x9b0187ff: [sf=1 ; Rm=1 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=31] --> OK
-0x9b01fc00: [sf=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=0] --> OK
-0x9b01fc01: [sf=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=1] --> OK
+0x9b01fc00: [sf=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 64 }} ( Exp6__5 [ 0 +: 64 ] ),cvt_bits_uint.0 {{ 64 }} ( Exp8__5 [ 0 +: 64 ] ) ) )")
+0x9b01fc01: [sf=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 64 }} ( Exp6__5 [ 0 +: 64 ] ),cvt_bits_uint.0 {{ 64 }} ( Exp8__5 [ 0 +: 64 ] ) ) )")
 0x9b01fc1f: [sf=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=31] --> OK
-0x9b01fc20: [sf=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=0] --> OK
-0x9b01fc21: [sf=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=1] --> OK
+0x9b01fc20: [sf=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 64 }} ( Exp6__5 [ 0 +: 64 ] ),cvt_bits_uint.0 {{ 64 }} ( Exp8__5 [ 0 +: 64 ] ) ) )")
+0x9b01fc21: [sf=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 64 }} ( Exp6__5 [ 0 +: 64 ] ),cvt_bits_uint.0 {{ 64 }} ( Exp8__5 [ 0 +: 64 ] ) ) )")
 0x9b01fc3f: [sf=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=31] --> OK
 0x9b01ffe0: [sf=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=31 ; Rd=0] --> OK
 0x9b01ffe1: [sf=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=31 ; Rd=1] --> OK
@@ -9169,11 +9169,11 @@ ENCODING: aarch64_integer_arithmetic_mul_widening_32_64
 0x9ba087e0: [U=1 ; Rm=0 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=0] --> OK
 0x9ba087e1: [U=1 ; Rm=0 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=1] --> OK
 0x9ba087ff: [U=1 ; Rm=0 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=31] --> OK
-0x9ba0fc00: [U=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=0] --> OK
-0x9ba0fc01: [U=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=1] --> OK
+0x9ba0fc00: [U=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
+0x9ba0fc01: [U=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
 0x9ba0fc1f: [U=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=31] --> OK
-0x9ba0fc20: [U=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=0] --> OK
-0x9ba0fc21: [U=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=1] --> OK
+0x9ba0fc20: [U=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
+0x9ba0fc21: [U=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
 0x9ba0fc3f: [U=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=31] --> OK
 0x9ba0ffe0: [U=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=31 ; Rd=0] --> OK
 0x9ba0ffe1: [U=1 ; Rm=0 ; o0=1 ; Ra=31 ; Rn=31 ; Rd=1] --> OK
@@ -9223,11 +9223,11 @@ ENCODING: aarch64_integer_arithmetic_mul_widening_32_64
 0x9ba187e0: [U=1 ; Rm=1 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=0] --> OK
 0x9ba187e1: [U=1 ; Rm=1 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=1] --> OK
 0x9ba187ff: [U=1 ; Rm=1 ; o0=1 ; Ra=1 ; Rn=31 ; Rd=31] --> OK
-0x9ba1fc00: [U=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=0] --> OK
-0x9ba1fc01: [U=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=1] --> OK
+0x9ba1fc00: [U=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
+0x9ba1fc01: [U=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
 0x9ba1fc1f: [U=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=0 ; Rd=31] --> OK
-0x9ba1fc20: [U=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=0] --> OK
-0x9ba1fc21: [U=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=1] --> OK
+0x9ba1fc20: [U=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
+0x9ba1fc21: [U=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("bits_size_of_expr: unhandled sub_int.0 {{  }} ( 0,mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 32 }} ( Exp6__5 [ 0 +: 32 ] ),cvt_bits_uint.0 {{ 32 }} ( Exp8__5 [ 0 +: 32 ] ) ) )")
 0x9ba1fc3f: [U=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=1 ; Rd=31] --> OK
 0x9ba1ffe0: [U=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=31 ; Rd=0] --> OK
 0x9ba1ffe1: [U=1 ; Rm=1 ; o0=1 ; Ra=31 ; Rn=31 ; Rd=1] --> OK
