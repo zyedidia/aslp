@@ -298,7 +298,17 @@ module StatefulIntToBits = struct
     let w = max lw iw in
     (w,s,i)
 
-  (* alternative is to derive the signedness directly from the interval *)
+  (** Special case the range analysis for division, considering positive and negative denominators *)
+  let abs_of_div (num: abs) ((dw,ds,(upper,lower)): abs): abs =
+    let abs_of i = abs_of_bop num (dw,ds,i) Primops.prim_zdiv_int in
+    let n_one = Z.neg (Z.one) in
+    (* Consider ranges from upper to 1 and -1 to lower, excluding 0 *)
+    let n_abs = abs_of (Z.min n_one upper, Z.min n_one lower) in
+    let p_abs = abs_of (Z.max Z.one upper, Z.max Z.one lower) in
+    (* Ignore abstract points that aren't in the denominator's range *)
+    if Z.geq lower Z.zero then p_abs (* also captures (0,0) interval *)
+    else if Z.leq upper Z.zero then n_abs
+    else merge_abs n_abs p_abs
 
   let width (n,_,_) = n
   let signed (_,s,_) = s
@@ -440,7 +450,7 @@ module StatefulIntToBits = struct
     | Expr_TApply (FIdent ("divide_real",0), [], [x; y]) ->
         let x = force_signed (bv_of_real_expr vars x) in
         let y = force_signed (bv_of_real_expr vars y) in
-        let w = merge_abs (snd x) (snd y) in
+        let w = abs_of_div (snd x) (snd y) in
         let ex = extend w in
         let f = sym_prim (FIdent ("sdiv_bits", 0)) [sym_of_abs w] [ex x; ex y] in
         (f,w)
