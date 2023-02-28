@@ -1000,6 +1000,72 @@ module CopyProp = struct
   type st = expr Bindings.t
   let debug_cp = true
 
+  (* Extract an access chain for an expr or lexpr, stopping at symbolic indices *)
+  let rec get_expr_ac (e: expr): (expr * access_chain list)  =
+      match e with
+      | Expr_Field (l, f) -> let (l',c) = get_expr_ac l in (l',c@[Field f])
+      | Expr_Array (l, Expr_LitInt i) -> let (l',c) = get_expr_ac l in (l',c@[Index (VInt (Z.of_string i))])
+      | _ -> (e, []) 
+  let rec get_lexpr_ac (le: lexpr): (lexpr * access_chain list)  =
+    match le with
+    | LExpr_Field (l, f) -> let (l',c) = get_lexpr_ac l in (l',c@[Field f])
+    | LExpr_Array (l, Expr_LitInt i) -> let (l',c) = get_lexpr_ac l in (l',c@[Index (VInt (Z.of_string i))])
+    | _ -> (le, [])
+
+  (* Identify divergence on access paths to avoid clobbering *)
+  let rec overlaps (p: 'a list) (l: 'a list): bool =
+    match p, l with
+    | x::xs, y::ys -> x = y && overlaps xs ys
+    | _ -> true
+
+  (* Clobber walk, determine if assigning to the lexpr may change the expression result *)
+  class clobber_walk (cl: lexpr) = object (self)
+    inherit nopAslVisitor
+    val mutable clobbered = false
+    method! vexpr expr =
+      match expr with
+      | Expr_Var _
+      | Expr_Field _
+      | Expr_Array _ -> 
+          let (lv,lc) = get_lexpr_ac cl in
+          let (v,c) = get_expr_ac expr in
+          (match lv, v with
+          | LExpr_Var lv, Expr_Var v -> 
+              (* Clobber if they are the same base variables and lc is a prefix of c *)
+              clobbered <- clobbered || (lv = v && overlaps lc c);
+              SkipChildren
+          | _ ->
+              (* Overapprox if base of the operation is not known *)
+              if debug_cp then Printf.printf "Copy-Prop over-approx. clobber: %s %s\n" (pp_expr expr) (pp_lexpr cl);
+              clobbered <- true;
+              SkipChildren)
+      | _ -> DoChildren
+    method result = clobbered
+  end
+
+  let clobber (le: lexpr) (e: expr): bool =
+    let visitor = new clobber_walk le in
+    let _ = visit_expr visitor e in
+    visitor#result
+
+  (* Load walk, identify is the expression is memory dependent *)
+  class load_walk = object (self)
+    inherit nopAslVisitor
+    val mutable clobbered = false
+    method! vexpr expr =
+      match expr with
+      | Expr_TApply (f,_,_) -> 
+          clobbered <- clobbered || (name_of_FIdent f = "Mem.read");
+          DoChildren
+      | _ -> DoChildren
+    method result = clobbered
+  end
+
+  let load (e: expr): bool =
+    let visitor = new load_walk in
+    let _ = visit_expr visitor e in
+    visitor#result
+
   let remove (i: ident) (copies: st): st =
     try 
       Bindings.remove i copies
@@ -1022,40 +1088,6 @@ module CopyProp = struct
   let candidateIdent (i: ident) =
     match i with
     | Ident s -> Str.string_match (Str.regexp "Exp") s 0
-    | _ -> false
-
-  let rec get_lexpr_ac (le: lexpr): (lexpr * access_chain list)  =
-    match le with
-    | LExpr_Field (l, f) -> let (l',c) = get_lexpr_ac l in (l',c@[Field f])
-    | LExpr_Array (l, Expr_LitInt i) -> let (l',c) = get_lexpr_ac l in (l',c@[Index (VInt (Z.of_string i))])
-    | _ -> (le, [])
-
-  let rec get_expr_ac (e: expr): (expr * access_chain list)  =
-    match e with
-    | Expr_Field (l, f) -> let (l',c) = get_expr_ac l in (l',c@[Field f])
-    | Expr_Array (l, Expr_LitInt i) -> let (l',c) = get_expr_ac l in (l',c@[Index (VInt (Z.of_string i))])
-    | _ -> (e, [])
-
-  let rec overlaps (p: 'a list) (l: 'a list): bool =
-    match p, l with
-    | x::xs, y::ys -> x = y && overlaps xs ys
-    | _ -> true
-
-  (* TODO: could clobber sub-expressions in e *)
-  let clobber (le: lexpr) (e: expr): bool =
-    let (lv,lc) = get_lexpr_ac le in
-    let (v,c) = get_expr_ac e in
-    match lv, v with
-      (* clobber if they are the same base variables and lc is a prefix of c *)
-    | LExpr_Var lv, Expr_Var v -> lv = v && overlaps lc c
-      (* Do not clobber if memory load instead *)
-    | _, Expr_TApply (f,_,_) when name_of_FIdent f = "Mem.read" -> false
-      (* clobber if either lv or v are not base variables (who knows whats going on) *)
-    | _ -> true
-
-  let load (e: expr): bool =
-    match e with 
-    | Expr_TApply (f,_,_) -> true
     | _ -> false
 
   let removeClobbers (le: lexpr) (copies: st): st =
@@ -1081,15 +1113,6 @@ module CopyProp = struct
           let e = subst_expr copies e in
           let copies = if candidateExpr e then add v e copies else remove v copies in
           (acc@[stmt], copies)
-
-          (*
-      | Stmt_Assign(LExpr_Var v, e, loc) ->
-          (* Introduce propagations for assignments to known locals *)
-          let stmt = subst_stmt copies stmt in
-          let e = subst_expr copies e in
-          let copies = if candidateExpr e then add v e copies else remove v copies in
-          (acc@[stmt], copies)
-          *)
 
       | Stmt_Assign(le, e, loc) ->
           (* Remove all clobbers *)
