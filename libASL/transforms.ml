@@ -998,7 +998,7 @@ end
 
 module CopyProp = struct
   type st = expr Bindings.t
-  let debug_cp = true
+  let debug_cp = false
 
   (* Extract an access chain for an expr or lexpr, stopping at symbolic indices *)
   let rec get_expr_ac (e: expr): (expr * access_chain list)  =
@@ -1048,7 +1048,7 @@ module CopyProp = struct
     let _ = visit_expr visitor e in
     visitor#result
 
-  (* Load walk, identify is the expression is memory dependent *)
+  (* Load walk, identify if the expression is memory dependent *)
   class load_walk = object (self)
     inherit nopAslVisitor
     val mutable clobbered = false
