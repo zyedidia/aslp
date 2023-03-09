@@ -1,4 +1,4 @@
-FROM ocaml/opam:ubuntu-22.04-ocaml-4.09
+FROM ocaml/opam:ubuntu-20.04-ocaml-4.09
 
 # Install system dependencies
 USER root
@@ -48,5 +48,3 @@ RUN cd bap/plugins/a64 && eval $(opam env) \
 
 # Unpack encodings to be used for coverage testing
 RUN cd asl-interpreter && tar -xzvf encodings.tar.gz
-
-CMD ["bash"]
