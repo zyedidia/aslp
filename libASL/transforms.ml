@@ -345,6 +345,10 @@ module StatefulIntToBits = struct
   let is_power_of_2 n = 
     n <> 0 && 0 = Int.logand n (n-1)
 
+  let is_pos (_,abs) =
+    let (_,l) = interval abs in
+    Z.geq l Z.zero
+
   (** Covert an integer expression tree into a bitvector equivalent *)
   let rec bv_of_int_expr (vars: state) (e: expr): (sym * abs) =
     match e with
@@ -393,6 +397,16 @@ module StatefulIntToBits = struct
         let f = sym_prim (FIdent ("mul_bits", 0)) [sym_of_abs w] [ex x;ex y] in
         (f,w)
 
+    (* Interface only supports zero rounding division at present, force fdiv result to be positive *)
+    | Expr_TApply (FIdent ("fdiv_int", 0), [], [x; y]) ->
+        let x = force_signed (bv_of_int_expr vars x) in
+        let y = force_signed (bv_of_int_expr vars y) in
+        assert (is_pos x && is_pos y);
+        let w = abs_of_div (snd x) (snd y) in
+        let ex = extend w in
+        let f = sym_prim (FIdent ("sdiv_bits", 0)) [sym_of_abs w] [ex x; ex y] in
+        (f,w)
+
     (* when the divisor is a power of 2, mod can be implemented by truncating. *)
     | Expr_TApply (FIdent ("frem_int", 0), [], [n;Expr_LitInt d]) when is_power_of_2 (int_of_string d) ->
         let digits = Z.log2 (Z.of_string d) in
@@ -422,8 +436,8 @@ module StatefulIntToBits = struct
             (sym_append_bits Unknown (width (snd x)) yshift (fst x) (sym_zeros yshift),abs)
         | _ -> 
             let (u,_) = interval (snd y) in
-            (* in worst case, could shift by 2^(ysize-1)-1 bits, assuming y >= 0. *)
-            let size = width (snd x) + (Int.shift_left 2 (Z.to_int u)) - 1 in
+            (* in worst case, could shift upper bound on y, adding y bits *)
+            let size = width (snd x) + (Z.to_int (Z.max u Z.zero)) in
             let abs = if signed (snd x) then abs_of_width size else abs_of_uwidth size in
             let ex = extend abs in
             let f = sym_prim (FIdent ("lsl_bits", 0)) [sym_of_int size; sym_of_abs (snd y)] [ex x;fst y] in
@@ -1303,6 +1317,7 @@ module CommonSubExprElim = struct
       | "LSL"                -> Type_Bits(num)
       | "LSR"                -> Type_Bits(num)
       | "ASR"                -> Type_Bits(num)
+      | "sdiv_bits"          -> Type_Bits(num)
       | "cvt_bits_uint"      -> type_integer
       | "cvt_bits_sint"      -> type_integer
       | "eq_bits"            -> type_bool
