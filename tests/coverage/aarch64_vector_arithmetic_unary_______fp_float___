@@ -2566,15 +2566,15 @@ ENCODING: aarch64_vector_arithmetic_unary_special_frecpx
 
 
 ENCODING: aarch64_vector_arithmetic_unary_special_recip_int
-0x0ea1c800: [Q=0 ; sz=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x0ea1c801: [Q=0 ; sz=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x0ea1c81f: [Q=0 ; sz=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x0ea1c820: [Q=0 ; sz=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x0ea1c821: [Q=0 ; sz=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x0ea1c83f: [Q=0 ; sz=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x0ea1cbe0: [Q=0 ; sz=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x0ea1cbe1: [Q=0 ; sz=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x0ea1cbff: [Q=0 ; sz=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
+0x0ea1c800: [Q=0 ; sz=0 ; Rn=0 ; Rd=0] --> OK
+0x0ea1c801: [Q=0 ; sz=0 ; Rn=0 ; Rd=1] --> OK
+0x0ea1c81f: [Q=0 ; sz=0 ; Rn=0 ; Rd=31] --> OK
+0x0ea1c820: [Q=0 ; sz=0 ; Rn=1 ; Rd=0] --> OK
+0x0ea1c821: [Q=0 ; sz=0 ; Rn=1 ; Rd=1] --> OK
+0x0ea1c83f: [Q=0 ; sz=0 ; Rn=1 ; Rd=31] --> OK
+0x0ea1cbe0: [Q=0 ; sz=0 ; Rn=31 ; Rd=0] --> OK
+0x0ea1cbe1: [Q=0 ; sz=0 ; Rn=31 ; Rd=1] --> OK
+0x0ea1cbff: [Q=0 ; sz=0 ; Rn=31 ; Rd=31] --> OK
 0x0ee1c800: [Q=0 ; sz=1 ; Rn=0 ; Rd=0] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 88202 char 39 - line 88203 char 0)
 0x0ee1c801: [Q=0 ; sz=1 ; Rn=0 ; Rd=1] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 88202 char 39 - line 88203 char 0)
 0x0ee1c81f: [Q=0 ; sz=1 ; Rn=0 ; Rd=31] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 88202 char 39 - line 88203 char 0)
@@ -2584,15 +2584,15 @@ ENCODING: aarch64_vector_arithmetic_unary_special_recip_int
 0x0ee1cbe0: [Q=0 ; sz=1 ; Rn=31 ; Rd=0] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 88202 char 39 - line 88203 char 0)
 0x0ee1cbe1: [Q=0 ; sz=1 ; Rn=31 ; Rd=1] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 88202 char 39 - line 88203 char 0)
 0x0ee1cbff: [Q=0 ; sz=1 ; Rn=31 ; Rd=31] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 88202 char 39 - line 88203 char 0)
-0x4ea1c800: [Q=1 ; sz=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x4ea1c801: [Q=1 ; sz=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x4ea1c81f: [Q=1 ; sz=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x4ea1c820: [Q=1 ; sz=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x4ea1c821: [Q=1 ; sz=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x4ea1c83f: [Q=1 ; sz=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x4ea1cbe0: [Q=1 ; sz=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x4ea1cbe1: [Q=1 ; sz=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
-0x4ea1cbff: [Q=1 ; sz=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
+0x4ea1c800: [Q=1 ; sz=0 ; Rn=0 ; Rd=0] --> OK
+0x4ea1c801: [Q=1 ; sz=0 ; Rn=0 ; Rd=1] --> OK
+0x4ea1c81f: [Q=1 ; sz=0 ; Rn=0 ; Rd=31] --> OK
+0x4ea1c820: [Q=1 ; sz=0 ; Rn=1 ; Rd=0] --> OK
+0x4ea1c821: [Q=1 ; sz=0 ; Rn=1 ; Rd=1] --> OK
+0x4ea1c83f: [Q=1 ; sz=0 ; Rn=1 ; Rd=31] --> OK
+0x4ea1cbe0: [Q=1 ; sz=0 ; Rn=31 ; Rd=0] --> OK
+0x4ea1cbe1: [Q=1 ; sz=0 ; Rn=31 ; Rd=1] --> OK
+0x4ea1cbff: [Q=1 ; sz=0 ; Rn=31 ; Rd=31] --> OK
 0x4ee1c800: [Q=1 ; sz=1 ; Rn=0 ; Rd=0] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 88202 char 39 - line 88203 char 0)
 0x4ee1c801: [Q=1 ; sz=1 ; Rn=0 ; Rd=1] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 88202 char 39 - line 88203 char 0)
 0x4ee1c81f: [Q=1 ; sz=1 ; Rn=0 ; Rd=31] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 88202 char 39 - line 88203 char 0)
