@@ -243,14 +243,18 @@ let sym_le_int   = prim_binop "le_int"
 let sym_eq_bits  = prim_binop "eq_bits"
 let sym_inmask   = prim_binop "in_mask"
 
+let sym_eq_real  = prim_binop "eq_real"
+
 let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
   (match (x,y) with
   | (Val x,Val y) -> Val (from_bool (eval_eq loc x y))
   | (Exp _,Val v) | (Val v, Exp _) ->
       (match v with
       | VBits _ -> sym_eq_bits loc x y
-      | VInt _ -> sym_eq_int loc x y
-      | _ -> failwith "sym_eq: unknown value type")
+      | VInt _
+      | VEnum _ -> sym_eq_int loc x y
+      | VReal _ -> sym_eq_real loc x y
+      | _ -> failwith @@ "sym_eq: unknown value type " ^ (pp_sym x) ^ " " ^ (pp_sym y))
   | (_,_) -> failwith "sym_eq: insufficient info to resolve type")
 
 (*** Symbolic Boolean Operations ***)
