@@ -45,134 +45,134 @@ bits(N1) asr_bits(bits(N1) x, bits(N2) y)
     return ASR(x, yn);
 
 integer HighestSetBit(bits(N) x)
-    assert 0 < N && N <= 64; 
-    if (63 < N && x[63] == '1') then 
+    assert 0 < N && N <= 64;
+    if (63 < N && x[63] == '1') then
         return 63;
-    elsif (62 < N && x[62] == '1') then 
+    elsif (62 < N && x[62] == '1') then
         return 62;
-    elsif (61 < N && x[61] == '1') then 
+    elsif (61 < N && x[61] == '1') then
         return 61;
-    elsif (60 < N && x[60] == '1') then 
+    elsif (60 < N && x[60] == '1') then
         return 60;
-    elsif (59 < N && x[59] == '1') then 
+    elsif (59 < N && x[59] == '1') then
         return 59;
-    elsif (58 < N && x[58] == '1') then 
+    elsif (58 < N && x[58] == '1') then
         return 58;
-    elsif (57 < N && x[57] == '1') then 
+    elsif (57 < N && x[57] == '1') then
         return 57;
-    elsif (56 < N && x[56] == '1') then 
+    elsif (56 < N && x[56] == '1') then
         return 56;
-    elsif (55 < N && x[55] == '1') then 
+    elsif (55 < N && x[55] == '1') then
         return 55;
-    elsif (54 < N && x[54] == '1') then 
+    elsif (54 < N && x[54] == '1') then
         return 54;
-    elsif (53 < N && x[53] == '1') then 
+    elsif (53 < N && x[53] == '1') then
         return 53;
-    elsif (52 < N && x[52] == '1') then 
+    elsif (52 < N && x[52] == '1') then
         return 52;
-    elsif (51 < N && x[51] == '1') then 
+    elsif (51 < N && x[51] == '1') then
         return 51;
-    elsif (50 < N && x[50] == '1') then 
+    elsif (50 < N && x[50] == '1') then
         return 50;
-    elsif (49 < N && x[49] == '1') then 
+    elsif (49 < N && x[49] == '1') then
         return 49;
-    elsif (48 < N && x[48] == '1') then 
+    elsif (48 < N && x[48] == '1') then
         return 48;
-    elsif (47 < N && x[47] == '1') then 
+    elsif (47 < N && x[47] == '1') then
         return 47;
-    elsif (46 < N && x[46] == '1') then 
+    elsif (46 < N && x[46] == '1') then
         return 46;
-    elsif (45 < N && x[45] == '1') then 
+    elsif (45 < N && x[45] == '1') then
         return 45;
-    elsif (44 < N && x[44] == '1') then 
+    elsif (44 < N && x[44] == '1') then
         return 44;
-    elsif (43 < N && x[43] == '1') then 
+    elsif (43 < N && x[43] == '1') then
         return 43;
-    elsif (42 < N && x[42] == '1') then 
+    elsif (42 < N && x[42] == '1') then
         return 42;
-    elsif (41 < N && x[41] == '1') then 
+    elsif (41 < N && x[41] == '1') then
         return 41;
-    elsif (40 < N && x[40] == '1') then 
+    elsif (40 < N && x[40] == '1') then
         return 40;
-    elsif (39 < N && x[39] == '1') then 
+    elsif (39 < N && x[39] == '1') then
         return 39;
-    elsif (38 < N && x[38] == '1') then 
+    elsif (38 < N && x[38] == '1') then
         return 38;
-    elsif (37 < N && x[37] == '1') then 
+    elsif (37 < N && x[37] == '1') then
         return 37;
-    elsif (36 < N && x[36] == '1') then 
+    elsif (36 < N && x[36] == '1') then
         return 36;
-    elsif (35 < N && x[35] == '1') then 
+    elsif (35 < N && x[35] == '1') then
         return 35;
-    elsif (34 < N && x[34] == '1') then 
+    elsif (34 < N && x[34] == '1') then
         return 34;
-    elsif (33 < N && x[33] == '1') then 
+    elsif (33 < N && x[33] == '1') then
         return 33;
-    elsif (32 < N && x[32] == '1') then 
+    elsif (32 < N && x[32] == '1') then
         return 32;
-    elsif (31 < N && x[31] == '1') then 
+    elsif (31 < N && x[31] == '1') then
         return 31;
-    elsif (30 < N && x[30] == '1') then 
+    elsif (30 < N && x[30] == '1') then
         return 30;
-    elsif (29 < N && x[29] == '1') then 
+    elsif (29 < N && x[29] == '1') then
         return 29;
-    elsif (28 < N && x[28] == '1') then 
+    elsif (28 < N && x[28] == '1') then
         return 28;
-    elsif (27 < N && x[27] == '1') then 
+    elsif (27 < N && x[27] == '1') then
         return 27;
-    elsif (26 < N && x[26] == '1') then 
+    elsif (26 < N && x[26] == '1') then
         return 26;
-    elsif (25 < N && x[25] == '1') then 
+    elsif (25 < N && x[25] == '1') then
         return 25;
-    elsif (24 < N && x[24] == '1') then 
+    elsif (24 < N && x[24] == '1') then
         return 24;
-    elsif (23 < N && x[23] == '1') then 
+    elsif (23 < N && x[23] == '1') then
         return 23;
-    elsif (22 < N && x[22] == '1') then 
+    elsif (22 < N && x[22] == '1') then
         return 22;
-    elsif (21 < N && x[21] == '1') then 
+    elsif (21 < N && x[21] == '1') then
         return 21;
-    elsif (20 < N && x[20] == '1') then 
+    elsif (20 < N && x[20] == '1') then
         return 20;
-    elsif (19 < N && x[19] == '1') then 
+    elsif (19 < N && x[19] == '1') then
         return 19;
-    elsif (18 < N && x[18] == '1') then 
+    elsif (18 < N && x[18] == '1') then
         return 18;
-    elsif (17 < N && x[17] == '1') then 
+    elsif (17 < N && x[17] == '1') then
         return 17;
-    elsif (16 < N && x[16] == '1') then 
+    elsif (16 < N && x[16] == '1') then
         return 16;
-    elsif (15 < N && x[15] == '1') then 
+    elsif (15 < N && x[15] == '1') then
         return 15;
-    elsif (14 < N && x[14] == '1') then 
+    elsif (14 < N && x[14] == '1') then
         return 14;
-    elsif (13 < N && x[13] == '1') then 
+    elsif (13 < N && x[13] == '1') then
         return 13;
-    elsif (12 < N && x[12] == '1') then 
+    elsif (12 < N && x[12] == '1') then
         return 12;
-    elsif (11 < N && x[11] == '1') then 
+    elsif (11 < N && x[11] == '1') then
         return 11;
-    elsif (10 < N && x[10] == '1') then 
+    elsif (10 < N && x[10] == '1') then
         return 10;
-    elsif (9 < N && x[9] == '1') then 
+    elsif (9 < N && x[9] == '1') then
         return 9;
-    elsif (8 < N && x[8] == '1') then 
+    elsif (8 < N && x[8] == '1') then
         return 8;
-    elsif (7 < N && x[7] == '1') then 
+    elsif (7 < N && x[7] == '1') then
         return 7;
-    elsif (6 < N && x[6] == '1') then 
+    elsif (6 < N && x[6] == '1') then
         return 6;
-    elsif (5 < N && x[5] == '1') then 
+    elsif (5 < N && x[5] == '1') then
         return 5;
-    elsif (4 < N && x[4] == '1') then 
+    elsif (4 < N && x[4] == '1') then
         return 4;
-    elsif (3 < N && x[3] == '1') then 
+    elsif (3 < N && x[3] == '1') then
         return 3;
-    elsif (2 < N && x[2] == '1') then 
+    elsif (2 < N && x[2] == '1') then
         return 2;
-    elsif (1 < N && x[1] == '1') then 
+    elsif (1 < N && x[1] == '1') then
         return 1;
-    elsif (0 < N && x[0] == '1') then 
+    elsif (0 < N && x[0] == '1') then
         return 0;
     else
         return -1;
@@ -196,7 +196,7 @@ integer LowestSetBit(bits(N) x)
     elsif (2 < N && x[2] == '1') then
         return 2;
     elsif (3 < N && x[3] == '1') then
-        return 60;
+        return 3;
     elsif (4 < N && x[4] == '1') then
         return 4;
     elsif (5 < N && x[5] == '1') then
