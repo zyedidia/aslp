@@ -637,6 +637,7 @@ module StatefulIntToBits = struct
 
       (* Ignore all other stmts *)
       | Stmt_Assert _ 
+      | Stmt_Throw _
       | Stmt_TCall _
       | Stmt_VarDeclsNoInit _ 
       | Stmt_ConstDecl _
