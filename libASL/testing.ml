@@ -381,9 +381,10 @@ let op_eval (env: Env.t) (iset: string) (op: value): Env.t opresult =
 
 let op_dis (env: Env.t) (iset: string) (op: value): stmt list opresult =
   let env = Env.copy env in
+  let lenv = Dis.build_env env in
   let decoder = Eval.Env.getDecoder env (Ident iset) in
   try
-    let stmts = Dis.dis_decode_entry env decoder op in
+    let stmts = Dis.dis_decode_entry env lenv decoder op in
     Result.Ok stmts
   with
     | e -> Result.Error (Op_DisFail e)
