@@ -913,7 +913,9 @@ module CommonSubExprElim = struct
         let new_stmt = Stmt_ConstDecl(infer_cse_expr_type head, Ident(new_var_name), head, Unknown) in
 
         let () = repl#add (Ident(new_var_name)) head in
-        add_exprs_num (insert_into_stmts xs new_stmt) (tail) (id+1)
+        (* Do replacement in our remaining eliminate-able expressions
+           to ensure that they will continue to match correctly *)
+        add_exprs_num (insert_into_stmts xs new_stmt) (visit_exprs repl tail) (id+1)
     in
     add_exprs_num xs knowledge 0
 
