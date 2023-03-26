@@ -70,7 +70,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         Eval.initializeGlobals cpu.env;
     | [":init"; "regs"] ->
         let vals = (List.init 64 (fun _ -> Z.of_int64 (Random.int64 Int64.max_int))) in
-        Eval.initializeRegisters cpu.env vals;
+        Eval.initializeRegistersAndMemory cpu.env vals;
     | ":enumerate" :: iset :: tail ->
         let (start,stop,fname) = (match tail with
         | [start;stop;fname] -> (int_of_string start, int_of_string stop, fname)
@@ -90,6 +90,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
                 List.iter (fun (op, valid) ->
                     let fs = fields_of_opcode fields op in
                     Printf.printf "%s: %s --> " (hex_of_int op) (pp_enc_fields fs);
+                    flush stdout;
                     if valid then
                         let result = op_test_opcode cpu.env iset op in
                         Printf.printf "%s\n" (pp_opresult (fun _ -> "OK") result)
@@ -105,7 +106,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
                 let initEnv = Eval.Env.copy cpu.env in
                 (* Obtain and set random initial values for _R registers. *)
                 let vals = (List.init 64 (fun _ -> Z.of_int64 (Random.int64 Int64.max_int))) in
-                Eval.initializeRegisters initEnv vals;
+                Eval.initializeRegistersAndMemory initEnv vals;
                 (* Replace remaining VUninitialized with default zero values. *)
                 Eval.initializeGlobals initEnv;
 
@@ -201,7 +202,8 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         Printf.printf "Dumping instruction semantics for %s %s" iset (Z.format "%x" op);
         Printf.printf " to file %s\n" fname;
         (* NOTE: .aslb file is a marshalled `stmt list` *)
-        Marshal.to_channel chan (stmts : stmt list) []
+        Marshal.to_channel chan (stmts : stmt list) [];
+        close_out chan
     | (":set" :: "impdef" :: rest) ->
         let cmd = String.concat " " rest in
         let loc = mkLoc fname cmd in

@@ -462,17 +462,33 @@ let sym_val_or_uninit (t: ty) (x: sym): value rws =
   | Val v -> DisEnv.pure v
   | Exp e -> DisEnv.mkUninit t
 
+(** Identify constants suitable for the ITE transform *)
+let ite_const e =
+  match e with
+  | Expr_Var(Ident "FALSE") -> Val (VBool false)
+  | Expr_Var(Ident "TRUE") ->  Val (VBool true)
+  | Expr_LitBits "1" -> Val (VBits {n=1; v=Z.one})
+  | Expr_LitBits "0" -> Val (VBits {n=1; v=Z.zero})
+  | _ -> Exp e
 
+(** Identify a series of stmts that could be considered pure for the ITE transform *)
+let rec ite_body stmts result =
+  match stmts with
+  | [Stmt_Assign(LExpr_Var tl, te, _)] ->
+      if (tl = var_ident result) then Some (ite_const te) else None
+  | (Stmt_ConstDecl _ )::es -> ite_body es result
+  | _ -> None
 
 (** Symbolic implementation of an if statement that returns an expression
  *)
-let sym_if (loc: l) (t: ty) (test: sym rws) (tcase: sym rws) (fcase: sym rws): sym rws =
+let rec sym_if (loc: l) (t: ty) (test: sym rws) (tcase: sym rws) (fcase: sym rws): sym rws =
   let@ r = test in
   (match r with
   | Val (VBool (true))  -> tcase
   | Val (VBool (false)) -> fcase
   | Val _ -> failwith ("Split on non-boolean value")
   | Exp e ->
+      let@ t = dis_type loc t in
       let@ tmp = declare_fresh_named_var loc "If" t in
       (* Evaluate true branch statements. *)
       let@ (tenv,tstmts) = DisEnv.locally_
@@ -483,11 +499,20 @@ let sym_if (loc: l) (t: ty) (test: sym rws) (tcase: sym rws) (fcase: sym rws): s
       let@ (fenv,fstmts) = DisEnv.locally_
           (DisEnv.put env' >> fcase >>= assign_var loc tmp) in
       let@ () = DisEnv.join_locals tenv fenv in
-      let+ () = DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)] in
-      Exp (var_expr tmp))
+      match ite_body tstmts tmp, ite_body fstmts tmp with
+      | Some (Val _ as te), Some fe
+      | Some te, Some (Val _ as fe) ->
+          let@ () = DisEnv.write (Utils.butlast tstmts) in
+          let+ () = DisEnv.write (Utils.butlast fstmts) in
+          (match t with
+          | Type_Bits _ -> sym_ite_bits loc (Exp e) te fe
+          | _ -> sym_ite_bool loc (Exp e) te fe)
+      | _ ->
+          let+ () = DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)] in
+          Exp (var_expr tmp))
 
 (** Symbolic implementation of an if statement with no return *)
-let unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit rws =
+and unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit rws =
   let@ r = test in
   (match r with
   | Val (VBool (true))  -> tcase
@@ -502,32 +527,32 @@ let unit_if (loc: l) (test: sym rws) (tcase: unit rws) (fcase: unit rws): unit r
       let@ () = DisEnv.join_locals tenv fenv in
       DisEnv.write [Stmt_If(e, tstmts, [], fstmts, loc)])
 
-let sym_and (loc: l) (x: sym rws) (y: sym rws): sym rws =
+and sym_and (loc: l) (x: sym rws) (y: sym rws): sym rws =
     sym_if loc type_bool x y (DisEnv.pure sym_false)
 
-let sym_or (loc: l) (x: sym rws) (y: sym rws): sym rws =
+and sym_or (loc: l) (x: sym rws) (y: sym rws): sym rws =
     sym_if loc type_bool x (DisEnv.pure sym_true) y
 
 (** Symbolic implementation of List.for_all2 *)
-let rec sym_for_all2 p l1 l2 =
+and sym_for_all2 p l1 l2 =
   match (l1, l2) with
   | ([], []) -> DisEnv.pure sym_true
   | (a1::l1, a2::l2) -> sym_if Unknown (type_bool) (p a1 a2) (sym_for_all2 p l1 l2) (DisEnv.pure sym_false)
   | (_, _) -> invalid_arg "sym_for_all2"
 
 (** Symbolic implementation of List.exists *)
-let rec sym_exists p = function
+and sym_exists p = function
   | [] -> DisEnv.pure sym_false
   | [a] -> p a
   | a::l -> sym_or Unknown (p a) (sym_exists p l)
 
-let width_of_type (loc: l) (t: ty): int =
+and width_of_type (loc: l) (t: ty): int =
   match t with
   | Type_Bits (Expr_LitInt wd) -> int_of_string wd
   | Type_Register (wd, _) -> int_of_string wd
   | _ -> unsupported loc @@ "Can't get bit width of type: " ^ pp_type t
 
-let width_of_field (loc: l) (t: ty) (f: ident): int =
+and width_of_field (loc: l) (t: ty) (f: ident): int =
   let env = Tcheck.env0 in
   let ft =
     (match Tcheck.typeFields env loc t with
@@ -539,7 +564,7 @@ let width_of_field (loc: l) (t: ty) (f: ident): int =
 (** Disassembly Functions *)
 
 (** Determine the type of memory access expression (Var, Array, Field) *)
-let rec type_of_load (loc: l) (x: expr): ty rws =
+and type_of_load (loc: l) (x: expr): ty rws =
   let env = Tcheck.env0 in
   (match x with
   | Expr_Var(id) ->
@@ -681,15 +706,6 @@ and dis_expr loc x =
 
 and dis_expr' (loc: l) (x: AST.expr): sym rws =
     (match x with
-    | Expr_If(Type_Bits(Expr_LitInt("1")), c, ((Expr_LitBits("1" as v) | Expr_LitBits("0" as v)) as t), [], ((Expr_LitBits("1") | Expr_LitBits("0")) as f)) -> 
-      begin match t, f with 
-      | Expr_LitBits("1"), Expr_LitBits("0") ->
-        dis_expr loc (Expr_TApply(FIdent("cvt_bool_bv", 0), [], [c]))
-      | Expr_LitBits("0"), Expr_LitBits("1") ->
-        dis_expr loc (Expr_TApply(FIdent("cvt_bool_bv", 0), [], [Expr_TApply((FIdent("not_bool", 0)), [], [c])]))
-      | _ ->
-        DisEnv.pure (Val(from_bitsLit v))
-      end
     | Expr_If(ty, c, t, els, e) ->
             let rec eval_if xs d : sym rws = match xs with
                 | [] -> dis_expr loc d
@@ -1365,6 +1381,7 @@ let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt l
     let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
     (* let stmts' = Transforms.Bits.bitvec_conversion stmts' in *)
+    let stmts' = Transforms.StatefulIntToBits.run stmts' in
     let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
     let stmts' = Transforms.CommonSubExprElim.do_transform stmts' in
 

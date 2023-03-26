@@ -323,15 +323,18 @@ let int_of_opcode: opcode_value -> int =
 
 let field_vals_flags_only (enc: encoding) (name: string) (wd: int): int list =
   let Encoding_Block (instr, _, _, _, _, _, _, _) = enc in
+  let bound = Int.shift_left 1 wd in
+  let ones = bound - 1 in
   match (instr, name) with
   | Ident "aarch64_branch_unconditional_eret", "Rn" -> [0b11111]
   | Ident "aarch64_branch_unconditional_register", "Rn" -> [0; 1; 0b11111]
   | _, "cond" -> [1]
-  | _ when Utils.startswith name "R" && name <> "R" -> [0;1]
-  | _ when Utils.startswith name "X" && name <> "R" -> [1]
-  | _ when Utils.startswith name "imm" -> [0;1]
+  | _ when Utils.startswith name "R" && name <> "R" -> [0;1;ones]
+  | _ when Utils.startswith name "X" && name <> "X" -> [0;1;ones]
+  | _ when Utils.startswith name "imm" -> [0;1;ones]
   | _ when Utils.startswith name "uimm" -> [1]
-  | _ -> List.init (Int.shift_left 1 wd) (fun x -> x)
+  | _, ("b40") -> [0;1;ones]
+  | _ -> List.init bound (fun x -> x)
 
 let enumerate_encoding (enc: encoding) (field_vals: string -> int -> int list): encoding_tree =
   let Encoding_Block(name, iset, fields, opcode, guard, unpreds, stmts, loc) = enc in
@@ -404,7 +407,7 @@ let op_test_opcode (env: Env.t) (iset: string) (op: int): Env.t opresult =
   let initenv = Env.copy env in
   Random.self_init ();
   let vals = (List.init 64 (fun _ -> Z.of_int64 (Random.int64 Int64.max_int))) in
-  Eval.initializeRegisters initenv vals;
+  Eval.initializeRegistersAndMemory initenv vals;
   Eval.initializeGlobals initenv;
 
   let initenv = Env.freeze initenv in
@@ -418,14 +421,15 @@ let op_test_opcode (env: Env.t) (iset: string) (op: int): Env.t opresult =
 let get_opcodes (opt_verbose: bool ref) (iset: string) (instr: string) (env: Env.t): (string * instr_field list * ((int * bool) list) option) list =
   if !opt_verbose then Printf.printf "Coverage for encoding %s\n" instr;
 
-  let re = Str.regexp instr in
+  let re = Pcre.regexp instr in
   let encoding_matches = function
       | (Encoding_Block (Ident nm, Ident is, _, _, _, _, _, _)) ->
-          is = iset && Str.string_match re nm 0
+          is = iset && Pcre.pmatch ~rex:re nm
       | _ -> assert false
   in
   let encs = List.map (fun (x,_,_,_) -> x) (Env.listInstructions env) in
   let encs' = List.filter encoding_matches encs in
+  (* List.iter (function (Encoding_Block (Ident mn, _,_,_,_,_,_,_)) -> Printf.printf "%s\n" mn | _ -> assert false) encs'; *)
 
   let opcodes = load_opcodes "encodings" in
   let get_opcodes nm =
