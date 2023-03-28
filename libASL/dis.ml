@@ -19,6 +19,7 @@ open Symbolic
 
 let debug_level = ref 0
 let debug_show_trace = ref false
+let no_debug = fun () -> !debug_level = 0
 
 (** (name, arg, location) tuple for tracing disassembly calls.
     For example: ("dis_expr", "1+1", loc).
@@ -684,7 +685,9 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
   TODO: This does not appear to be a problem at the moment, but requires greater testing to be sure.
   *)
 and dis_load loc x =
-  DisEnv.scope loc "dis_load" (pp_expr x) pp_sym (dis_load_chain loc x [])
+  let body = dis_load_chain loc x []  in
+  if no_debug() then body
+  else DisEnv.scope loc "dis_load" (pp_expr x) pp_sym body
 
 and dis_load_chain (loc: l) (x: expr) (ref: access_chain list): sym rws =
   (match x with
@@ -724,7 +727,10 @@ and dis_load_chain (loc: l) (x: expr) (ref: access_chain list): sym rws =
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
 and dis_expr loc x =
-  let+ r = DisEnv.scope loc "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x) in
+  let+ r =
+    let body = dis_expr' loc x in
+    if no_debug() then body
+    else DisEnv.scope loc "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x) in
   match r with
   | Val (VUninitialized _) -> internal_error loc @@ "dis_expr returning VUninitialized, invalidating assumption"
   | _ -> r
@@ -843,10 +849,12 @@ and dis_proccall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): unit rws =
 
 (** Disassemble a function call *)
 and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws =
-    DisEnv.scope loc "dis_call"
+    let body = dis_call' loc f tes es in
+    if no_debug() then body
+    else DisEnv.scope loc "dis_call"
         (pp_expr (Expr_TApply (f, List.map sym_expr tes, List.map sym_expr es)))
         (Option.fold ~none:"(no return)" ~some:pp_sym)
-        (dis_call' loc f tes es)
+        body
 
 and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws =
     let@ fn = DisEnv.getFun loc f in
@@ -910,9 +918,10 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws
         | None ->
             DisEnv.pure None) in
 
-        let@ env = DisEnv.get in
-        let@ () = DisEnv.if_ (!debug_level >= 2)
-            (DisEnv.log (LocalEnv.pp_locals env ^ "\n")) in
+        let@() = if !debug_level >= 2 then
+          let@ env = DisEnv.get in
+          DisEnv.log (LocalEnv.pp_locals env ^ "\n")
+        else DisEnv.unit in
 
         (* Evaluate body with new return symbol *)
         let@ () = DisEnv.modify (LocalEnv.addReturnSymbol rv) in
@@ -937,7 +946,6 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws
 
 and dis_prim (f: ident) (tes: sym list) (es: sym list): sym rws =
     let name = name_of_FIdent f in
-
     match sym_prim_simplify name tes es with
     | Some s -> DisEnv.pure s
     | None ->
@@ -950,10 +958,9 @@ and dis_prim (f: ident) (tes: sym list) (es: sym list): sym rws =
         | Val v -> DisEnv.pure (Val v)
 
 and dis_lexpr loc x r: unit rws =
-    DisEnv.scope loc
-        "dis_lexpr" (pp_stmt (Stmt_Assign (x, sym_expr r, Unknown)))
-        Utils.pp_unit
-        (dis_lexpr' loc x r)
+    let body = dis_lexpr' loc x r in
+    if no_debug() then body
+    else DisEnv.scope loc "dis_lexpr" (pp_stmt (Stmt_Assign (x, sym_expr r, Unknown))) Utils.pp_unit body
 
 (** Remove potential effects from an lexpr *)
 and resolve_lexpr (loc: l) (x: lexpr): lexpr rws =
@@ -1126,7 +1133,10 @@ and dis_stmts (stmts: AST.stmt list): unit rws =
 
 
 (** Disassemble statement *)
-and dis_stmt x = DisEnv.scope (stmt_loc x) "dis_stmt" (pp_stmt x) Utils.pp_unit (dis_stmt' x)
+and dis_stmt x =
+    let body = dis_stmt' x in
+    if no_debug() then body
+    else DisEnv.scope (stmt_loc x) "dis_stmt" (pp_stmt x) Utils.pp_unit body
 and dis_stmt' (x: AST.stmt): unit rws =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
@@ -1295,8 +1305,9 @@ let dis_decode_slice (loc: l) (x: decode_slice) (op: value): value rws =
 
 (* Duplicate of eval_decode_case modified to print rather than eval *)
 let rec dis_decode_case (loc: AST.l) (x: decode_case) (op: value): unit rws =
-    DisEnv.scope loc "dis_decode_case" (pp_decode_case x) Utils.pp_unit
-        (dis_decode_case' loc x op)
+    let body = dis_decode_case' loc x op in
+    if no_debug() then body
+    else DisEnv.scope loc "dis_decode_case" (pp_decode_case x) Utils.pp_unit body
 and dis_decode_case' (loc: AST.l) (x: decode_case) (op: value): unit rws =
     (match x with
     | DecoderCase_Case (ss, alts, loc) ->
@@ -1317,8 +1328,9 @@ and dis_decode_case' (loc: AST.l) (x: decode_case) (op: value): unit rws =
 
 (* Duplicate of eval_decode_alt modified to print rather than eval *)
 and dis_decode_alt (loc: l) (x: decode_alt) (vs: value list) (op: value): bool rws =
-    DisEnv.scope loc "dis_decode_alt" (pp_decode_alt x) string_of_bool
-        (dis_decode_alt' loc x vs op)
+    let body = dis_decode_alt' loc x vs op in
+    if no_debug() then body
+    else DisEnv.scope loc "dis_decode_alt" (pp_decode_alt x) string_of_bool body
 and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): bool rws =
     if List.for_all2 (Eval.eval_decode_pattern loc) ps vs then
         (match b with
