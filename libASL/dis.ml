@@ -232,18 +232,6 @@ module LocalEnv = struct
 
     let addLocalConst = addLocalVar
 
-    (** Resolves the given identifier within the scopes.
-        Returns inner-most scope with a matching variable, due to
-        shadowing. *)
-    let resolveVar (loc: l) (x: ident) (env: t): var =
-        let rec go (bs: (ty * sym) Bindings.t list) =
-          match bs with
-          | [] -> internal_error loc @@ "cannot resolve undeclared variable: " ^ pprint_ident x ^ "\n\n" ^ pp_locals env
-          | b::rest when Bindings.mem x b -> Var (List.length rest,x)
-          | _::rest -> go rest
-        in
-        go (env.locals)
-
     (** Gets the type and value of a resolved variable. *)
     let getVar (loc: l) (x: var) (env: t): (ty * sym) =
         let Var (i,id) = x in
@@ -253,21 +241,30 @@ module LocalEnv = struct
         | None -> internal_error loc @@ "failed to get resolved variable: " ^ pp_var x
 
     (** Resolves then gets the type and value of a resolved variable. *)
-    let resolveGetVar (loc: l) (x: ident) (env: t): (var * (ty * sym)) =
-        let var = resolveVar loc x env in
-        let (t,v) = getVar loc var env in
-        (var, (t,v))
+    let rec go loc x env i (bs: (ty * sym) Bindings.t list) =
+        (match bs with
+        | [] -> internal_error loc @@ "cannot resolve undeclared variable: " ^ pprint_ident x ^ "\n\n" ^ pp_locals env
+        | b::rest -> match Bindings.find_opt x b with
+          | Some v -> (Var (i,x),v)
+          | _ -> go loc x env (i - 1) rest)
+    let resolveGetVar (loc: l) (x: ident) = fun env ->
+        let l = List.length env.locals - 1 in
+        match env.locals with
+        | b::rest -> (match Bindings.find_opt x b with
+          | Some v -> (Var (l,x),v)
+          | _ -> go loc x env (l - 1) rest)
+        | _ -> internal_error loc @@ "cannot resolve undeclared variable: " ^ pprint_ident x ^ "\n\n" ^ pp_locals env
 
     (** Sets a resolved variable to the given value. *)
     let setVar (loc: l) (x: var) (v: sym) (env: t): t =
         if !Eval.trace_write then Printf.printf "TRACE: write %s = %s\n" (pp_var x) (pp_sym v);
         let Var (i,id) = x in
         let n = List.length env.locals - i - 1 in
-        match Bindings.find_opt id (List.nth env.locals n) with
-        | Some (t,_) ->
-          let locals = Utils.nth_modify (Bindings.add id (t,v)) n env.locals in
-          { env with locals }
-        | None -> internal_error loc @@ "failed to set resolved variable: " ^ pp_var x
+        let locals = Utils.nth_modify (
+          Bindings.update id (fun e -> match e with
+          | Some (t,_) -> Some (t,v)
+          | None -> internal_error loc @@ "failed to set resolved variable: " ^ pp_var x)) n env.locals in
+        { env with locals }
 
 end
 
@@ -287,8 +284,8 @@ module DisEnv = struct
         with EvalError _ -> None
 
     let getVar (loc: l) (x: ident): (ty * sym) rws =
-        let* x = gets (LocalEnv.resolveVar loc x) in
-        gets (LocalEnv.getVar loc x)
+        let+ (_,v) = gets (LocalEnv.resolveGetVar loc x) in
+        v
 
     let uninit (t: ty) (env: Eval.Env.t): value =
         try
