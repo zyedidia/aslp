@@ -290,8 +290,7 @@ module DisEnv = struct
         let* x = gets (LocalEnv.resolveVar loc x) in
         gets (LocalEnv.getVar loc x)
 
-    let mkUninit (t: ty): value rws =
-        let+ env = read in
+    let uninit (t: ty) (env: Eval.Env.t): value =
         try
             Eval.mk_uninitialized Unknown env t
         with
@@ -299,38 +298,34 @@ module DisEnv = struct
                 "mkUninit: failed to evaluate type " ^ pp_type t ^ " due to " ^
                 Printexc.to_string e
 
+    let mkUninit (t: ty): value rws =
+        reads (uninit t)
+
+    let merge_bindings env l r: (ty * sym) Bindings.t =
+      if l == r then l else
+      Bindings.union (fun k (t1,v1) (t2,v2) ->
+        if !debug_level > 0 && t2 <> t1 then
+            unsupported Unknown @@
+              Printf.sprintf "cannot merge locals with different types: %s, %s <> %s."
+              (pprint_ident k) (pp_type t1) (pp_type t2);
+          let out = Some (t1,match v1 = v2 with
+            | false -> Val (uninit t1 env)
+            | true -> v1)  in
+          out) l r
+
     let join_locals (l: LocalEnv.t) (r: LocalEnv.t): unit rws =
+        let* env = read in
         assert (l.returnSymbols = r.returnSymbols);
         assert (l.indent = r.indent);
         assert (l.trace = r.trace);
-
-        let merge_bindings l r: (ty * sym) Bindings.t rws =
-            Bindings.fold (fun k (t1,v1) bs ->
-                match Bindings.find_opt k r with
-                | None -> bs
-                | Some (t2,v2) ->
-                    if t2 <> t1 then
-                        unsupported Unknown @@
-                        Printf.sprintf "cannot merge locals with different types: %s, %s <> %s."
-                            (pprint_ident k) (pp_type t1) (pp_type t2);
-                    let+ v =
-                        (match v1 = v2 with
-                        | false -> let+ v = mkUninit t1 in Val v
-                        | true -> pure v1)
-                    and+ bs' = bs in
-                    Bindings.add k (t1,v) bs')
-            l (pure Bindings.empty) in
-        let* locals' = traverse2 merge_bindings l.locals r.locals in
-        let lenv': LocalEnv.t =
-        {
+        let locals' = List.map2 (merge_bindings env) l.locals r.locals in
+        put {
             locals = locals';
             returnSymbols = l.returnSymbols;
             numSymbols = max l.numSymbols r.numSymbols;
             indent = l.indent;
             trace = l.trace;
         }
-        in
-        put lenv'
 
 
     let getFun (loc: l) (x: ident): Eval.fun_sig option rws =
