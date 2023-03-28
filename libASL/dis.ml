@@ -279,10 +279,6 @@ module DisEnv = struct
 
     open Let
 
-    let catch (f: 'b -> 'a) (x: 'b): 'a option =
-        try Some (f x)
-        with EvalError _ -> None
-
     let getVar (loc: l) (x: ident): (ty * sym) rws =
         let+ (_,v) = gets (LocalEnv.resolveGetVar loc x) in
         v
@@ -326,7 +322,7 @@ module DisEnv = struct
 
 
     let getFun (loc: l) (x: ident): Eval.fun_sig option rws =
-        reads (catch (fun env -> Eval.Env.getFun loc env x))
+        reads (fun env -> Eval.Env.getFunOpt loc env x)
 
     let nextVarName (prefix: string): ident rws =
         let+ num = stateful LocalEnv.incNumSymbols in
