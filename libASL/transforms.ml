@@ -6,6 +6,103 @@ open Asl_visitor
 open Symbolic
 open Value
 
+let infer_type (e: expr): ty option =
+  match e with
+  | Expr_Slices(x, [Slice_LoWd(l,w)]) -> Some(Type_Bits(w))
+  | Expr_TApply((FIdent(name, _) | Ident(name)), [], _) -> begin
+    match name with
+    | "eq_enum"            -> Some(type_bool)
+    | "ne_enum"            -> Some(type_bool)
+    | "eq_bool"            -> Some(type_bool)
+    | "ne_bool"            -> Some(type_bool)
+    | "equiv_bool"         -> Some(type_bool)
+    | "not_bool"           -> Some(type_bool)
+    | "eq_int"             -> Some(type_bool)
+    | "ne_int"             -> Some(type_bool)
+    | "le_int"             -> Some(type_bool)
+    | "lt_int"             -> Some(type_bool)
+    | "ge_int"             -> Some(type_bool)
+    | "gt_int"             -> Some(type_bool)
+    | "is_pow2_int"        -> Some(type_bool)
+    | "neg_int"            -> Some(type_integer)
+    | "add_int"            -> Some(type_integer)
+    | "sub_int"            -> Some(type_integer)
+    | "shl_int"            -> Some(type_integer)
+    | "shr_int"            -> Some(type_integer)
+    | "mul_int"            -> Some(type_integer)
+    | "zdiv_int"           -> Some(type_integer)
+    | "zrem_int"           -> Some(type_integer)
+    | "fdiv_int"           -> Some(type_integer)
+    | "frem_int"           -> Some(type_integer)
+    | "mod_pow2_int"       -> Some(type_integer)
+    | "align_int"          -> Some(type_integer)
+    | "pow2_int"           -> Some(type_integer)
+    | "pow_int_int"        -> Some(type_integer)
+    | "eq_real"            -> Some(type_bool)
+    | "ne_real"            -> Some(type_bool)
+    | "le_real"            -> Some(type_bool)
+    | "lt_real"            -> Some(type_bool)
+    | "ge_real"            -> Some(type_bool)
+    | "round_tozero_real"  -> Some(type_integer)
+    | "round_down_real"    -> Some(type_integer)
+    | "round_up_real"      -> Some(type_integer)
+    | "in_mask"            -> Some(type_bool)
+    | "notin_mask"         -> Some(type_bool)
+    | "eq_str"             -> Some(type_bool)
+    | "ne_str"             -> Some(type_bool)
+    | "is_cunpred_exc"     -> Some(type_bool)
+    | "is_exctaken_exc"    -> Some(type_bool)
+    | "is_impdef_exc"      -> Some(type_bool)
+    | "is_see_exc"         -> Some(type_bool)
+    | "is_undefined_exc"   -> Some(type_bool)
+    | "is_unpred_exc"      -> Some(type_bool)
+    | "asl_file_open"      -> Some(type_integer)
+    | "asl_file_getc"      -> Some(type_integer)
+    | "cvt_bool_bv"        -> Some(Type_Bits(Expr_LitInt("1")))
+    | "cvt_bv_bool"        -> Some(type_bool)
+    | _ -> None
+    end
+  | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(_) as num], _) -> begin
+    match name with
+    | "ram_read"           -> Some(Type_Bits(num))
+    | "add_bits"           -> Some(Type_Bits(num))
+    | "sub_bits"           -> Some(Type_Bits(num))
+    | "mul_bits"           -> Some(Type_Bits(num))
+    | "sdiv_bits"          -> Some(Type_Bits(num))
+    | "and_bits"           -> Some(Type_Bits(num))
+    | "or_bits"            -> Some(Type_Bits(num))
+    | "eor_bits"           -> Some(Type_Bits(num))
+    | "not_bits"           -> Some(Type_Bits(num))
+    | "neg_bits"           -> Some(Type_Bits(num))
+    | "zeros_bits"         -> Some(Type_Bits(num))
+    | "ones_bits"          -> Some(Type_Bits(num))
+    | "replicate_bits"     -> Some(Type_Bits(num))
+    | "append_bits"        -> Some(Type_Bits(num))
+    | "cvt_int_bits"       -> Some(Type_Bits(num))
+    | "LSL"                -> Some(Type_Bits(num))
+    | "LSR"                -> Some(Type_Bits(num))
+    | "ASR"                -> Some(Type_Bits(num))
+    | "cvt_bits_uint"      -> Some(type_integer)
+    | "cvt_bits_sint"      -> Some(type_integer)
+    | "eq_bits"            -> Some(type_bool)
+    | "ne_bits"            -> Some(type_bool)
+    | _ -> None
+    end
+  | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(v1) as num1; Expr_LitInt(v2) as num2], _) -> begin
+    (* These are... dubious. None appear in value.ml, so they're all based on what "looks correct". *)
+    match name with
+    | "ZeroExtend"         -> Some(Type_Bits(num2))
+    | "SignExtend"         -> Some(Type_Bits(num2))
+    | "lsl_bits"           -> Some(Type_Bits(num1))
+    | "lsr_bits"           -> Some(Type_Bits(num1))
+    | "asl_bits"           -> Some(Type_Bits(num1))
+    | "asr_bits"           -> Some(Type_Bits(num1))
+    | "append_bits"        ->
+      Some(Type_Bits(Expr_LitInt(string_of_int((int_of_string v1) + (int_of_string v2)))))
+    | _ -> None
+    end
+  | _ -> None
+
 (** Remove variables which are unused at the end of the statement list. *)
 module RemoveUnused = struct
   let rec remove_unused (globals: IdentSet.t) xs = (remove_unused' globals xs)
@@ -1176,100 +1273,11 @@ end
 
 module RedundantSlice = struct 
 
-  let infer_type (e: expr): ty option = 
-    match e with
-    | Expr_TApply((FIdent(name, _) | Ident(name)), [], _) -> begin
-      match name with
-      | "eq_enum"            -> Some(type_bool)
-      | "ne_enum"            -> Some(type_bool)
-      | "eq_bool"            -> Some(type_bool)
-      | "ne_bool"            -> Some(type_bool)
-      | "equiv_bool"         -> Some(type_bool)
-      | "not_bool"           -> Some(type_bool)
-      | "eq_int"             -> Some(type_bool)
-      | "ne_int"             -> Some(type_bool)
-      | "le_int"             -> Some(type_bool)
-      | "lt_int"             -> Some(type_bool)
-      | "ge_int"             -> Some(type_bool)
-      | "gt_int"             -> Some(type_bool)
-      | "is_pow2_int"        -> Some(type_bool)
-      | "neg_int"            -> Some(type_integer)
-      | "add_int"            -> Some(type_integer)
-      | "sub_int"            -> Some(type_integer)
-      | "shl_int"            -> Some(type_integer)
-      | "shr_int"            -> Some(type_integer)
-      | "mul_int"            -> Some(type_integer)
-      | "zdiv_int"           -> Some(type_integer)
-      | "zrem_int"           -> Some(type_integer)
-      | "fdiv_int"           -> Some(type_integer)
-      | "frem_int"           -> Some(type_integer)
-      | "mod_pow2_int"       -> Some(type_integer)
-      | "align_int"          -> Some(type_integer)
-      | "pow2_int"           -> Some(type_integer)
-      | "pow_int_int"        -> Some(type_integer)
-      | "eq_real"            -> Some(type_bool)
-      | "ne_real"            -> Some(type_bool)
-      | "le_real"            -> Some(type_bool)
-      | "lt_real"            -> Some(type_bool)
-      | "ge_real"            -> Some(type_bool)
-      | "round_tozero_real"  -> Some(type_integer)
-      | "round_down_real"    -> Some(type_integer)
-      | "round_up_real"      -> Some(type_integer)
-      | "in_mask"            -> Some(type_bool)
-      | "notin_mask"         -> Some(type_bool)
-      | "eq_str"             -> Some(type_bool)
-      | "ne_str"             -> Some(type_bool)
-      | "is_cunpred_exc"     -> Some(type_bool)
-      | "is_exctaken_exc"    -> Some(type_bool)
-      | "is_impdef_exc"      -> Some(type_bool)
-      | "is_see_exc"         -> Some(type_bool)
-      | "is_undefined_exc"   -> Some(type_bool)
-      | "is_unpred_exc"      -> Some(type_bool)
-      | "asl_file_open"      -> Some(type_integer)
-      | "asl_file_getc"      -> Some(type_integer)
-      | "cvt_bool_bv"        -> Some(Type_Bits(Expr_LitInt("1")))
-      | "cvt_bv_bool"        -> Some(type_bool)
-      | _ -> None
-      end
-    | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(_) as num], _) -> begin
-      match name with
-      | "ram_read"           -> Some(Type_Bits(num))
-      | "add_bits"           -> Some(Type_Bits(num))
-      | "sub_bits"           -> Some(Type_Bits(num))
-      | "mul_bits"           -> Some(Type_Bits(num))
-      | "and_bits"           -> Some(Type_Bits(num))
-      | "or_bits"            -> Some(Type_Bits(num))
-      | "eor_bits"           -> Some(Type_Bits(num))
-      | "not_bits"           -> Some(Type_Bits(num))
-      | "neg_bits"           -> Some(Type_Bits(num))
-      | "zeros_bits"         -> Some(Type_Bits(num))
-      | "ones_bits"          -> Some(Type_Bits(num))
-      | "replicate_bits"     -> Some(Type_Bits(num))
-      | "append_bits"        -> Some(Type_Bits(num))
-      | "cvt_int_bits"       -> Some(Type_Bits(num))
-      | "LSL"                -> Some(Type_Bits(num))
-      | "LSR"                -> Some(Type_Bits(num))
-      | "ASR"                -> Some(Type_Bits(num))
-      | "cvt_bits_uint"      -> Some(type_integer)
-      | "cvt_bits_sint"      -> Some(type_integer)
-      | "eq_bits"            -> Some(type_bool)
-      | "ne_bits"            -> Some(type_bool)
-      | _ -> None
-      end
-    | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(v1) as num1; Expr_LitInt(v2) as num2], _) -> begin
-      (* These are... dubious. None appear in value.ml, so they're all based on what "looks correct". *)
-      match name with
-      | "ZeroExtend"         -> Some(Type_Bits(num2))
-      | "SignExtend"         -> Some(Type_Bits(num2))
-      | "lsl_bits"           -> Some(Type_Bits(num1))
-      | "lsr_bits"           -> Some(Type_Bits(num1))
-      | "asl_bits"           -> Some(Type_Bits(num1))
-      | "asr_bits"           -> Some(Type_Bits(num1))
-      | "append_bits"        -> 
-        Some(Type_Bits(Expr_LitInt(string_of_int((int_of_string v1) + (int_of_string v2)))))
-      | _ -> None
-      end
-    | _ -> None
+  let non_const e =
+    match  e with
+    | Expr_LitInt _ -> false
+    | Expr_LitHex _ -> false
+    | _ -> true
 
   class expression_walk = object
     inherit Asl_visitor.nopAslVisitor
@@ -1277,6 +1285,13 @@ module RedundantSlice = struct
     method! vexpr (e: expr): expr visitAction =
       ChangeDoChildrenPost(e, fun e ->
       match e with
+      (* Last chance to convert dynamic slices into shift & static slice *)
+      | Expr_Slices(x, [Slice_LoWd(l,w)]) when non_const l ->
+          (match infer_type x with
+          | Some (Type_Bits xw) ->
+              let e = Expr_TApply (FIdent ("LSR", 0), [xw], [x; l]) in
+              Expr_Slices(e, [Slice_LoWd (Expr_LitInt "0", w)])
+          | _ -> e)
       | Expr_Slices(e', [Slice_LoWd (Expr_LitInt "0", wd)]) ->
           (match infer_type e' with
           | Some(Type_Bits(num)) when num = wd -> e'
@@ -1361,101 +1376,9 @@ module CommonSubExprElim = struct
   end 
 
   let infer_cse_expr_type (e: expr): ty = 
-    match e with
-    | Expr_TApply((FIdent(name, _) | Ident(name)), [], _) -> begin
-      match name with
-      | "eq_enum"            -> type_bool
-      | "ne_enum"            -> type_bool
-      | "eq_bool"            -> type_bool
-      | "ne_bool"            -> type_bool
-      | "equiv_bool"         -> type_bool
-      | "not_bool"           -> type_bool
-      | "eq_int"             -> type_bool
-      | "ne_int"             -> type_bool
-      | "le_int"             -> type_bool
-      | "lt_int"             -> type_bool
-      | "ge_int"             -> type_bool
-      | "gt_int"             -> type_bool
-      | "is_pow2_int"        -> type_bool
-      | "neg_int"            -> type_integer
-      | "add_int"            -> type_integer
-      | "sub_int"            -> type_integer
-      | "shl_int"            -> type_integer
-      | "shr_int"            -> type_integer
-      | "mul_int"            -> type_integer
-      | "zdiv_int"           -> type_integer
-      | "zrem_int"           -> type_integer
-      | "fdiv_int"           -> type_integer
-      | "frem_int"           -> type_integer
-      | "mod_pow2_int"       -> type_integer
-      | "align_int"          -> type_integer
-      | "pow2_int"           -> type_integer
-      | "pow_int_int"        -> type_integer
-      | "eq_real"            -> type_bool
-      | "ne_real"            -> type_bool
-      | "le_real"            -> type_bool
-      | "lt_real"            -> type_bool
-      | "ge_real"            -> type_bool
-      | "round_tozero_real"  -> type_integer
-      | "round_down_real"    -> type_integer
-      | "round_up_real"      -> type_integer
-      | "in_mask"            -> type_bool
-      | "notin_mask"         -> type_bool
-      | "eq_str"             -> type_bool
-      | "ne_str"             -> type_bool
-      | "is_cunpred_exc"     -> type_bool
-      | "is_exctaken_exc"    -> type_bool
-      | "is_impdef_exc"      -> type_bool
-      | "is_see_exc"         -> type_bool
-      | "is_undefined_exc"   -> type_bool
-      | "is_unpred_exc"      -> type_bool
-      | "asl_file_open"      -> type_integer
-      | "asl_file_getc"      -> type_integer
-      | "cvt_bool_bv"        -> Type_Bits(Expr_LitInt("1"))
-      | "cvt_bv_bool"        -> type_bool
-      | _ -> raise (CSEError ("Can't infer type of strange primitive: " ^ (pp_expr e)))
-      end
-    | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(_) as num], _) -> begin
-      match name with
-      | "ram_read"           -> Type_Bits(num)
-      | "add_bits"           -> Type_Bits(num)
-      | "sub_bits"           -> Type_Bits(num)
-      | "mul_bits"           -> Type_Bits(num)
-      | "and_bits"           -> Type_Bits(num)
-      | "or_bits"            -> Type_Bits(num)
-      | "eor_bits"           -> Type_Bits(num)
-      | "not_bits"           -> Type_Bits(num)
-      | "neg_bits"           -> Type_Bits(num)
-      | "zeros_bits"         -> Type_Bits(num)
-      | "ones_bits"          -> Type_Bits(num)
-      | "replicate_bits"     -> Type_Bits(num)
-      | "append_bits"        -> Type_Bits(num)
-      | "cvt_int_bits"       -> Type_Bits(num)
-      | "LSL"                -> Type_Bits(num)
-      | "LSR"                -> Type_Bits(num)
-      | "ASR"                -> Type_Bits(num)
-      | "sdiv_bits"          -> Type_Bits(num)
-      | "cvt_bits_uint"      -> type_integer
-      | "cvt_bits_sint"      -> type_integer
-      | "eq_bits"            -> type_bool
-      | "ne_bits"            -> type_bool
-      | _ -> raise (CSEError ("Can't infer type of strange primitive: " ^ (pp_expr e)))
-      end
-    | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(v1) as num1; Expr_LitInt(v2) as num2], _) -> begin
-      (* These are... dubious. None appear in value.ml, so they're all based on what "looks correct". *)
-      match name with
-      | "ZeroExtend"         -> Type_Bits(num2)
-      | "SignExtend"         -> Type_Bits(num2)
-      | "lsl_bits"           -> Type_Bits(num1)
-      | "lsr_bits"           -> Type_Bits(num1)
-      | "asl_bits"           -> Type_Bits(num1)
-      | "asr_bits"           -> Type_Bits(num1)
-      | "append_bits"        -> 
-        Type_Bits(Expr_LitInt(string_of_int((int_of_string v1) + (int_of_string v2))))
-      | _ -> raise (CSEError ("Can't infer type of strange primitive: " ^ (pp_expr e)))
-      end
-    | _ -> 
-      raise (CSEError ("Can't infer type of strange expr: " ^ (pp_expr e)))
+    match infer_type e with
+    | Some t -> t
+    | None -> raise (CSEError ("Can't infer type of strange expr: " ^ (pp_expr e)))
   
   let insert_into_stmts (xs: stmt list) (x: stmt): (stmt list) =
     let rec move_after_stmts (head: stmt list) (tail: stmt list) (targets: IdentSet.t) (found: IdentSet.t) = 
