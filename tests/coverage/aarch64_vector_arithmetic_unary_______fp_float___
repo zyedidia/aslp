@@ -2528,42 +2528,24 @@ ENCODING: aarch64_vector_arithmetic_unary_shift
 0x6ee13bff: [Q=1 ; size=3 ; Rn=31 ; Rd=31] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 77597 char 42 - line 77598 char 0)
 
 ENCODING: aarch64_vector_arithmetic_unary_special_frecpx
-0x5ea1f800: [sz=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ea1f801: [sz=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ea1f81f: [sz=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ea1f820: [sz=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ea1f821: [sz=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ea1f83f: [sz=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ea1fbe0: [sz=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ea1fbe1: [sz=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ea1fbff: [sz=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ee1f800: [sz=1 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ee1f801: [sz=1 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ee1f81f: [sz=1 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ee1f820: [sz=1 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ee1f821: [sz=1 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ee1f83f: [sz=1 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ee1fbe0: [sz=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ee1fbe1: [sz=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x5ee1fbff: [sz=1 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
+0x5ea1f800: [sz=0 ; Rn=0 ; Rd=0] --> OK
+0x5ea1f801: [sz=0 ; Rn=0 ; Rd=1] --> OK
+0x5ea1f81f: [sz=0 ; Rn=0 ; Rd=31] --> OK
+0x5ea1f820: [sz=0 ; Rn=1 ; Rd=0] --> OK
+0x5ea1f821: [sz=0 ; Rn=1 ; Rd=1] --> OK
+0x5ea1f83f: [sz=0 ; Rn=1 ; Rd=31] --> OK
+0x5ea1fbe0: [sz=0 ; Rn=31 ; Rd=0] --> OK
+0x5ea1fbe1: [sz=0 ; Rn=31 ; Rd=1] --> OK
+0x5ea1fbff: [sz=0 ; Rn=31 ; Rd=31] --> OK
+0x5ee1f800: [sz=1 ; Rn=0 ; Rd=0] --> OK
+0x5ee1f801: [sz=1 ; Rn=0 ; Rd=1] --> OK
+0x5ee1f81f: [sz=1 ; Rn=0 ; Rd=31] --> OK
+0x5ee1f820: [sz=1 ; Rn=1 ; Rd=0] --> OK
+0x5ee1f821: [sz=1 ; Rn=1 ; Rd=1] --> OK
+0x5ee1f83f: [sz=1 ; Rn=1 ; Rd=31] --> OK
+0x5ee1fbe0: [sz=1 ; Rn=31 ; Rd=0] --> OK
+0x5ee1fbe1: [sz=1 ; Rn=31 ; Rd=1] --> OK
+0x5ee1fbff: [sz=1 ; Rn=31 ; Rd=31] --> OK
 
 ENCODING: aarch64_vector_arithmetic_unary_special_recip_int
 0x0ea1c800: [Q=0 ; sz=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("bv_of_int_expr: Unknown integer expression: fdiv_int.0 {{  }} ( add_int.0 {{  }} ( fdiv_int.0 {{  }} ( 524288,add_int.0 {{  }} ( mul_int.0 {{  }} ( cvt_bits_uint.0 {{ 9 }} ( Exp4__5 [ 23 +: 9 ] ),2 ),1 ) ),1 ),2 )")
@@ -2604,24 +2586,15 @@ ENCODING: aarch64_vector_arithmetic_unary_special_recip_int
 0x4ee1cbff: [Q=1 ; sz=1 ; Rn=31 ; Rd=31] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 88202 char 39 - line 88203 char 0)
 
 ENCODING: aarch64_vector_arithmetic_unary_special_sqrt
-0x2ea1f800: [Q=0 ; sz=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x2ea1f801: [Q=0 ; sz=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x2ea1f81f: [Q=0 ; sz=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x2ea1f820: [Q=0 ; sz=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x2ea1f821: [Q=0 ; sz=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x2ea1f83f: [Q=0 ; sz=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x2ea1fbe0: [Q=0 ; sz=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x2ea1fbe1: [Q=0 ; sz=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x2ea1fbff: [Q=0 ; sz=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
+0x2ea1f800: [Q=0 ; sz=0 ; Rn=0 ; Rd=0] --> OK
+0x2ea1f801: [Q=0 ; sz=0 ; Rn=0 ; Rd=1] --> OK
+0x2ea1f81f: [Q=0 ; sz=0 ; Rn=0 ; Rd=31] --> OK
+0x2ea1f820: [Q=0 ; sz=0 ; Rn=1 ; Rd=0] --> OK
+0x2ea1f821: [Q=0 ; sz=0 ; Rn=1 ; Rd=1] --> OK
+0x2ea1f83f: [Q=0 ; sz=0 ; Rn=1 ; Rd=31] --> OK
+0x2ea1fbe0: [Q=0 ; sz=0 ; Rn=31 ; Rd=0] --> OK
+0x2ea1fbe1: [Q=0 ; sz=0 ; Rn=31 ; Rd=1] --> OK
+0x2ea1fbff: [Q=0 ; sz=0 ; Rn=31 ; Rd=31] --> OK
 0x2ee1f800: [Q=0 ; sz=1 ; Rn=0 ; Rd=0] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 82851 char 42 - line 82852 char 0)
 0x2ee1f801: [Q=0 ; sz=1 ; Rn=0 ; Rd=1] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 82851 char 42 - line 82852 char 0)
 0x2ee1f81f: [Q=0 ; sz=1 ; Rn=0 ; Rd=31] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 82851 char 42 - line 82852 char 0)
@@ -2631,80 +2604,35 @@ ENCODING: aarch64_vector_arithmetic_unary_special_sqrt
 0x2ee1fbe0: [Q=0 ; sz=1 ; Rn=31 ; Rd=0] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 82851 char 42 - line 82852 char 0)
 0x2ee1fbe1: [Q=0 ; sz=1 ; Rn=31 ; Rd=1] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 82851 char 42 - line 82852 char 0)
 0x2ee1fbff: [Q=0 ; sz=1 ; Rn=31 ; Rd=31] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 82851 char 42 - line 82852 char 0)
-0x6ea1f800: [Q=1 ; sz=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ea1f801: [Q=1 ; sz=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ea1f81f: [Q=1 ; sz=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ea1f820: [Q=1 ; sz=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ea1f821: [Q=1 ; sz=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ea1f83f: [Q=1 ; sz=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ea1fbe0: [Q=1 ; sz=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ea1fbe1: [Q=1 ; sz=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ea1fbff: [Q=1 ; sz=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ee1f800: [Q=1 ; sz=1 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ee1f801: [Q=1 ; sz=1 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ee1f81f: [Q=1 ; sz=1 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ee1f820: [Q=1 ; sz=1 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ee1f821: [Q=1 ; sz=1 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ee1f83f: [Q=1 ; sz=1 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ee1fbe0: [Q=1 ; sz=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ee1fbe1: [Q=1 ; sz=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
-0x6ee1fbff: [Q=1 ; sz=1 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 9170 char 31 - line 9171 char 0: dis_stmt: unsupported statement: IMPLEMENTATION_DEFINED "floating-point trap handling" ;
-
+0x6ea1f800: [Q=1 ; sz=0 ; Rn=0 ; Rd=0] --> OK
+0x6ea1f801: [Q=1 ; sz=0 ; Rn=0 ; Rd=1] --> OK
+0x6ea1f81f: [Q=1 ; sz=0 ; Rn=0 ; Rd=31] --> OK
+0x6ea1f820: [Q=1 ; sz=0 ; Rn=1 ; Rd=0] --> OK
+0x6ea1f821: [Q=1 ; sz=0 ; Rn=1 ; Rd=1] --> OK
+0x6ea1f83f: [Q=1 ; sz=0 ; Rn=1 ; Rd=31] --> OK
+0x6ea1fbe0: [Q=1 ; sz=0 ; Rn=31 ; Rd=0] --> OK
+0x6ea1fbe1: [Q=1 ; sz=0 ; Rn=31 ; Rd=1] --> OK
+0x6ea1fbff: [Q=1 ; sz=0 ; Rn=31 ; Rd=31] --> OK
+0x6ee1f800: [Q=1 ; sz=1 ; Rn=0 ; Rd=0] --> OK
+0x6ee1f801: [Q=1 ; sz=1 ; Rn=0 ; Rd=1] --> OK
+0x6ee1f81f: [Q=1 ; sz=1 ; Rn=0 ; Rd=31] --> OK
+0x6ee1f820: [Q=1 ; sz=1 ; Rn=1 ; Rd=0] --> OK
+0x6ee1f821: [Q=1 ; sz=1 ; Rn=1 ; Rd=1] --> OK
+0x6ee1f83f: [Q=1 ; sz=1 ; Rn=1 ; Rd=31] --> OK
+0x6ee1fbe0: [Q=1 ; sz=1 ; Rn=31 ; Rd=0] --> OK
+0x6ee1fbe1: [Q=1 ; sz=1 ; Rn=31 ; Rd=1] --> OK
+0x6ee1fbff: [Q=1 ; sz=1 ; Rn=31 ; Rd=31] --> OK
 
 ENCODING: aarch64_vector_arithmetic_unary_special_sqrt_est_int
-0x2ea1c800: [Q=0 ; sz=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x2ea1c801: [Q=0 ; sz=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x2ea1c81f: [Q=0 ; sz=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x2ea1c820: [Q=0 ; sz=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x2ea1c821: [Q=0 ; sz=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x2ea1c83f: [Q=0 ; sz=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x2ea1cbe0: [Q=0 ; sz=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x2ea1cbe1: [Q=0 ; sz=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x2ea1cbff: [Q=0 ; sz=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
+0x2ea1c800: [Q=0 ; sz=0 ; Rn=0 ; Rd=0] --> OK
+0x2ea1c801: [Q=0 ; sz=0 ; Rn=0 ; Rd=1] --> OK
+0x2ea1c81f: [Q=0 ; sz=0 ; Rn=0 ; Rd=31] --> OK
+0x2ea1c820: [Q=0 ; sz=0 ; Rn=1 ; Rd=0] --> OK
+0x2ea1c821: [Q=0 ; sz=0 ; Rn=1 ; Rd=1] --> OK
+0x2ea1c83f: [Q=0 ; sz=0 ; Rn=1 ; Rd=31] --> OK
+0x2ea1cbe0: [Q=0 ; sz=0 ; Rn=31 ; Rd=0] --> OK
+0x2ea1cbe1: [Q=0 ; sz=0 ; Rn=31 ; Rd=1] --> OK
+0x2ea1cbff: [Q=0 ; sz=0 ; Rn=31 ; Rd=31] --> OK
 0x2ee1c800: [Q=0 ; sz=1 ; Rn=0 ; Rd=0] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 29716 char 39 - line 29717 char 0)
 0x2ee1c801: [Q=0 ; sz=1 ; Rn=0 ; Rd=1] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 29716 char 39 - line 29717 char 0)
 0x2ee1c81f: [Q=0 ; sz=1 ; Rn=0 ; Rd=31] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 29716 char 39 - line 29717 char 0)
@@ -2714,42 +2642,15 @@ b = add_int.0 {{  }} ( b,1 ) ;
 0x2ee1cbe0: [Q=0 ; sz=1 ; Rn=31 ; Rd=0] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 29716 char 39 - line 29717 char 0)
 0x2ee1cbe1: [Q=0 ; sz=1 ; Rn=31 ; Rd=1] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 29716 char 39 - line 29717 char 0)
 0x2ee1cbff: [Q=0 ; sz=1 ; Rn=31 ; Rd=31] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 29716 char 39 - line 29717 char 0)
-0x6ea1c800: [Q=1 ; sz=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x6ea1c801: [Q=1 ; sz=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x6ea1c81f: [Q=1 ; sz=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x6ea1c820: [Q=1 ; sz=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x6ea1c821: [Q=1 ; sz=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x6ea1c83f: [Q=1 ; sz=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x6ea1cbe0: [Q=1 ; sz=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x6ea1cbe1: [Q=1 ; sz=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
-0x6ea1cbff: [Q=1 ; sz=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 16871 char 10 - line 16874 char 5: dis_stmt: unsupported statement: while lt_int.0 {{  }} ( mul_int.0 {{  }} ( mul_int.0 {{  }} ( a,( add_int.0 {{  }} ( b,1 ) ) ),( add_int.0 {{  }} ( b,1 ) ) ),pow_int_int.0 {{  }} ( 2,28 ) ) do {
-b = add_int.0 {{  }} ( b,1 ) ;
-}
-
+0x6ea1c800: [Q=1 ; sz=0 ; Rn=0 ; Rd=0] --> OK
+0x6ea1c801: [Q=1 ; sz=0 ; Rn=0 ; Rd=1] --> OK
+0x6ea1c81f: [Q=1 ; sz=0 ; Rn=0 ; Rd=31] --> OK
+0x6ea1c820: [Q=1 ; sz=0 ; Rn=1 ; Rd=0] --> OK
+0x6ea1c821: [Q=1 ; sz=0 ; Rn=1 ; Rd=1] --> OK
+0x6ea1c83f: [Q=1 ; sz=0 ; Rn=1 ; Rd=31] --> OK
+0x6ea1cbe0: [Q=1 ; sz=0 ; Rn=31 ; Rd=0] --> OK
+0x6ea1cbe1: [Q=1 ; sz=0 ; Rn=31 ; Rd=1] --> OK
+0x6ea1cbff: [Q=1 ; sz=0 ; Rn=31 ; Rd=31] --> OK
 0x6ee1c800: [Q=1 ; sz=1 ; Rn=0 ; Rd=0] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 29716 char 39 - line 29717 char 0)
 0x6ee1c801: [Q=1 ; sz=1 ; Rn=0 ; Rd=1] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 29716 char 39 - line 29717 char 0)
 0x6ee1c81f: [Q=1 ; sz=1 ; Rn=0 ; Rd=31] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 29716 char 39 - line 29717 char 0)

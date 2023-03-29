@@ -20661,294 +20661,42 @@ ENCODING: aarch64_integer_shift_variable
 0x9adf2fff: [sf=1 ; Rm=31 ; op2=3 ; Rn=31 ; Rd=31] --> OK
 
 ENCODING: aarch64_integer_tags_mcaddtag
-0x91810400: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=0 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x91810401: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=0 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181041f: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=0 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x91810420: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=1 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x91810421: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181043f: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=1 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x918107e0: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=31 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x918107e1: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=31 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x918107ff: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=31 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x91814400: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=0 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x91814401: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=0 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181441f: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=0 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x91814420: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=1 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x91814421: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181443f: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=1 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x918147e0: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=31 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x918147e1: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=31 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x918147ff: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=31 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x91818400: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=0 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x91818401: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=0 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181841f: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=0 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x91818420: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=1 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x91818421: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181843f: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=1 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x918187e0: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=31 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x918187e1: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=31 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x918187ff: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=31 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181c400: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=0 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181c401: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=0 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181c41f: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=0 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181c420: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=1 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181c421: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181c43f: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=1 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181c7e0: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=31 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181c7e1: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=31 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0x9181c7ff: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=31 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
+0x91810400: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=0 ; Xd=0] --> OK
+0x91810401: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=0 ; Xd=1] --> OK
+0x9181041f: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=0 ; Xd=31] --> OK
+0x91810420: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=1 ; Xd=0] --> OK
+0x91810421: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=1 ; Xd=1] --> OK
+0x9181043f: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=1 ; Xd=31] --> OK
+0x918107e0: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=31 ; Xd=0] --> OK
+0x918107e1: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=31 ; Xd=1] --> OK
+0x918107ff: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=31 ; Xd=31] --> OK
+0x91814400: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=0 ; Xd=0] --> OK
+0x91814401: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=0 ; Xd=1] --> OK
+0x9181441f: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=0 ; Xd=31] --> OK
+0x91814420: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=1 ; Xd=0] --> OK
+0x91814421: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=1 ; Xd=1] --> OK
+0x9181443f: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=1 ; Xd=31] --> OK
+0x918147e0: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=31 ; Xd=0] --> OK
+0x918147e1: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=31 ; Xd=1] --> OK
+0x918147ff: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=31 ; Xd=31] --> OK
+0x91818400: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=0 ; Xd=0] --> OK
+0x91818401: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=0 ; Xd=1] --> OK
+0x9181841f: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=0 ; Xd=31] --> OK
+0x91818420: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=1 ; Xd=0] --> OK
+0x91818421: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=1 ; Xd=1] --> OK
+0x9181843f: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=1 ; Xd=31] --> OK
+0x918187e0: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=31 ; Xd=0] --> OK
+0x918187e1: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=31 ; Xd=1] --> OK
+0x918187ff: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=31 ; Xd=31] --> OK
+0x9181c400: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=0 ; Xd=0] --> OK
+0x9181c401: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=0 ; Xd=1] --> OK
+0x9181c41f: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=0 ; Xd=31] --> OK
+0x9181c420: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=1 ; Xd=0] --> OK
+0x9181c421: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=1 ; Xd=1] --> OK
+0x9181c43f: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=1 ; Xd=31] --> OK
+0x9181c7e0: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=31 ; Xd=0] --> OK
+0x9181c7e1: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=31 ; Xd=1] --> OK
+0x9181c7ff: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=31 ; Xd=31] --> OK
 
 ENCODING: aarch64_integer_tags_mcgettag
 0xd9600000: [imm9=0 ; Xn=0 ; Xt=0] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch.asl" line 8117 char 11 - line 8118 char 0: assertion failure
@@ -20991,114 +20739,33 @@ ENCODING: aarch64_integer_tags_mcgettagarray
 0xd9e003ff: [Xn=31 ; Xt=31] --> UNDEFINED (file "./mra_tools/arch/arch_instrs.asl" line 28760 char 21 - line 28761 char 0)
 
 ENCODING: aarch64_integer_tags_mcinsertrandomtag
-0x9ac01000: [Xm=0 ; Xn=0 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac01001: [Xm=0 ; Xn=0 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac0101f: [Xm=0 ; Xn=0 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac01020: [Xm=0 ; Xn=1 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac01021: [Xm=0 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac0103f: [Xm=0 ; Xn=1 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac013e0: [Xm=0 ; Xn=31 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac013e1: [Xm=0 ; Xn=31 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac013ff: [Xm=0 ; Xn=31 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac11000: [Xm=1 ; Xn=0 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac11001: [Xm=1 ; Xn=0 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac1101f: [Xm=1 ; Xn=0 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac11020: [Xm=1 ; Xn=1 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac11021: [Xm=1 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac1103f: [Xm=1 ; Xn=1 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac113e0: [Xm=1 ; Xn=31 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac113e1: [Xm=1 ; Xn=31 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9ac113ff: [Xm=1 ; Xn=31 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9adf1000: [Xm=31 ; Xn=0 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9adf1001: [Xm=31 ; Xn=0 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9adf101f: [Xm=31 ; Xn=0 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9adf1020: [Xm=31 ; Xn=1 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9adf1021: [Xm=31 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9adf103f: [Xm=31 ; Xn=1 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9adf13e0: [Xm=31 ; Xn=31 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9adf13e1: [Xm=31 ; Xn=31 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
-0x9adf13ff: [Xm=31 ; Xn=31 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14227 char 14 - line 14230 char 9: dis_stmt: unsupported statement: while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-
+0x9ac01000: [Xm=0 ; Xn=0 ; Xd=0] --> OK
+0x9ac01001: [Xm=0 ; Xn=0 ; Xd=1] --> OK
+0x9ac0101f: [Xm=0 ; Xn=0 ; Xd=31] --> OK
+0x9ac01020: [Xm=0 ; Xn=1 ; Xd=0] --> OK
+0x9ac01021: [Xm=0 ; Xn=1 ; Xd=1] --> OK
+0x9ac0103f: [Xm=0 ; Xn=1 ; Xd=31] --> OK
+0x9ac013e0: [Xm=0 ; Xn=31 ; Xd=0] --> OK
+0x9ac013e1: [Xm=0 ; Xn=31 ; Xd=1] --> OK
+0x9ac013ff: [Xm=0 ; Xn=31 ; Xd=31] --> OK
+0x9ac11000: [Xm=1 ; Xn=0 ; Xd=0] --> OK
+0x9ac11001: [Xm=1 ; Xn=0 ; Xd=1] --> OK
+0x9ac1101f: [Xm=1 ; Xn=0 ; Xd=31] --> OK
+0x9ac11020: [Xm=1 ; Xn=1 ; Xd=0] --> OK
+0x9ac11021: [Xm=1 ; Xn=1 ; Xd=1] --> OK
+0x9ac1103f: [Xm=1 ; Xn=1 ; Xd=31] --> OK
+0x9ac113e0: [Xm=1 ; Xn=31 ; Xd=0] --> OK
+0x9ac113e1: [Xm=1 ; Xn=31 ; Xd=1] --> OK
+0x9ac113ff: [Xm=1 ; Xn=31 ; Xd=31] --> OK
+0x9adf1000: [Xm=31 ; Xn=0 ; Xd=0] --> OK
+0x9adf1001: [Xm=31 ; Xn=0 ; Xd=1] --> OK
+0x9adf101f: [Xm=31 ; Xn=0 ; Xd=31] --> OK
+0x9adf1020: [Xm=31 ; Xn=1 ; Xd=0] --> OK
+0x9adf1021: [Xm=31 ; Xn=1 ; Xd=1] --> OK
+0x9adf103f: [Xm=31 ; Xn=1 ; Xd=31] --> OK
+0x9adf13e0: [Xm=31 ; Xn=31 ; Xd=0] --> OK
+0x9adf13e1: [Xm=31 ; Xn=31 ; Xd=1] --> OK
+0x9adf13ff: [Xm=31 ; Xn=31 ; Xd=31] --> OK
 
 ENCODING: aarch64_integer_tags_mcinserttagmask
 0x9ac01400: [Xm=0 ; Xn=0 ; Xd=0] --> OK
@@ -31874,291 +31541,39 @@ ENCODING: aarch64_integer_tags_mcsettagpre
 0xd93fffff: [imm9=511 ; Xn=31 ; Xt=31] --> [1] Evaluation failure: EvalError at file "./mra_tools/arch/arch_instrs.asl" line 56217 char 32 - line 56218 char 0: getFun SetTagCheckedInstruction.0
 
 ENCODING: aarch64_integer_tags_mcsubtag
-0xd1810400: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=0 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd1810401: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=0 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181041f: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=0 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd1810420: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=1 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd1810421: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181043f: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=1 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd18107e0: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=31 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd18107e1: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=31 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd18107ff: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=31 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd1814400: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=0 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd1814401: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=0 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181441f: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=0 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd1814420: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=1 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd1814421: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181443f: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=1 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd18147e0: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=31 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd18147e1: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=31 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd18147ff: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=31 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd1818400: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=0 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd1818401: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=0 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181841f: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=0 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd1818420: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=1 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd1818421: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181843f: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=1 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd18187e0: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=31 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd18187e1: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=31 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd18187ff: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=31 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181c400: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=0 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181c401: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=0 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181c41f: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=0 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181c420: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=1 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181c421: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=1 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181c43f: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=1 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181c7e0: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=31 ; Xd=0] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181c7e1: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=31 ; Xd=1] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
-0xd181c7ff: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=31 ; Xd=31] --> [2] Disassembly failure: DisUnsupported: file "./mra_tools/arch/arch.asl" line 14230 char 10 - line 14236 char 10: dis_stmt: unsupported statement: while ne_bits.0 {{ 4 }} ( offset,'0000' ) do {
-offset = sub_bits.0 {{ 4 }} ( offset,'0001' ) ;
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-while eq_bits.0 {{ add_int.0 {{  }} ( 0,1 ) }} ( exclude [ UInt.1 {{ 4 }} ( tag ) ],'1' ) do {
-tag = add_bits.0 {{ 4 }} ( tag,'0001' ) ;
-}
-}
-
+0xd1810400: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=0 ; Xd=0] --> OK
+0xd1810401: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=0 ; Xd=1] --> OK
+0xd181041f: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=0 ; Xd=31] --> OK
+0xd1810420: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=1 ; Xd=0] --> OK
+0xd1810421: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=1 ; Xd=1] --> OK
+0xd181043f: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=1 ; Xd=31] --> OK
+0xd18107e0: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=31 ; Xd=0] --> OK
+0xd18107e1: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=31 ; Xd=1] --> OK
+0xd18107ff: [uimm6=1 ; op3=0 ; uimm4=1 ; Xn=31 ; Xd=31] --> OK
+0xd1814400: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=0 ; Xd=0] --> OK
+0xd1814401: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=0 ; Xd=1] --> OK
+0xd181441f: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=0 ; Xd=31] --> OK
+0xd1814420: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=1 ; Xd=0] --> OK
+0xd1814421: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=1 ; Xd=1] --> OK
+0xd181443f: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=1 ; Xd=31] --> OK
+0xd18147e0: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=31 ; Xd=0] --> OK
+0xd18147e1: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=31 ; Xd=1] --> OK
+0xd18147ff: [uimm6=1 ; op3=1 ; uimm4=1 ; Xn=31 ; Xd=31] --> OK
+0xd1818400: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=0 ; Xd=0] --> OK
+0xd1818401: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=0 ; Xd=1] --> OK
+0xd181841f: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=0 ; Xd=31] --> OK
+0xd1818420: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=1 ; Xd=0] --> OK
+0xd1818421: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=1 ; Xd=1] --> OK
+0xd181843f: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=1 ; Xd=31] --> OK
+0xd18187e0: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=31 ; Xd=0] --> OK
+0xd18187e1: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=31 ; Xd=1] --> OK
+0xd18187ff: [uimm6=1 ; op3=2 ; uimm4=1 ; Xn=31 ; Xd=31] --> OK
+0xd181c400: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=0 ; Xd=0] --> OK
+0xd181c401: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=0 ; Xd=1] --> OK
+0xd181c41f: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=0 ; Xd=31] --> OK
+0xd181c420: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=1 ; Xd=0] --> OK
+0xd181c421: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=1 ; Xd=1] --> OK
+0xd181c43f: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=1 ; Xd=31] --> OK
+0xd181c7e0: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=31 ; Xd=0] --> OK
+0xd181c7e1: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=31 ; Xd=1] --> OK
+0xd181c7ff: [uimm6=1 ; op3=3 ; uimm4=1 ; Xn=31 ; Xd=31] --> OK

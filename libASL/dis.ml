@@ -80,7 +80,6 @@ let no_inline = [
   "FPMin",0;
   "FPMaxNum",0;
   "FPMinNum",0;
-  "FPAbs",0;
   "FPSub",0;
   "FPRecpX",0;
   "Mem.read",0;
