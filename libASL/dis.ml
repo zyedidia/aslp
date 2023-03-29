@@ -1342,23 +1342,21 @@ and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: 
                 let@ enc_match = dis_encoding enc op in
                 if enc_match then begin
                     (* todo: should evaluate ConditionHolds to decide whether to execute body *)
-                    let@ env = DisEnv.read in
-
                     if !debug_level >= 1 then begin
                         Printf.printf "Dissasm: %s\n" (pprint_ident inst);
                     end;
 
-                    let opost' = (match opost with
-                    | Some post ->
-                        if !debug_level >= 2 then begin
-                          Printf.printf "also disassembling __postdecode...\n"
-                        end;
-                        post
-                    | None -> []
-                    ) in
                     let@ (lenv',stmts) = DisEnv.locally_ (
                         let@ () = DisEnv.modify (LocalEnv.addLevel) in
-                        let@ () = dis_stmts (opost' @ exec) in
+                        let@ () = (match opost with
+                          | Some post ->
+                              if !debug_level >= 2 then begin
+                                Printf.printf "also disassembling __postdecode...\n"
+                              end;
+                              dis_stmts post
+                          | None -> DisEnv.unit
+                        ) in
+                        let@ () = dis_stmts exec in
                         DisEnv.modify (LocalEnv.popLevel)
                     ) in
 
