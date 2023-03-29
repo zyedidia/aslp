@@ -828,22 +828,18 @@ and no_inline_impure = List.map (fun (x,y) -> FIdent (x,y))
 
 (** Disassemble call to function *)
 and dis_funcall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): sym rws =
-    let+ ret = DisEnv.catcherror (dis_call loc f tvs vs) in
-    (* we always want to reduce to values if possible, but exceptions may be thrown while
-        disassembling functions. *)
-    match ret with
-    | Ok None -> internal_error loc "function call finished without returning a value"
-    | Ok (Some (Val v)) -> Val v
-    | Error _
-    | Ok (Some (Exp _)) when List.mem f no_inline_pure -> 
-        (* this case is reached when a no_inline_pure function cannot be fully evaluated. *)
-        (* in this case, simply emit the primitive. *)
-        let expr = Exp (Expr_TApply (f, List.map sym_expr tvs, List.map sym_expr vs)) in
-        (match sym_prim_simplify (name_of_FIdent f) tvs vs with 
-        | Some x -> x 
-        | None -> expr)
-    | Ok (Some (Exp e)) -> Exp e
-    | Error (exn,bt) -> raise exn (* it is an error if a non-primitive function cannot be disassembled. *)
+    if List.mem f no_inline_pure &&
+      ((List.exists (function Exp _ -> true | _ -> false) tvs) ||
+        (List.exists (function Exp _ -> true | _ -> false) vs)) then
+      let expr = Exp (Expr_TApply (f, List.map sym_expr tvs, List.map sym_expr vs)) in
+      DisEnv.pure (match sym_prim_simplify (name_of_FIdent f) tvs vs with
+      | Some x -> x
+      | None -> expr)
+    else
+      let+ r = dis_call loc f tvs vs in
+      match r with
+      | Some x -> x
+      | None -> internal_error loc "function call finished without returning a value"
 
 (** Evaluate call to procedure *)
 and dis_proccall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): unit rws =
