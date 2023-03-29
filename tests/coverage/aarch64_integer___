@@ -20124,23 +20124,14 @@ ENCODING: aarch64_integer_logical_shiftedreg
 
 ENCODING: aarch64_integer_pac_autda_dp_1src
 0xdac11800: [Z=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11801: [Z=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac1181f: [Z=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11820: [Z=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11821: [Z=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac1183f: [Z=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11be0: [Z=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11be1: [Z=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11bff: [Z=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac13800: [Z=1 ; Rn=0 ; Rd=0] --> (invalid)
 0xdac13801: [Z=1 ; Rn=0 ; Rd=1] --> (invalid)
 0xdac1381f: [Z=1 ; Rn=0 ; Rd=31] --> (invalid)
@@ -20148,31 +20139,19 @@ ENCODING: aarch64_integer_pac_autda_dp_1src
 0xdac13821: [Z=1 ; Rn=1 ; Rd=1] --> (invalid)
 0xdac1383f: [Z=1 ; Rn=1 ; Rd=31] --> (invalid)
 0xdac13be0: [Z=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac13be1: [Z=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac13bff: [Z=1 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 
 ENCODING: aarch64_integer_pac_autdb_dp_1src
 0xdac11c00: [Z=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11c01: [Z=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11c1f: [Z=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11c20: [Z=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11c21: [Z=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11c3f: [Z=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11fe0: [Z=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11fe1: [Z=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11fff: [Z=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac13c00: [Z=1 ; Rn=0 ; Rd=0] --> (invalid)
 0xdac13c01: [Z=1 ; Rn=0 ; Rd=1] --> (invalid)
 0xdac13c1f: [Z=1 ; Rn=0 ; Rd=31] --> (invalid)
@@ -20180,31 +20159,19 @@ ENCODING: aarch64_integer_pac_autdb_dp_1src
 0xdac13c21: [Z=1 ; Rn=1 ; Rd=1] --> (invalid)
 0xdac13c3f: [Z=1 ; Rn=1 ; Rd=31] --> (invalid)
 0xdac13fe0: [Z=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac13fe1: [Z=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac13fff: [Z=1 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 
 ENCODING: aarch64_integer_pac_autia_dp_1src
 0xdac11000: [Z=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11001: [Z=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac1101f: [Z=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11020: [Z=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11021: [Z=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac1103f: [Z=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac113e0: [Z=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac113e1: [Z=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac113ff: [Z=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac13000: [Z=1 ; Rn=0 ; Rd=0] --> (invalid)
 0xdac13001: [Z=1 ; Rn=0 ; Rd=1] --> (invalid)
 0xdac1301f: [Z=1 ; Rn=0 ; Rd=31] --> (invalid)
@@ -20212,34 +20179,22 @@ ENCODING: aarch64_integer_pac_autia_dp_1src
 0xdac13021: [Z=1 ; Rn=1 ; Rd=1] --> (invalid)
 0xdac1303f: [Z=1 ; Rn=1 ; Rd=31] --> (invalid)
 0xdac133e0: [Z=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac133e1: [Z=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac133ff: [Z=1 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 
 ENCODING: aarch64_integer_pac_autia_hint
 (encoding unused)
 
 ENCODING: aarch64_integer_pac_autib_dp_1src
 0xdac11400: [Z=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11401: [Z=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac1141f: [Z=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11420: [Z=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac11421: [Z=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac1143f: [Z=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac117e0: [Z=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac117e1: [Z=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac117ff: [Z=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac13400: [Z=1 ; Rn=0 ; Rd=0] --> (invalid)
 0xdac13401: [Z=1 ; Rn=0 ; Rd=1] --> (invalid)
 0xdac1341f: [Z=1 ; Rn=0 ; Rd=31] --> (invalid)
@@ -20247,34 +20202,22 @@ ENCODING: aarch64_integer_pac_autib_dp_1src
 0xdac13421: [Z=1 ; Rn=1 ; Rd=1] --> (invalid)
 0xdac1343f: [Z=1 ; Rn=1 ; Rd=31] --> (invalid)
 0xdac137e0: [Z=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac137e1: [Z=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac137ff: [Z=1 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 
 ENCODING: aarch64_integer_pac_autib_hint
 (encoding unused)
 
 ENCODING: aarch64_integer_pac_pacda_dp_1src
 0xdac10800: [Z=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10801: [Z=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac1081f: [Z=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10820: [Z=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10821: [Z=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac1083f: [Z=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10be0: [Z=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10be1: [Z=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10bff: [Z=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac12800: [Z=1 ; Rn=0 ; Rd=0] --> (invalid)
 0xdac12801: [Z=1 ; Rn=0 ; Rd=1] --> (invalid)
 0xdac1281f: [Z=1 ; Rn=0 ; Rd=31] --> (invalid)
@@ -20282,31 +20225,19 @@ ENCODING: aarch64_integer_pac_pacda_dp_1src
 0xdac12821: [Z=1 ; Rn=1 ; Rd=1] --> (invalid)
 0xdac1283f: [Z=1 ; Rn=1 ; Rd=31] --> (invalid)
 0xdac12be0: [Z=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac12be1: [Z=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac12bff: [Z=1 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 
 ENCODING: aarch64_integer_pac_pacdb_dp_1src
 0xdac10c00: [Z=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10c01: [Z=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10c1f: [Z=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10c20: [Z=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10c21: [Z=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10c3f: [Z=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10fe0: [Z=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10fe1: [Z=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10fff: [Z=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac12c00: [Z=1 ; Rn=0 ; Rd=0] --> (invalid)
 0xdac12c01: [Z=1 ; Rn=0 ; Rd=1] --> (invalid)
 0xdac12c1f: [Z=1 ; Rn=0 ; Rd=31] --> (invalid)
@@ -20314,11 +20245,8 @@ ENCODING: aarch64_integer_pac_pacdb_dp_1src
 0xdac12c21: [Z=1 ; Rn=1 ; Rd=1] --> (invalid)
 0xdac12c3f: [Z=1 ; Rn=1 ; Rd=31] --> (invalid)
 0xdac12fe0: [Z=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac12fe1: [Z=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac12fff: [Z=1 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 
 ENCODING: aarch64_integer_pac_pacga_dp_2src
 0x9ac03000: [Rm=0 ; Rn=0 ; Rd=0] --> [1] Evaluation failure: LibASL.Value.Throw(ExceptionTaken) at file "./mra_tools/support/fetchdecode.asl" line 9 char 20 - line 10 char 0
@@ -20351,23 +20279,14 @@ ENCODING: aarch64_integer_pac_pacga_dp_2src
 
 ENCODING: aarch64_integer_pac_pacia_dp_1src
 0xdac10000: [Z=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10001: [Z=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac1001f: [Z=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10020: [Z=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10021: [Z=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac1003f: [Z=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac103e0: [Z=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac103e1: [Z=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac103ff: [Z=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac12000: [Z=1 ; Rn=0 ; Rd=0] --> (invalid)
 0xdac12001: [Z=1 ; Rn=0 ; Rd=1] --> (invalid)
 0xdac1201f: [Z=1 ; Rn=0 ; Rd=31] --> (invalid)
@@ -20375,34 +20294,22 @@ ENCODING: aarch64_integer_pac_pacia_dp_1src
 0xdac12021: [Z=1 ; Rn=1 ; Rd=1] --> (invalid)
 0xdac1203f: [Z=1 ; Rn=1 ; Rd=31] --> (invalid)
 0xdac123e0: [Z=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac123e1: [Z=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac123ff: [Z=1 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 
 ENCODING: aarch64_integer_pac_pacia_hint
 (encoding unused)
 
 ENCODING: aarch64_integer_pac_pacib_dp_1src
 0xdac10400: [Z=0 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10401: [Z=0 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac1041f: [Z=0 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10420: [Z=0 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac10421: [Z=0 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac1043f: [Z=0 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac107e0: [Z=0 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac107e1: [Z=0 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac107ff: [Z=0 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac12400: [Z=1 ; Rn=0 ; Rd=0] --> (invalid)
 0xdac12401: [Z=1 ; Rn=0 ; Rd=1] --> (invalid)
 0xdac1241f: [Z=1 ; Rn=0 ; Rd=31] --> (invalid)
@@ -20410,11 +20317,8 @@ ENCODING: aarch64_integer_pac_pacib_dp_1src
 0xdac12421: [Z=1 ; Rn=1 ; Rd=1] --> (invalid)
 0xdac1243f: [Z=1 ; Rn=1 ; Rd=31] --> (invalid)
 0xdac127e0: [Z=1 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac127e1: [Z=1 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 0xdac127ff: [Z=1 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: Failure("Casting unhandled value type to expression: {.NS = 1'0', .exceptype = Exception_PACTrap, .ipaddress = 52'0000000000000000000000000000000000000000000000000000', .ipavalid = FALSE, .syndrome = 25'0000000000000000000000000', .vaddress = 64'0000000000000000000000000000000000000000000000000000000000000000'}")
-
 
 ENCODING: aarch64_integer_pac_pacib_hint
 (encoding unused)
