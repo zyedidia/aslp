@@ -821,10 +821,13 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     | Expr_LitString(s) -> DisEnv.pure (Val (from_stringLit s))
     )
 
+and no_inline_pure = List.map (fun (x,y) -> FIdent(x,y))
+  ["LSL",0; "LSR",0; "ASR",0; "SignExtend",0; "ZeroExtend",0]
+and no_inline_impure = List.map (fun (x,y) -> FIdent (x,y))
+  no_inline
+
 (** Disassemble call to function *)
 and dis_funcall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): sym rws =
-    let no_inline_pure = List.map (fun (x,y) -> FIdent(x,y))
-        ["LSL",0; "LSR",0; "ASR",0; "SignExtend",0; "ZeroExtend",0] in
     let+ ret = DisEnv.catcherror (dis_call loc f tvs vs) in
     (* we always want to reduce to values if possible, but exceptions may be thrown while
         disassembling functions. *)
@@ -857,7 +860,6 @@ and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws 
 
 and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws =
     let@ fn = DisEnv.getFun loc f in
-    let no_inline_impure = List.map (fun (x,y) -> FIdent (x,y)) no_inline in
     (match fn with
     | Some (rty, _, targs, _, _, _) when List.mem f no_inline_impure -> 
         (* impure functions are not visited. *)
