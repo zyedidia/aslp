@@ -345,6 +345,10 @@ module StatefulIntToBits = struct
   let is_power_of_2 n = 
     n <> 0 && 0 = Int.logand n (n-1)
 
+  let is_pos (_,abs) =
+    let (_,l) = interval abs in
+    Z.geq l Z.zero
+
   (** Covert an integer expression tree into a bitvector equivalent *)
   let rec bv_of_int_expr (vars: state) (e: expr): (sym * abs) =
     match e with
@@ -393,6 +397,16 @@ module StatefulIntToBits = struct
         let f = sym_prim (FIdent ("mul_bits", 0)) [sym_of_abs w] [ex x;ex y] in
         (f,w)
 
+    (* Interface only supports zero rounding division at present, force fdiv result to be positive *)
+    | Expr_TApply (FIdent ("fdiv_int", 0), [], [x; y]) ->
+        let x = force_signed (bv_of_int_expr vars x) in
+        let y = force_signed (bv_of_int_expr vars y) in
+        assert (is_pos x = is_pos y);
+        let w = abs_of_div (snd x) (snd y) in
+        let ex = extend w in
+        let f = sym_prim (FIdent ("sdiv_bits", 0)) [sym_of_abs w] [ex x; ex y] in
+        (f,w)
+
     (* when the divisor is a power of 2, mod can be implemented by truncating. *)
     | Expr_TApply (FIdent ("frem_int", 0), [], [n;Expr_LitInt d]) when is_power_of_2 (int_of_string d) ->
         let digits = Z.log2 (Z.of_string d) in
@@ -422,8 +436,8 @@ module StatefulIntToBits = struct
             (sym_append_bits Unknown (width (snd x)) yshift (fst x) (sym_zeros yshift),abs)
         | _ -> 
             let (u,_) = interval (snd y) in
-            (* in worst case, could shift by 2^(ysize-1)-1 bits, assuming y >= 0. *)
-            let size = width (snd x) + (Int.shift_left 2 (Z.to_int u)) - 1 in
+            (* in worst case, could shift upper bound on y, adding y bits *)
+            let size = width (snd x) + (Z.to_int (Z.max u Z.zero)) in
             let abs = if signed (snd x) then abs_of_width size else abs_of_uwidth size in
             let ex = extend abs in
             let f = sym_prim (FIdent ("lsl_bits", 0)) [sym_of_int size; sym_of_abs (snd y)] [ex x;fst y] in
@@ -432,7 +446,7 @@ module StatefulIntToBits = struct
 
     (* TODO: Over-approximate range on result, could be a little closer *)
     | Expr_TApply (FIdent ("shr_int", 0), [], [x; y]) -> 
-        let x = bv_of_int_expr vars x in
+        let x = force_signed (bv_of_int_expr vars x) in
         let y = force_signed (bv_of_int_expr vars y) in
         (sym_prim (FIdent ("asr_bits", 0)) [sym_of_abs (snd x); sym_of_abs (snd y)] [fst x;fst y],snd x)
 
@@ -577,7 +591,7 @@ module StatefulIntToBits = struct
      TODO: Unique variable names or support multiple decls somehow
      TODO: This won't respect local scopes within If stmts
   *)
-  let rec walk (vars: abs Bindings.t) (s: stmt list): (state * stmt list) =
+  let rec walk changed (vars: abs Bindings.t) (s: stmt list): (state * stmt list) =
     List.fold_left (fun (st,acc) stmt ->
       let stmt = Asl_visitor.visit_stmt (new transform_int_expr st) stmt in
       let (st,stmt) = (match stmt with
@@ -615,14 +629,15 @@ module StatefulIntToBits = struct
 
       (* Expect only normalised Ifs *)
       | Stmt_If (e, tstmts, [], fstmts, loc) ->
-          let (_,vars) = st in
-          let (t,tstmts) = walk vars tstmts in
-          let (f,fstmts) = walk vars fstmts in
+          let (changed,vars) = st in
+          let (t,tstmts) = walk changed vars tstmts in
+          let (f,fstmts) = walk changed vars fstmts in
           (merge t f,Stmt_If(e, tstmts, [], fstmts, loc))
       | Stmt_If _ -> failwith "walk: invalid if"
 
       (* Ignore all other stmts *)
       | Stmt_Assert _ 
+      | Stmt_Throw _
       | Stmt_TCall _
       | Stmt_VarDeclsNoInit _ 
       | Stmt_ConstDecl _
@@ -632,12 +647,12 @@ module StatefulIntToBits = struct
 
       | _ -> failwith "walk: invalid IR") in
       (st,acc@[stmt])
-    ) ((false,vars),[]) s 
+    ) ((changed,vars),[]) s
 
   let rec fixedPoint (vars: abs Bindings.t) (s: stmt list): stmt list =
-    let ((changed,vars),res) = walk vars s in
-    if changed then begin fixedPoint vars s 
-    end else res
+    let ((changed,vars),res) = walk false vars s in
+    if changed then fixedPoint vars s
+    else res
 
   let run (s: stmt list): stmt list =
     fixedPoint Bindings.empty s
@@ -1303,6 +1318,7 @@ module CommonSubExprElim = struct
       | "LSL"                -> Type_Bits(num)
       | "LSR"                -> Type_Bits(num)
       | "ASR"                -> Type_Bits(num)
+      | "sdiv_bits"          -> Type_Bits(num)
       | "cvt_bits_uint"      -> type_integer
       | "cvt_bits_sint"      -> type_integer
       | "eq_bits"            -> type_bool
