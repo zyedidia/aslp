@@ -42,41 +42,6 @@ module Make (M : S) = struct
     let (and*) = (and+)
   end
 
-  open Let
-
-  (* higher-order functions and transformations *)
-
-  (** Performs a list of computations in sequence, resulting in a list
-      of their results.  *)
-  let rec sequence (xs: 'a m list): 'a list m =
-    match xs with
-    | (x::xs) ->
-      let+ x = x
-      and+ xs = sequence xs in
-        (x :: xs)
-    | [] -> pure []
-
-  (** Performs a list of computations in sequence and discard their results
-      (but retains their monad effects).  *)
-  let sequence_ (xs : 'a m list): unit m =
-    let+ _ = sequence xs in ()
-
-  (** Uses the given function to create a list of computations which are
-      then run sequentially. Results in a list of their results.  *)
-  let traverse (f: 'a -> 'b m) (x: 'a list): 'b list m =
-    sequence (List.map f x)
-
-  let traverse2 (f: 'a -> 'b -> 'c m) (x: 'a list) (y: 'b list): 'c list m =
-    sequence (List.map2 f x y)
-
-  (** Uses the given function to create a list of computations which are
-      then run sequentually. Discards their results. *)
-  let traverse_ (f: 'a -> 'b m) (x: 'a list): unit m =
-    let+ _ = sequence (List.map f x) in ()
-
-  let traverse2_ (f: 'a -> 'b -> 'c m) (x: 'a list) (y: 'b list): unit m =
-    let+ _ = sequence (List.map2 f x y) in ()
-
   (** A nil computation. Does nothing and returns nothing of interest. *)
   let unit: unit m = pure ()
 
