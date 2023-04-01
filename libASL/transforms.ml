@@ -73,7 +73,6 @@ let infer_type (e: expr): ty option =
     | "or_bits"            -> Some(Type_Bits(num))
     | "eor_bits"           -> Some(Type_Bits(num))
     | "not_bits"           -> Some(Type_Bits(num))
-    | "neg_bits"           -> Some(Type_Bits(num))
     | "zeros_bits"         -> Some(Type_Bits(num))
     | "ones_bits"          -> Some(Type_Bits(num))
     | "replicate_bits"     -> Some(Type_Bits(num))
@@ -518,7 +517,9 @@ module StatefulIntToBits = struct
         let x = bv_of_int_expr vars x in
         let w = abs_of_uop (snd x) Primops.prim_neg_int in
         let ex = extend w in
-        let f = sym_prim (FIdent ("neg_bits", 0)) [sym_of_abs w] [ex x] in
+        let f = sym_prim (FIdent ("not_bits", 0)) [sym_of_abs w] [ex x] in
+        let offset = Val (VBits {v=Z.one; n=width w}) in
+        let f = sym_prim (FIdent ("add_bits", 0)) [sym_of_abs w] [f; offset] in
         (f,w)
 
     (* TODO: Somewhat haphazard translation from old approach *)
@@ -1104,7 +1105,6 @@ module IntToBits = struct
         (match name_of_FIdent f with
         | "add_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
         | "sub_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
-        | "neg_bits" -> ChangeDoChildrenPost (narrow_args (), fun x -> Expr_Slices (x, [sl]))
         | _ -> ChangeDoChildrenPost (narrow inner, fun x -> Expr_Slices (x, [sl]))
         )
       | _ -> DoChildren
