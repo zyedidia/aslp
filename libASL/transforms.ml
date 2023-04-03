@@ -1309,9 +1309,6 @@ module CommonSubExprElim = struct
   (* Basic common sub-expression elimination.
      (Theoretical) Pitfalls:
      - Type inference of our factorised subexpressions isn't great. See large match statement in infer_cse_expr_type
-     - Eliminating two connected expressions will depend entirely on which one it sees first.
-        i.e. trying to simultaneously factorise "add (mem (add (3+4)))" and "mem (add (3+4))" - 
-        ideal case is "x = mem (add (3+4)); y = add (x)" but this may not happen.
      - We only attempt to eliminate TApplys. TApplys are our "primitive functions" and are the
         main goal of this transform but we could also eliminate many other things.
   *)
@@ -1416,7 +1413,9 @@ module CommonSubExprElim = struct
         let new_stmt = Stmt_ConstDecl(infer_cse_expr_type head, Ident(new_var_name), head, Unknown) in
 
         let () = repl#add (Ident(new_var_name)) head in
-        add_exprs_num (insert_into_stmts xs new_stmt) (tail) (id+1)
+        (* Do replacement in our remaining eliminate-able expressions
+           to ensure that they will continue to match correctly *)
+        add_exprs_num (insert_into_stmts xs new_stmt) (visit_exprs repl tail) (id+1)
     in
     add_exprs_num xs knowledge 0
 
