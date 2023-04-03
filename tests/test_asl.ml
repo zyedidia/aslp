@@ -71,6 +71,7 @@ let test_compare env () : unit =
             let disEnv = Eval.Env.copy env in
             let evalEnv = Eval.Env.copy initEnv in
             let disEvalEnv = Eval.Env.copy initEnv in
+            let lenv = Dis.build_env disEnv in
 
             let opcode = input_line inchan in
             let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))) in
@@ -81,7 +82,7 @@ let test_compare env () : unit =
 
                 (try
                     (* Generate and evaluate partially evaluated instruction *)
-                    let disStmts = Dis.dis_decode_entry disEnv decoder op in
+                    let disStmts = Dis.dis_decode_entry disEnv lenv decoder op in
                     List.iter (Eval.eval_stmt disEvalEnv) disStmts;
 
                     compare_env evalEnv disEvalEnv opcode

@@ -19,6 +19,7 @@ open Symbolic
 
 let debug_level = ref 0
 let debug_show_trace = ref false
+let no_debug = fun () -> !debug_level = 0
 
 (** (name, arg, location) tuple for tracing disassembly calls.
     For example: ("dis_expr", "1+1", loc).
@@ -231,18 +232,6 @@ module LocalEnv = struct
 
     let addLocalConst = addLocalVar
 
-    (** Resolves the given identifier within the scopes.
-        Returns inner-most scope with a matching variable, due to
-        shadowing. *)
-    let resolveVar (loc: l) (x: ident) (env: t): var =
-        let rec go (bs: (ty * sym) Bindings.t list) =
-          match bs with
-          | [] -> internal_error loc @@ "cannot resolve undeclared variable: " ^ pprint_ident x ^ "\n\n" ^ pp_locals env
-          | b::rest when Bindings.mem x b -> Var (List.length rest,x)
-          | _::rest -> go rest
-        in
-        go (env.locals)
-
     (** Gets the type and value of a resolved variable. *)
     let getVar (loc: l) (x: var) (env: t): (ty * sym) =
         let Var (i,id) = x in
@@ -252,21 +241,30 @@ module LocalEnv = struct
         | None -> internal_error loc @@ "failed to get resolved variable: " ^ pp_var x
 
     (** Resolves then gets the type and value of a resolved variable. *)
-    let resolveGetVar (loc: l) (x: ident) (env: t): (var * (ty * sym)) =
-        let var = resolveVar loc x env in
-        let (t,v) = getVar loc var env in
-        (var, (t,v))
+    let rec go loc x env i (bs: (ty * sym) Bindings.t list) =
+        (match bs with
+        | [] -> internal_error loc @@ "cannot resolve undeclared variable: " ^ pprint_ident x ^ "\n\n" ^ pp_locals env
+        | b::rest -> match Bindings.find_opt x b with
+          | Some v -> (Var (i,x),v)
+          | _ -> go loc x env (i - 1) rest)
+    let resolveGetVar (loc: l) (x: ident) = fun env ->
+        let l = List.length env.locals - 1 in
+        match env.locals with
+        | b::rest -> (match Bindings.find_opt x b with
+          | Some v -> (Var (l,x),v)
+          | _ -> go loc x env (l - 1) rest)
+        | _ -> internal_error loc @@ "cannot resolve undeclared variable: " ^ pprint_ident x ^ "\n\n" ^ pp_locals env
 
     (** Sets a resolved variable to the given value. *)
     let setVar (loc: l) (x: var) (v: sym) (env: t): t =
         if !Eval.trace_write then Printf.printf "TRACE: write %s = %s\n" (pp_var x) (pp_sym v);
         let Var (i,id) = x in
         let n = List.length env.locals - i - 1 in
-        match Bindings.find_opt id (List.nth env.locals n) with
-        | Some (t,_) ->
-          let locals = Utils.nth_modify (Bindings.add id (t,v)) n env.locals in
-          { env with locals }
-        | None -> internal_error loc @@ "failed to set resolved variable: " ^ pp_var x
+        let locals = Utils.nth_modify (
+          Bindings.update id (fun e -> match e with
+          | Some (t,_) -> Some (t,v)
+          | None -> internal_error loc @@ "failed to set resolved variable: " ^ pp_var x)) n env.locals in
+        { env with locals }
 
 end
 
@@ -281,16 +279,11 @@ module DisEnv = struct
 
     open Let
 
-    let catch (f: 'b -> 'a) (x: 'b): 'a option =
-        try Some (f x)
-        with EvalError _ -> None
-
     let getVar (loc: l) (x: ident): (ty * sym) rws =
-        let* x = gets (LocalEnv.resolveVar loc x) in
-        gets (LocalEnv.getVar loc x)
+        let+ (_,v) = gets (LocalEnv.resolveGetVar loc x) in
+        v
 
-    let mkUninit (t: ty): value rws =
-        let+ env = read in
+    let uninit (t: ty) (env: Eval.Env.t): value =
         try
             Eval.mk_uninitialized Unknown env t
         with
@@ -298,42 +291,38 @@ module DisEnv = struct
                 "mkUninit: failed to evaluate type " ^ pp_type t ^ " due to " ^
                 Printexc.to_string e
 
+    let mkUninit (t: ty): value rws =
+        reads (uninit t)
+
+    let merge_bindings env l r: (ty * sym) Bindings.t =
+      if l == r then l else
+      Bindings.union (fun k (t1,v1) (t2,v2) ->
+        if !debug_level > 0 && t2 <> t1 then
+            unsupported Unknown @@
+              Printf.sprintf "cannot merge locals with different types: %s, %s <> %s."
+              (pprint_ident k) (pp_type t1) (pp_type t2);
+          let out = Some (t1,match v1 = v2 with
+            | false -> Val (uninit t1 env)
+            | true -> v1)  in
+          out) l r
+
     let join_locals (l: LocalEnv.t) (r: LocalEnv.t): unit rws =
+        let* env = read in
         assert (l.returnSymbols = r.returnSymbols);
         assert (l.indent = r.indent);
         assert (l.trace = r.trace);
-
-        let merge_bindings l r: (ty * sym) Bindings.t rws =
-            Bindings.fold (fun k (t1,v1) bs ->
-                match Bindings.find_opt k r with
-                | None -> bs
-                | Some (t2,v2) ->
-                    if t2 <> t1 then
-                        unsupported Unknown @@
-                        Printf.sprintf "cannot merge locals with different types: %s, %s <> %s."
-                            (pprint_ident k) (pp_type t1) (pp_type t2);
-                    let+ v =
-                        (match v1 = v2 with
-                        | false -> let+ v = mkUninit t1 in Val v
-                        | true -> pure v1)
-                    and+ bs' = bs in
-                    Bindings.add k (t1,v) bs')
-            l (pure Bindings.empty) in
-        let* locals' = traverse2 merge_bindings l.locals r.locals in
-        let lenv': LocalEnv.t =
-        {
+        let locals' = List.map2 (merge_bindings env) l.locals r.locals in
+        put {
             locals = locals';
             returnSymbols = l.returnSymbols;
             numSymbols = max l.numSymbols r.numSymbols;
             indent = l.indent;
             trace = l.trace;
         }
-        in
-        put lenv'
 
 
     let getFun (loc: l) (x: ident): Eval.fun_sig option rws =
-        reads (catch (fun env -> Eval.Env.getFun loc env x))
+        reads (fun env -> Eval.Env.getFunOpt loc env x)
 
     let nextVarName (prefix: string): ident rws =
         let+ num = stateful LocalEnv.incNumSymbols in
@@ -684,7 +673,9 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
   TODO: This does not appear to be a problem at the moment, but requires greater testing to be sure.
   *)
 and dis_load loc x =
-  DisEnv.scope loc "dis_load" (pp_expr x) pp_sym (dis_load_chain loc x [])
+  let body = dis_load_chain loc x []  in
+  if no_debug() then body
+  else DisEnv.scope loc "dis_load" (pp_expr x) pp_sym body
 
 and dis_load_chain (loc: l) (x: expr) (ref: access_chain list): sym rws =
   (match x with
@@ -724,7 +715,10 @@ and dis_load_chain (loc: l) (x: expr) (ref: access_chain list): sym rws =
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
 and dis_expr loc x =
-  let+ r = DisEnv.scope loc "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x) in
+  let+ r =
+    let body = dis_expr' loc x in
+    if no_debug() then body
+    else DisEnv.scope loc "dis_expr" (pp_expr x) pp_sym (dis_expr' loc x) in
   match r with
   | Val (VUninitialized _) -> internal_error loc @@ "dis_expr returning VUninitialized, invalidating assumption"
   | _ -> r
@@ -843,10 +837,12 @@ and dis_proccall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): unit rws =
 
 (** Disassemble a function call *)
 and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws =
-    DisEnv.scope loc "dis_call"
+    let body = dis_call' loc f tes es in
+    if no_debug() then body
+    else DisEnv.scope loc "dis_call"
         (pp_expr (Expr_TApply (f, List.map sym_expr tes, List.map sym_expr es)))
         (Option.fold ~none:"(no return)" ~some:pp_sym)
-        (dis_call' loc f tes es)
+        body
 
 and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws =
     let@ fn = DisEnv.getFun loc f in
@@ -910,9 +906,10 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws
         | None ->
             DisEnv.pure None) in
 
-        let@ env = DisEnv.get in
-        let@ () = DisEnv.if_ (!debug_level >= 2)
-            (DisEnv.log (LocalEnv.pp_locals env ^ "\n")) in
+        let@() = if !debug_level >= 2 then
+          let@ env = DisEnv.get in
+          DisEnv.log (LocalEnv.pp_locals env ^ "\n")
+        else DisEnv.unit in
 
         (* Evaluate body with new return symbol *)
         let@ () = DisEnv.modify (LocalEnv.addReturnSymbol rv) in
@@ -937,7 +934,6 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws
 
 and dis_prim (f: ident) (tes: sym list) (es: sym list): sym rws =
     let name = name_of_FIdent f in
-
     match sym_prim_simplify name tes es with
     | Some s -> DisEnv.pure s
     | None ->
@@ -950,10 +946,9 @@ and dis_prim (f: ident) (tes: sym list) (es: sym list): sym rws =
         | Val v -> DisEnv.pure (Val v)
 
 and dis_lexpr loc x r: unit rws =
-    DisEnv.scope loc
-        "dis_lexpr" (pp_stmt (Stmt_Assign (x, sym_expr r, Unknown)))
-        Utils.pp_unit
-        (dis_lexpr' loc x r)
+    let body = dis_lexpr' loc x r in
+    if no_debug() then body
+    else DisEnv.scope loc "dis_lexpr" (pp_stmt (Stmt_Assign (x, sym_expr r, Unknown))) Utils.pp_unit body
 
 (** Remove potential effects from an lexpr *)
 and resolve_lexpr (loc: l) (x: lexpr): lexpr rws =
@@ -1126,7 +1121,10 @@ and dis_stmts (stmts: AST.stmt list): unit rws =
 
 
 (** Disassemble statement *)
-and dis_stmt x = DisEnv.scope (stmt_loc x) "dis_stmt" (pp_stmt x) Utils.pp_unit (dis_stmt' x)
+and dis_stmt x =
+    let body = dis_stmt' x in
+    if no_debug() then body
+    else DisEnv.scope (stmt_loc x) "dis_stmt" (pp_stmt x) Utils.pp_unit body
 and dis_stmt' (x: AST.stmt): unit rws =
     (match x with
     | Stmt_VarDeclsNoInit(ty, vs, loc) ->
@@ -1295,8 +1293,9 @@ let dis_decode_slice (loc: l) (x: decode_slice) (op: value): value rws =
 
 (* Duplicate of eval_decode_case modified to print rather than eval *)
 let rec dis_decode_case (loc: AST.l) (x: decode_case) (op: value): unit rws =
-    DisEnv.scope loc "dis_decode_case" (pp_decode_case x) Utils.pp_unit
-        (dis_decode_case' loc x op)
+    let body = dis_decode_case' loc x op in
+    if no_debug() then body
+    else DisEnv.scope loc "dis_decode_case" (pp_decode_case x) Utils.pp_unit body
 and dis_decode_case' (loc: AST.l) (x: decode_case) (op: value): unit rws =
     (match x with
     | DecoderCase_Case (ss, alts, loc) ->
@@ -1317,8 +1316,9 @@ and dis_decode_case' (loc: AST.l) (x: decode_case) (op: value): unit rws =
 
 (* Duplicate of eval_decode_alt modified to print rather than eval *)
 and dis_decode_alt (loc: l) (x: decode_alt) (vs: value list) (op: value): bool rws =
-    DisEnv.scope loc "dis_decode_alt" (pp_decode_alt x) string_of_bool
-        (dis_decode_alt' loc x vs op)
+    let body = dis_decode_alt' loc x vs op in
+    if no_debug() then body
+    else DisEnv.scope loc "dis_decode_alt" (pp_decode_alt x) string_of_bool body
 and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: value): bool rws =
     if List.for_all2 (Eval.eval_decode_pattern loc) ps vs then
         (match b with
@@ -1330,23 +1330,21 @@ and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: 
                 let@ enc_match = dis_encoding enc op in
                 if enc_match then begin
                     (* todo: should evaluate ConditionHolds to decide whether to execute body *)
-                    let@ env = DisEnv.read in
-
                     if !debug_level >= 1 then begin
                         Printf.printf "Dissasm: %s\n" (pprint_ident inst);
                     end;
 
-                    let opost' = (match opost with
-                    | Some post ->
-                        if !debug_level >= 2 then begin
-                          Printf.printf "also disassembling __postdecode...\n"
-                        end;
-                        post
-                    | None -> []
-                    ) in
                     let@ (lenv',stmts) = DisEnv.locally_ (
                         let@ () = DisEnv.modify (LocalEnv.addLevel) in
-                        let@ () = dis_stmts (opost' @ exec) in
+                        let@ () = (match opost with
+                          | Some post ->
+                              if !debug_level >= 2 then begin
+                                Printf.printf "also disassembling __postdecode...\n"
+                              end;
+                              dis_stmts post
+                          | None -> DisEnv.unit
+                        ) in
+                        let@ () = dis_stmts exec in
                         DisEnv.modify (LocalEnv.popLevel)
                     ) in
 
@@ -1375,12 +1373,29 @@ and dis_decode_alt' (loc: AST.l) (DecoderAlt_Alt (ps, b)) (vs: value list) (op: 
     else
         DisEnv.pure false
 
-let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt list =
-    let DecoderCase_Case (_,_,loc) = decode in
+type env = (LocalEnv.t * IdentSet.t)
 
+let dis_decode_entry (env: Eval.Env.t) ((lenv,globals): env) (decode: decode_case) (op: value): stmt list =
+    let DecoderCase_Case (_,_,loc) = decode in
+    let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
+    let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
+    let stmts' = Transforms.StatefulIntToBits.run stmts' in
+    let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
+    let stmts' = Transforms.CommonSubExprElim.do_transform stmts' in
+    let stmts' = Transforms.CopyProp.copyProp stmts' in
+    let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts' in
+    if !debug_level >= 2 then begin
+        let stmts' = Asl_visitor.visit_stmts (new Asl_utils.resugarClass (!TC.binop_table)) stmts' in
+        Printf.printf "===========\n";
+        List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts';
+        Printf.printf "===========\n";
+    end;
+    stmts'
+
+let build_env (env: Eval.Env.t): env =
     let env = Eval.Env.freeze env in
-    let globals = IdentSet.of_list @@ List.map fst @@ Bindings.bindings (Eval.Env.readGlobals env) in
     let lenv = LocalEnv.init env in
+    let loc = Unknown in
 
     (* get the pstate, then construct a new pstate where nRW=0, EL=0 & SP=0, then set the pstate *)
     let (_, pstate) = LocalEnv.getVar loc (Var(0, Ident("PSTATE"))) lenv in
@@ -1397,40 +1412,26 @@ let dis_decode_entry (env: Eval.Env.t) (decode: decode_case) (op: value): stmt l
 
     (* set InGuardedPage to false *)
     let lenv = LocalEnv.setVar loc (Var(0, Ident("InGuardedPage"))) (Val (VBool false)) lenv in
-  
-    let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
-    let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
-    (* let stmts' = Transforms.Bits.bitvec_conversion stmts' in *)
-    let stmts' = Transforms.RedundantSlice.do_transform stmts' in
-    let stmts' = Transforms.StatefulIntToBits.run stmts' in
-    let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
-    let stmts' = Transforms.CommonSubExprElim.do_transform stmts' in
+    let globals = IdentSet.of_list @@ List.map fst @@ Bindings.bindings (Eval.Env.readGlobals env) in
+    lenv, globals
 
-    let stmts' = Transforms.CopyProp.copyProp stmts' in (* Can't run before IntToBits for some reason *)
-    let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts' in
-    if !debug_level >= 2 then begin
-        let stmts' = Asl_visitor.visit_stmts (new Asl_utils.resugarClass (!TC.binop_table)) stmts' in
-        Printf.printf "===========\n";
-        List.iter (fun s -> Printf.printf "%s\n" (pp_stmt s)) stmts';
-        Printf.printf "===========\n";
-    end;
-    stmts'
-    
 (** Instruction behaviour may be dependent on its PC. When lifting this information may be statically known. 
     If this is the case, we benefit from setting a PC initially and propagating its value through partial evaluation.
     Assumes variable is named _PC and its represented as a bitvector. *)
-    let setPC (env: Eval.Env.t) (address: Z.t): unit =
-      let loc = Unknown in
-      let pc = Ident "_PC" in
-      let width = (match Eval.Env.getVar loc env pc with
-      | VUninitialized ty -> width_of_type loc ty
-      | VBits b -> b.n
-      | _ -> unsupported loc @@ "Initial env contains PC with unexpected type") in
-      let addr = VBits (Primops.mkBits width address) in
-      Eval.Env.setVar loc env pc addr
-  
-  let retrieveDisassembly ?(address:string option) (env: Eval.Env.t) (opcode: string) : stmt list =
-      let decoder = Eval.Env.getDecoder env (Ident "A64") in
-      let DecoderCase_Case (_,_,loc) = decoder in
-      Option.iter (fun v -> setPC env (Z.of_string v)) address;
-      dis_decode_entry env decoder (Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))))
+let setPC (env: Eval.Env.t) (lenv,g: env) (address: Z.t): env =
+    let loc = Unknown in
+    let pc = Ident "_PC" in
+    let width = (match Eval.Env.getVar loc env pc with
+    | VUninitialized ty -> width_of_type loc ty
+    | VBits b -> b.n
+    | _ -> unsupported loc @@ "Initial env contains PC with unexpected type") in
+    let addr = VBits (Primops.mkBits width address) in
+    LocalEnv.setVar loc (Var(0, pc)) (Val addr) lenv,g
+
+let retrieveDisassembly ?(address:string option) (env: Eval.Env.t) (lenv: env) (opcode: string) : stmt list =
+    let decoder = Eval.Env.getDecoder env (Ident "A64") in
+    let DecoderCase_Case (_,_,loc) = decoder in
+    let lenv = match address with
+    | Some v -> setPC env lenv (Z.of_string v)
+    | None -> lenv in
+    dis_decode_entry env lenv decoder (Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))))

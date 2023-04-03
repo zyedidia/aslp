@@ -129,6 +129,7 @@ module Env : sig
     val setVar              : AST.l -> t -> ident -> value -> unit
 
     val getFun              : AST.l -> t -> ident -> (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list)
+    val getFunOpt           : AST.l -> t -> ident -> (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) option
     val addFun              : AST.l -> t -> ident -> (ty option * ((ty * ident) list) * ident list * ident list * AST.l * stmt list) -> unit
 
     val getInstruction      : AST.l -> t -> ident -> (encoding * (stmt list) option * bool * stmt list)
@@ -391,6 +392,9 @@ end = struct
         | Some def -> def
         | None     -> raise (EvalError (loc, "getFun " ^ pprint_ident x))
         )
+
+    let getFunOpt (loc: l) (env: t) (x: ident): fun_sig option =
+        Bindings.find_opt x env.functions
 
     (*  Here, a function definition is given as a tuple of:
             ty option           - optional return type

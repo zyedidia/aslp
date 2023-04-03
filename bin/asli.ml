@@ -115,6 +115,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
                 let disEnv = Eval.Env.copy cpu.env in
                 let evalEnv = Eval.Env.copy initEnv in
                 let disEvalEnv = Eval.Env.copy initEnv in
+                let lenv = Dis.build_env disEnv in
 
                 let opcode = input_line inchan in
                 let op = Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))) in
@@ -128,7 +129,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
 
                     (try
                         (* Generate and evaluate partially evaluated instruction *)
-                        let disStmts = Dis.dis_decode_entry disEnv decoder op in
+                        let disStmts = Dis.dis_decode_entry disEnv lenv decoder op in
                         List.iter (eval_stmt disEvalEnv) disStmts;
 
                         if Eval.Env.compare evalEnv disEvalEnv then
@@ -182,7 +183,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
                 ) opcodes
         ) encodings;
     | [":sem"; iset; opcode] ->
-        let cpu' = Cpu.mkCPU (Eval.Env.copy cpu.env) in
+        let cpu' = Cpu.mkCPU cpu.env cpu.denv in
         let op = Z.of_int (int_of_string opcode) in
         Printf.printf "Decoding instruction %s %s\n" iset (Z.format "%x" op);
         cpu'.sem iset op
@@ -193,11 +194,11 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
             | [x] -> x 
             | _ -> invalid_arg "expected at most 3 arguments to :dump")
         in
-        let cpu' = Cpu.mkCPU (Eval.Env.copy cpu.env) in
+        let cpu' = Cpu.mkCPU (Eval.Env.copy cpu.env) cpu.denv in
         let op = Z.of_int (int_of_string opcode) in
         let bits = VBits (Primops.prim_cvt_int_bits (Z.of_int 32) op) in
         let decoder = Eval.Env.getDecoder cpu'.env (Ident iset) in
-        let stmts = Dis.dis_decode_entry cpu'.env decoder bits in
+        let stmts = Dis.dis_decode_entry cpu'.env cpu.denv decoder bits in
         let chan = open_out_bin fname in
         Printf.printf "Dumping instruction semantics for %s %s" iset (Z.format "%x" op);
         Printf.printf " to file %s\n" fname;
@@ -338,8 +339,9 @@ let main () =
         LNoise.history_load ~filename:"asl_history" |> ignore;
         LNoise.history_set ~max_length:100 |> ignore;
         
+        let denv = Dis.build_env env in
         let prj_files = List.filter (fun f -> Utils.endswith f ".prj") !opt_filenames in
-        let tcenv = TC.Env.mkEnv TC.env0 and cpu = Cpu.mkCPU env in
+        let tcenv = TC.Env.mkEnv TC.env0 and cpu = Cpu.mkCPU env denv in
         List.iter (fun f -> process_command tcenv cpu "<args>" (":project " ^ f)) prj_files;
         repl tcenv cpu
     end
