@@ -59,6 +59,31 @@ let () = Printexc.register_printer
         Some ("LibASL.Value.EvalError(\"" ^ e ^ "\") at " ^ pp_loc loc)
     | _ -> None)
 
+(* Don't inline these functions, as we assume their behaviours conform to some spec *)
+let no_inline = [
+  "FPConvert",0;
+  "FPRoundInt",0;
+  "FPRoundIntN",0;
+  "FPNeg",0;
+  "FPToFixed",0;
+  "FixedToFP",0;
+  "FPCompare",0;
+  "FPToFixedJS",0;
+  "FPSqrt",0;
+  "FPAdd",0;
+  "FPMul",0;
+  "FPDiv",0;
+  "FPMulAdd",0;
+  "FPMulAddH",0;
+  "FPMulX",0;
+  "FPMax",0;
+  "FPMin",0;
+  "FPMaxNum",0;
+  "FPMinNum",0;
+  "FPSub",0;
+  "FPRecpX",0;
+  "Mem.read",0;
+  "Mem.set",0]
 
 (** A variable's stack level and original identifier name.
     The "stack level" is how many scopes deep it is.
@@ -825,8 +850,7 @@ and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws 
 
 and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws =
     let@ fn = DisEnv.getFun loc f in
-    let no_inline_impure = List.map (fun (x,y) -> FIdent (x,y)) 
-        ["Mem.read",0; "Mem.set",0] in
+    let no_inline_impure = List.map (fun (x,y) -> FIdent (x,y)) no_inline in
     (match fn with
     | Some (rty, _, targs, _, _, _) when List.mem f no_inline_impure -> 
         (* impure functions are not visited. *)
@@ -1207,24 +1231,20 @@ and dis_stmt' (x: AST.stmt): unit rws =
         | _, _ ->
             raise (DisUnsupported (loc, "for loop bounds not statically known: " ^ pp_stmt x)))
     | Stmt_Dep_Undefined loc
-    | Stmt_Undefined loc ->
-        (* We don't actually know whether this point is reachable, so we shouldn't error out *)
+    | Stmt_Undefined loc 
+    | Stmt_Unpred loc
+    | Stmt_ConstrainedUnpred loc
+    | Stmt_ImpDef (_, loc)
+    | Stmt_ExceptionTaken loc
+    | Stmt_Dep_Unpred loc
+    | Stmt_Dep_ImpDef (_, loc)
+    | Stmt_See (_, loc)
+    | Stmt_Throw (_, loc)
+    | Stmt_DecodeExecute (_, _, loc)
+    | Stmt_While (_, _, loc)
+    | Stmt_Repeat (_, _, loc)
+    | Stmt_Try (_, _, _, _, loc) ->
         DisEnv.write [Stmt_Assert(expr_false, loc)]
-    | Stmt_Unpred _
-    | Stmt_ConstrainedUnpred _
-    | Stmt_ImpDef (_, _)
-    | Stmt_ExceptionTaken _
-    | Stmt_Dep_Unpred _
-    | Stmt_Dep_ImpDef (_, _)
-    | Stmt_See (_, _)
-    | Stmt_Throw (_, _)
-    | Stmt_DecodeExecute (_, _, _)
-    | Stmt_While (_, _, _)
-    | Stmt_Repeat (_, _, _)
-    | Stmt_Try (_, _, _, _, _) ->
-        (* need to defer raising so this does not throw in unreachable cases. *)
-        let@ () = DisEnv.unit in
-        raise (DisUnsupported (stmt_loc x, "dis_stmt: unsupported statement: " ^ pp_stmt x))
     )
 
 let dis_encoding (x: encoding) (op: value): bool rws =

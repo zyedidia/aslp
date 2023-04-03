@@ -333,6 +333,7 @@ let field_vals_flags_only (enc: encoding) (name: string) (wd: int): int list =
   | _ when Utils.startswith name "X" && name <> "X" -> [0;1;ones]
   | _ when Utils.startswith name "imm" -> [0;1;ones]
   | _ when Utils.startswith name "uimm" -> [1]
+  | _ when Utils.startswith name "scale" -> [0]
   | _, ("b40") -> [0;1;ones]
   | _ -> List.init bound (fun x -> x)
 
