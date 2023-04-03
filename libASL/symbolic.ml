@@ -329,8 +329,10 @@ let sym_ite_bits loc (b: sym) (x: sym) (y: sym) =
   let nb = sym_not_bits loc w b in
   sym_or_bits loc w (sym_and_bits loc w b x) (sym_and_bits loc w nb y)
 
+let int_expr i = Expr_LitInt (string_of_int i)
+
 (** Append two bitvector symbols and explicitly provide their widths *)
-let sym_append_bits (loc: l) (xw: int) (yw: int) (x: sym) (y: sym): sym =
+let rec sym_append_bits (loc: l) (xw: int) (yw: int) (x: sym) (y: sym): sym =
   (match (x,y) with
   | (Val (VBits {n=0; _}), y) -> y
   | (x, Val (VBits {n=0; _})) -> x
@@ -346,15 +348,19 @@ let sym_append_bits (loc: l) (xw: int) (yw: int) (x: sym) (y: sym): sym =
       [expr_of_int (xw + int_of_string lw); rw]
       [l'; r])
 
+  (* Match append of top-bit replicate expressions, turn into sign extend *)
+  | (Exp (Expr_TApply (FIdent ("replicate_bits", 0), [Expr_LitInt "1"; w], [e;_])), Exp r) when sym_slice loc (Exp r) (yw - 1) 1 = Exp e ->
+      Exp (Expr_TApply (FIdent ("SignExtend", 0), [int_expr yw;int_expr (xw+yw)], [r; int_expr (xw + yw)])) 
+
   | (x,y) ->
     Exp (expr_prim' "append_bits" [expr_of_int xw; expr_of_int yw] [sym_expr x;sym_expr y])
   )
 
 (* WARNING: incorrect type arguments passed to append_bits but sufficient for evaluation
    of primitive with eval_prim. *)
-let sym_append_bits_unsafe loc x y = sym_append_bits loc (-1) (-1) x y
+and sym_append_bits_unsafe loc x y = sym_append_bits loc (-1) (-1) x y
 
-let sym_replicate (xw: int) (x: sym) (n: int): sym =
+and sym_replicate (xw: int) (x: sym) (n: int): sym =
   match n with
   | _ when n < 0 -> failwith @@ "sym_replicate: negative replicate count"
   | 0 -> Val (from_bitsLit "")
@@ -373,8 +379,7 @@ let sym_replicate (xw: int) (x: sym) (n: int): sym =
     Applies optimisations to collapse consecutive slice operations and
     distributes slices across bitvector append operations.
   *)
-let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
-  let int_expr i = Expr_LitInt (string_of_int i) in
+and sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
   match x with
   | Val v -> Val (extract_bits'' loc v (VInt (Z.of_int lo)) (VInt (Z.of_int wd)))
   | Exp e ->
@@ -382,9 +387,18 @@ let rec sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
     let slice_expr =
       (Expr_Slices (e, [Slice_LoWd (int_expr lo, int_expr wd)])) in
     (match e with
+
+    (* Combine nested slices *)
     | (Expr_Slices (e', [Slice_LoWd (Expr_LitInt l',_)])) ->
         let l2 = int_of_string l' in
         sym_slice loc (sym_of_expr e') (l2 + lo) wd
+    | (Expr_Slices (e', [Slice_LoWd (lo',wd')])) when lo = 0 ->
+        Exp (Expr_Slices (e', [Slice_LoWd (lo', int_expr wd)]))
+
+    (* Match slice of a single bit replication, turn into shorter replication *)
+    | (Expr_TApply (FIdent ("replicate_bits", 0), [Expr_LitInt "1"; Expr_LitInt t2], [x;_])) ->
+        Exp (Expr_TApply (FIdent ("replicate_bits", 0), [Expr_LitInt "1"; int_expr wd], [x; int_expr wd]))
+
     | (Expr_TApply (FIdent ("ZeroExtend" as ext_type, 0), [Expr_LitInt t1; Expr_LitInt t2], [x;_])) ->
       (* only handle ZeroExtend cases to avoid introducing replicate_bits expressions. *)
       let t1 = int_of_string t1 in (* old width *)
