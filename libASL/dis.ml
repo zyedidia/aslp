@@ -1379,6 +1379,7 @@ let dis_decode_entry (env: Eval.Env.t) ((lenv,globals): env) (decode: decode_cas
     let DecoderCase_Case (_,_,loc) = decode in
     let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
+    let stmts' = Transforms.RedundantSlice.do_transform stmts' in
     let stmts' = Transforms.StatefulIntToBits.run stmts' in
     let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
     let stmts' = Transforms.CommonSubExprElim.do_transform stmts' in
