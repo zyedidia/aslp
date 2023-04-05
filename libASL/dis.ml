@@ -65,10 +65,12 @@ let no_inline = [
   "FPConvert",0;
   "FPRoundInt",0;
   "FPRoundIntN",0;
-  "FPNeg",0;
   "FPToFixed",0;
   "FixedToFP",0;
   "FPCompare",0;
+  "FPCompareEQ",0;
+  "FPCompareGE",0;
+  "FPCompareGT",0;
   "FPToFixedJS",0;
   "FPSqrt",0;
   "FPAdd",0;
@@ -83,6 +85,13 @@ let no_inline = [
   "FPMinNum",0;
   "FPSub",0;
   "FPRecpX",0;
+  "FPRecipStepFused",0;
+  "FPRSqrtStepFused",0;
+  "FPRoundBase",0;
+  "FPConvertBF",0;
+  "BFRound",0;
+  "BFAdd",0;
+  "BFMul",0;
   "Mem.read",0;
   "Mem.set",0]
 

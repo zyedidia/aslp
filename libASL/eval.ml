@@ -964,9 +964,10 @@ and eval_stmt (env: Env.t) (x: AST.stmt): unit =
 
     | Stmt_While(c, b, loc) ->
             let rec eval _ =
-                if to_bool loc (eval_expr loc env c) then
+                if to_bool loc (eval_expr loc env c) then begin
                     eval_stmts env b;
                     eval ()
+                end
             in
             eval ()
     | Stmt_Repeat(b, c, loc) ->

@@ -15,6 +15,8 @@ let infer_type (e: expr): ty option =
     | "ne_enum"            -> Some(type_bool)
     | "eq_bool"            -> Some(type_bool)
     | "ne_bool"            -> Some(type_bool)
+    | "and_bool"           -> Some(type_bool)
+    | "or_bool"            -> Some(type_bool)
     | "equiv_bool"         -> Some(type_bool)
     | "not_bool"           -> Some(type_bool)
     | "eq_int"             -> Some(type_bool)
