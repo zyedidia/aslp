@@ -21,7 +21,7 @@
     "linenoise"
     "pprint"
     "zarith"
-    ("z3"        (>= "4.8.17"))
+    ("z3"        (>= "4.8.7"))
     "pcre"
     ("alcotest"  :with-test)
   )
