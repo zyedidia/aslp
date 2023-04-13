@@ -88635,7 +88635,7 @@ __instruction aarch64_memory_literal_general
             integer t = UInt(Rt);
             MemOp memop = MemOp_LOAD;
             boolean signed = FALSE;
-            integer size;
+            integer size = 1;
             bits(64) offset;
             
             case opc of

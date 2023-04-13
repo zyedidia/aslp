@@ -318,7 +318,7 @@ integer LowestSetBit(bits(N) x)
     elsif (63 < N && x[63] == '1') then
         return 63;
     else
-        return -1;
+        return N;
 
 
 

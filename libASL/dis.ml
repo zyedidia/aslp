@@ -65,10 +65,12 @@ let no_inline = [
   "FPConvert",0;
   "FPRoundInt",0;
   "FPRoundIntN",0;
-  "FPNeg",0;
   "FPToFixed",0;
   "FixedToFP",0;
   "FPCompare",0;
+  "FPCompareEQ",0;
+  "FPCompareGE",0;
+  "FPCompareGT",0;
   "FPToFixedJS",0;
   "FPSqrt",0;
   "FPAdd",0;
@@ -83,6 +85,13 @@ let no_inline = [
   "FPMinNum",0;
   "FPSub",0;
   "FPRecpX",0;
+  "FPRecipStepFused",0;
+  "FPRSqrtStepFused",0;
+  "FPRoundBase",0;
+  "FPConvertBF",0;
+  "BFRound",0;
+  "BFAdd",0;
+  "BFMul",0;
   "Mem.read",0;
   "Mem.set",0]
 
@@ -1379,6 +1388,7 @@ let dis_decode_entry (env: Eval.Env.t) ((lenv,globals): env) (decode: decode_cas
     let DecoderCase_Case (_,_,loc) = decode in
     let ((),lenv',stmts) = (dis_decode_case loc decode op) env lenv in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
+    let stmts' = Transforms.RedundantSlice.do_transform stmts' in
     let stmts' = Transforms.StatefulIntToBits.run stmts' in
     let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
     let stmts' = Transforms.CommonSubExprElim.do_transform stmts' in
