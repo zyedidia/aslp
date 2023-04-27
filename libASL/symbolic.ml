@@ -418,6 +418,17 @@ and sym_slice (loc: l) (x: sym) (lo: int) (wd: int): sym =
       sym_slice loc
         (sym_append_bits loc ext_wd t1 ext (sym_of_expr x))
         lo wd
+
+    | (Expr_TApply (FIdent ("or_bits", 0), [w], [x1; x2])) ->
+        sym_or_bits loc (int_expr wd)
+          (sym_slice loc (Exp x1) lo wd)
+          (sym_slice loc (Exp x2) lo wd)
+
+    | (Expr_TApply (FIdent ("and_bits", 0), [w], [x1; x2])) ->
+        sym_and_bits loc (int_expr wd)
+          (sym_slice loc (Exp x1) lo wd)
+          (sym_slice loc (Exp x2) lo wd)
+
     | (Expr_TApply (FIdent ("append_bits", 0), [Expr_LitInt t1; Expr_LitInt t2], [x1; x2])) ->
       let t2 = int_of_string t2 in
       if t2 < 0 then
@@ -584,7 +595,21 @@ let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option 
   | ("append_bits", [_; Val t2],      [x1; _])            when is_zero t2 -> Some x1
 
   | ("LSL",         _,                [x1; Val x2])       when is_zero x2 -> Some x1
+  | ("LSL",         [Val (VInt w)],   [x1; Val (VInt s)]) ->
+      let si = Z.to_int s in
+      let u = Z.to_int w - si in
+      let z = Val (VBits (prim_zeros_bits s)) in
+      let upper = sym_slice loc x1 0 u in
+      Some (sym_append_bits loc u si upper z)
+
   | ("LSR",         _,                [x1; Val x2])       when is_zero x2 -> Some x1
+  | ("LSR",         [Val (VInt w)],   [x1; Val (VInt s)]) ->
+      let si = Z.to_int s in
+      let u = Z.to_int w - si in
+      let z = Val (VBits (prim_zeros_bits s)) in
+      let lower = sym_slice loc x1 si u in
+      Some (sym_append_bits loc si u z lower)
+
   | ("ZeroExtend",  [Val (VInt v1); Val (VInt v2)], [x1;_]) when Z.equal v1 v2 -> Some x1
 
   | ("eq_enum",     _,                [x; Val (VBool true)])
