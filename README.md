@@ -1,4 +1,10 @@
-# ASL Interpreter
+# *ASLp* - ASL Partial Evaluator
+
+This forks ASLi to extract usable semantics from the 
+architecture specifications. 
+The semantics produced are in ASL but are reduced to contain 
+only simple control flow and scalar types, 
+for use in further static analysis.
 
 ## Introduction
 
