@@ -1,6 +1,11 @@
+AtomicStart()
+  return;
+
+AtomicEnd()
+  return;
+
 bits(64) AArch64.BranchAddr(bits(64) vaddress)
     return vaddress;
-
 
 AArch64.CheckFPAdvSIMDEnabled()
     return;
@@ -352,9 +357,43 @@ AArch64.MemSingle[bits(64) vaddress, integer size, AccType acctype, boolean wasa
 
     _Mem[address, size, access] = value;
 
+bits(size) MemAtomic(bits(64) address, MemAtomicOp op, bits(size) value, AccType ldacctype, AccType stacctype)
+    bits(size) newvalue;
+    //memaddrdesc = AArch64.TranslateAddressForAtomicAccess(address, size);
+    //ldaccdesc = CreateAccessDescriptor(ldacctype);
+    //staccdesc = CreateAccessDescriptor(stacctype);
+
+    AtomicStart();
+
+    // All observers in the shareability domain observe the
+    // following load and store atomically.
+    oldvalue = Mem[address, size DIV 8, ldacctype];
+    if BigEndian() then
+        oldvalue = BigEndianReverse(oldvalue);
+
+    case op of
+        when MemAtomicOp_ADD   newvalue = oldvalue + value;
+        when MemAtomicOp_BIC   newvalue = oldvalue AND NOT(value);
+        when MemAtomicOp_EOR   newvalue = oldvalue EOR value;
+        when MemAtomicOp_ORR   newvalue = oldvalue OR value;
+        when MemAtomicOp_SMAX  newvalue = if SInt(oldvalue) > SInt(value) then oldvalue else value;
+        when MemAtomicOp_SMIN  newvalue = if SInt(oldvalue) > SInt(value) then value else oldvalue;
+        when MemAtomicOp_UMAX  newvalue = if UInt(oldvalue) > UInt(value) then oldvalue else value;
+        when MemAtomicOp_UMIN  newvalue = if UInt(oldvalue) > UInt(value) then value else oldvalue;
+        when MemAtomicOp_SWP   newvalue = value;
+
+    if BigEndian() then
+        newvalue = BigEndianReverse(newvalue);
+    Mem[address, size DIV 8, stacctype] = newvalue;
+
+    AtomicEnd();
+
+    // Load operations return the old (pre-operation) value
+    return oldvalue;
 
 bits(size) MemAtomicCompareAndSwap(bits(64) address, bits(size) expectedvalue,
                                    bits(size) newvalue, AccType ldacctype, AccType stacctype)
+    AtomicStart();
     bits(size) oldvalue = Mem[address, size DIV 8, ldacctype];
     if BigEndian() then
         oldvalue = BigEndianReverse(oldvalue);
@@ -363,4 +402,5 @@ bits(size) MemAtomicCompareAndSwap(bits(64) address, bits(size) expectedvalue,
         if BigEndian() then
             newvalue = BigEndianReverse(newvalue);
         Mem[address, size DIV 8, stacctype] = newvalue;
+    AtomicEnd();
     return oldvalue;

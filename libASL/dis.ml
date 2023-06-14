@@ -93,7 +93,9 @@ let no_inline = [
   "BFAdd",0;
   "BFMul",0;
   "Mem.read",0;
-  "Mem.set",0]
+  "Mem.set",0;
+  "AtomicStart",0;
+  "AtomicEnd",0]
 
 (** A variable's stack level and original identifier name.
     The "stack level" is how many scopes deep it is.
@@ -1021,6 +1023,11 @@ and dis_lexpr_chain (loc: l) (x: lexpr) (ref: access_chain list) (r: sym): unit 
                 (match var with
                 | Var(0, Ident("InGuardedPage")) ->
                   unsupported loc @@ "Update to InGuardedPage while disassembling" ^ pp_lexpr x;
+                | Var(0, Ident("SCR_EL3")) ->
+                  unsupported loc @@ "Update to SCR_EL3 while disassembling" ^ pp_lexpr x;
+                | Var(0, Ident("SCTLR_EL1")) ->
+                  unsupported loc @@ "Update to SCTLR_EL1 while disassembling" ^ pp_lexpr x;
+
                 | _ -> ());
                 (* if accessing bare variable, just set its variable in local store. *)
                 DisEnv.modify (LocalEnv.setVar loc var r)
@@ -1108,17 +1115,29 @@ and stmt_append (xs: stmt list) (ys: stmt list): stmt list =
 
     | x::xs -> x :: stmt_append xs ys
 
+(** When duplicating the body after an If, we may want to stop duplication at
+    a particular statement. This function splits the follow-on body into
+    a duplicated prefix and preserved suffix. *)
+and duplicate_up_to (stmts: AST.stmt list) : (AST.stmt list * AST.stmt list) =
+  match stmts with
+  (* Don't duplicate AtomicEnd, as they are linked with an AtomicStart *)
+  | Stmt_TCall(FIdent("AtomicEnd", 0), _, _, _)::rest ->
+      ([], stmts)
+  | r::rest -> (match duplicate_up_to rest with (f,s) -> (r::f,s))
+  | [] -> ([],[])
+
 (** Dissassemble list of statements. *)
 and dis_stmts (stmts: AST.stmt list): unit rws =
     match stmts with
     | [] -> DisEnv.unit
     | (Stmt_If(c, tstmts, elsif, fstmts, loc)::rest) ->
+        let (dup,post) = duplicate_up_to rest in
         (* append everything after the if statement into each of its branches. *)
-        let tstmts' = stmt_append tstmts rest
+        let tstmts' = stmt_append tstmts dup
         and elsif' = List.map (fun (S_Elsif_Cond(e,ss)) ->
-            S_Elsif_Cond(e,stmt_append ss rest)) elsif
-        and fstmts' = stmt_append fstmts rest in
-        dis_stmt (Stmt_If (c, tstmts', elsif', fstmts', loc))
+            S_Elsif_Cond(e,stmt_append ss dup)) elsif
+        and fstmts' = stmt_append fstmts dup in
+        dis_stmt (Stmt_If (c, tstmts', elsif', fstmts', loc)) >> dis_stmts post
     | (Stmt_FunReturn _ | Stmt_ProcReturn _) as ret :: rest ->
         (match rest with
         | [] -> dis_stmt ret
@@ -1419,6 +1438,8 @@ let build_env (env: Eval.Env.t): env =
       unsupported loc @@ "Initial env value of PSTATE is not a Value";
     ) in
     let lenv = LocalEnv.setVar loc (Var(0, Ident("PSTATE"))) (Val(pstate)) lenv in
+    let lenv = LocalEnv.setVar loc (Var(0, Ident("SCR_EL3"))) (Val(VBits({n=64; v=Z.zero;}))) lenv in
+    let lenv = LocalEnv.setVar loc (Var(0, Ident("SCTLR_EL1"))) (Val(VBits({n=64; v=Z.zero;}))) lenv in
 
     (* set InGuardedPage to false *)
     let lenv = LocalEnv.setVar loc (Var(0, Ident("InGuardedPage"))) (Val (VBool false)) lenv in
