@@ -1261,6 +1261,10 @@ module CopyProp = struct
       | Stmt_TCall (FIdent("Mem.set", 0), _, _, _) ->
           (acc@[subst_stmt copies stmt], removeMemory copies)
 
+      | Stmt_TCall (FIdent("AtomicStart", 0), _, _, _)
+      | Stmt_TCall (FIdent("AtomicEnd", 0), _, _, _) ->
+          (acc@[stmt],removeMemory copies)
+
       | _ -> 
           (* Over-approximate all other situations for soundness *)
           if debug_cp then Printf.printf "Over-approx: %s\n" (pp_stmt stmt);
