@@ -11,6 +11,8 @@
       ASL_PATH=${asli}/asl
       cd ${asli}/bin
       makeBinaryWrapper "$(pwd)/asli" $out/bin/aslp \
+        --append-flags --prelude \
+        --append-flags $ASL_PATH/prelude.asl \
         --append-flags $ASL_PATH/prelude.asl \
         --append-flags $ASL_PATH/mra_tools/arch/regs.asl \
         --append-flags $ASL_PATH/mra_tools/types.asl \

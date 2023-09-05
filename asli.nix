@@ -21,7 +21,7 @@ ocamlPackages.buildDunePackage {
   doCheck = lib.versionAtLeast ocaml.version "4.09";
 
   configurePhase = ''
-    sed -i 's|`opam config var ott:share`|${pkgs.ott.out + "/share/ott"}|' ./libASL/dune 
+    export ASLI_OTT=${pkgs.ott.out + "/share/ott"}
     mkdir -p $out/asl
     cp -rv prelude.asl mra_tools tests $out/asl
   '';

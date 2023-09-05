@@ -19,6 +19,7 @@ module TC     = Tcheck
 module PP     = Asl_parser_pp
 module AST    = Asl_ast
 
+let opt_prelude : string ref = ref "prelude.asl"
 let opt_filenames : string list ref = ref []
 let opt_print_version = ref false
 let opt_verbose = ref false
@@ -284,6 +285,7 @@ let options = Arg.align ([
     ( "-x", Arg.Set_int opt_debug_level,      "       Debugging output");
     ( "-v", Arg.Set opt_verbose,              "       Verbose output");
     ( "--version", Arg.Set opt_print_version, "       Print version");
+    ( "--prelude", Arg.Set_string opt_prelude,"       ASL prelude file (default: ./prelude.asl)");
 ] )
 
 let version = "ASL 0.2.0 alpha"
@@ -311,7 +313,7 @@ let main () =
     else begin
         if !opt_verbose then List.iter print_endline banner;
         if !opt_verbose then print_endline "\nType :? for help";
-        let t  = LoadASL.read_file "prelude.asl" true !opt_verbose in
+        let t  = LoadASL.read_file !opt_prelude true !opt_verbose in
         let ts = List.map (fun filename ->
             if Utils.endswith filename ".spec" then begin
                 LoadASL.read_spec filename !opt_verbose

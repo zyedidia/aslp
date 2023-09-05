@@ -10,7 +10,7 @@
    (progn
      (run ott -aux_style_rules false -tex_wrap true -quotient_rules false -i asl.ott -o asl_parser_head.mly -o asl_lexer.mll -o asl_ast.ml)
      (run mv asl_parser_head_pp.ml asl_parser_pp.ml)
-     (with-stdout-to asl_parser_tail.mly (bash "grep -v '^%%' `opam config var ott:share`/menhir_library_extra.mly"))
+     (with-stdout-to asl_parser_tail.mly (bash "OTT=${ASLI_OTT:-$(opam config var ott:share)};  grep -v '^%%' $OTT/menhir_library_extra.mly"))
      (with-stdout-to asl_parser.mly (run cat asl_parser_head.mly asl_parser_tail.mly)))))
 
 (library
