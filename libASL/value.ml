@@ -12,6 +12,10 @@ open Primops
 module AST = Asl_ast
 open Asl_utils
 
+(** If set, treats UNKNOWN values as a concrete value for concrete evaluation.
+    Otherwise, treats UNKNOWN as unitialized, suitable for partial evaluation. *)
+let concrete_unknown = ref false
+
 (****************************************************************)
 (** {2 Values}                                                  *)
 (****************************************************************)
@@ -459,16 +463,20 @@ let eval_concat (loc: AST.l) (xs: value list): value =
  *)
 
 let eval_unknown_bits (wd: Primops.bigint): value =
-  VUninitialized (Type_Bits (Expr_LitInt (Z.to_string wd)))
-    (*VBits (Primops.mkBits (Z.to_int wd) Z.zero)*)
+  if !concrete_unknown then 
+    VBits (Primops.mkBits (Z.to_int wd) Z.zero)
+  else
+    VUninitialized (Type_Bits (Expr_LitInt (Z.to_string wd)))
 
 let eval_unknown_ram (a: Primops.bigint): value =
-  VUninitialized (type_builtin "__RAM")
-    (*VRAM (Primops.init_ram (char_of_int 0))*)
+  if !concrete_unknown then 
+    VRAM (Primops.init_ram (char_of_int 0))
+  else
+    VUninitialized (type_builtin "__RAM")
 
-let eval_unknown_integer (_: unit): value = VUninitialized (type_builtin "integer") (*VInt Z.zero*)
-let eval_unknown_real    (_: unit): value = VUninitialized (type_builtin "real") (*VReal Q.zero*)
-let eval_unknown_string  (_: unit): value = VUninitialized (type_builtin "string") (*VString "<UNKNOWN string>"*)
+let eval_unknown_integer (_: unit): value = if !concrete_unknown then VInt Z.zero else VUninitialized (type_builtin "integer") 
+let eval_unknown_real    (_: unit): value = if !concrete_unknown then VReal Q.zero else VUninitialized (type_builtin "real") 
+let eval_unknown_string  (_: unit): value = if !concrete_unknown then VString "<UNKNOWN string>" else VUninitialized (type_builtin "string") 
 
 
 (****************************************************************

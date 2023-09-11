@@ -43,6 +43,9 @@ let help_msg = [
     {|:set impdef <string> = <expr>  Define implementation defined behavior|};
     {|:set +<flag>                   Set flag|};
     {|:set -<flag>                   Clear flag|};
+    {|:init globals                  Initializes global variables to concrete values (for evaluation)|};
+    {|:init regs                     Initializes registers to concrete values (for evaluation)|};
+    {|:coverage <instr-set> <regex>  Runs differential testing of partial and concrete evaluation|};
     {|<expr>                         Execute ASL expression|};
     {|<stmt> ;                       Execute ASL statement|}
 ]
@@ -51,7 +54,8 @@ let flags = [
     ("trace:write", Eval.trace_write);
     ("trace:fun",   Eval.trace_funcall);
     ("trace:prim",  Eval.trace_primop);
-    ("trace:instr", Eval.trace_instruction)
+    ("trace:instr", Eval.trace_instruction);
+    ("eval:concrete_unknown", Value.concrete_unknown)
 ]
 
 let mkLoc (fname: string) (input: string): AST.l =

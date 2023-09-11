@@ -29,27 +29,12 @@ To build and run the ASL interpreter, you will need:
       * odoc      - OCaml documentation generator (optional)
       * dune      - OCaml build system
       * menhir    - parser generator tool
-      * ott.0.29  - tool for defining language grammars and semantics (this version or later required)
+      * ott       - tool for defining language grammars and semantics 
       * linenoise - OCaml line editing library
       * pprint    - OCaml pretty-printing library
-      * z3.4.7.1  - OCaml bindings for the Z3 SMT solver (exactly this version is required)
+      * z3        - OCaml bindings for the Z3 SMT solver 
       * zarith    - OCaml multiprecision arithmetic library
 
-## License and contribution
-
-The software is provided under the [BSD-3-Clause licence](https://spdx.org/licenses/BSD-3-Clause.html).
-Contributions to this project are accepted under the same licence.
-
-This software includes code from one other open source projects
-
- * The [CIL project](https://people.eecs.berkeley.edu/~necula/cil/)
-   defines a useful
-   [visitor class](https://github.com/cil-project/cil/blob/936b04103eb573f320c6badf280e8bb17f6e7b26/src/cil.ml#L931)
-   for traversing C ASTs.
-   The file `visitor.ml` is a modified copy of this class that generalizes
-   the type to work with an arbitrary AST.
-
-   CIL is distributed under a [BSD-3-Clause licence](https://github.com/cil-project/cil/blob/develop/LICENSE).
 
 
 ## Building and development
@@ -76,6 +61,11 @@ This interpreter consists of a single directory organized as follows
           * `libASL/primops.ml`      - implementation of ASL builtin types and operations
           * `libASL/value.ml`        - interpreter support code
           * `libASL/eval.ml`         - evaluator for ASL language
+      * **ASLp additions**
+          * `libASL/dis.ml`          - main partial evaluation disassembler (follows structure of eval.ml)
+          * `libASL/symbolic.ml`     - primitives for working with and simplifying symbolic bitvector values
+          * `libASL/rws.ml`          - the reader-writer-state monad, used in dis.ml
+          * `libASL/testing.ml`      - differential testing of ASLp against the ASLi interpreter
       * ASL standard library
           * `libASL/prelude.asl`     - builtin types and functions
       * Programs
@@ -95,20 +85,16 @@ Platform specific instructions:
         brew install opam
         brew install gmp mpir
     Ubuntu:
-        sudo apt-get install opam
+        sudo apt-get install opam libpcre3-dev
+    OpenSUSE:
+        sudo zypper install ocaml opam ocaml-ocaml-compiler-libs-devel
 ```
 
 Platform independent instructions:
 
 ```
-    opam install ocaml.4.09.0
-    opam install dune
-    opam install menhir
-    opam install ott
-    opam install linenoise
-    opam install pprint
-    opam install z3.4.7.1
-    opam install zarith
+    # Install dependencies from asli.opam file
+    opam install --deps-only --with-test ./asli.opam
 
     # the following are optional and only needed if modifying asli code
     opam install odoc
@@ -174,35 +160,44 @@ statements and expressions.
     ASLi> :quit
 ```
 
-### Using ASL interpreter with Arm's public specifications
+### Using the ASL partial evaluator
 
-You can download Arm's v8-A architecture specification at
-[https://developer.arm.com/architectures/cpu-architecture/a-profile/exploration-tools](https://developer.arm.com/architectures/cpu-architecture/a-profile/exploration-tools).
-Historically, these are updated every 6 months with the latest "8.x" release
-released in December.
-You can download tools to unpack Arm's specification from
-[https://github.com/alastairreid/mra_tools](https://github.com/alastairreid/mra_tools).
+Arm's specification files are shipped with the ASLp fork in the mra_tools/ subfolder.
+We also define a small number of overrides in tests/override.asl and tests/override.prj.
+These provide alternative but equivalent definitions of some pre-defined functions
+which are more suitable for partial evaluation.
+(See [alastairreid/asl-interpreter](https://github.com/alastairreid/asl-interpreter#using-asl-interpreter-with-arms-public-specifications) for more details.)
 
-Clone the MRA tools release and follow the instructions to unpack Arm's
-specification.
-In the following, I will assume that this is in directory "../mra_tools".
+There is a script `./asli` which will load the required files.
+For example, to print the partially-evaluated semantics of the `add x1, x2, x3, LSL 4` instruction:
+```bash
+$ ./asli
+ASLi> :sem A64 0x8b031041
+Decoding instruction A64 8b031041
+__array _R [ 1 ] = add_bits.0 {{ 64 }} (
+    __array _R [ 2 ] [ 0 +: 64 ],
+    append_bits.0 {{ 60,4 }} ( __array _R [ 3 ] [ 0 +: 60 ],'0000' ) 
+) [ 0 +: 64 ] ;
+ASLi> 
+```
+LLVM can be used to obtain the bytecode for a particular instruction mnemonic:
+```bash
+$ echo 'add x1, x2, x3, LSL 4' | 
+    clang -x assembler -target aarch64 - -c -o/dev/stdout |
+    llvm-objdump - -d --section=.text |
+    tail -n1
+0: 8b031041      add     x1, x2, x3, lsl #4
+```
 
+The interpreter's evaluation (inherited from the original ASLi) can be tested with these commands:
 ```
-    # follow the instructions in ../mra_tools/README.md for downloading the Arm specs
-    make -C ../mra_tools clean
-    make -C ../mra_tools
-    make install
-    asli prelude.asl ../mra_tools/arch/regs.asl ../mra_tools/types.asl ../mra_tools/arch/arch.asl ../mra_tools/arch/arch_instrs.asl ../mra_tools/arch/arch_decode.asl ../mra_tools/support/aes.asl ../mra_tools/support/barriers.asl ../mra_tools/support/debug.asl ../mra_tools/support/feature.asl ../mra_tools/support/hints.asl ../mra_tools/support/interrupts.asl ../mra_tools/support/memory.asl ../mra_tools/support/stubs.asl ../mra_tools/support/fetchdecode.asl
+:init globals
+:init regs
+:set +eval:concrete_unknown
+:project tests/test.prj
 ```
 
-After loading the v8.6-A architecture spec, you can configure the
-implementation defined behaviour, load an ELF file and run the
-program as follows.
-```
-    :project tests/test.prj
-    :quit
-```
-The test program prints the line "Test" so you should see output like this
+This test program prints the line "Test" so you should see output like this
 ```
 ASLi> :project tests/test.prj
 Loading ELF file tests/test_O2.elf.
@@ -212,5 +207,43 @@ Program exited by writing ^D to TUBE
 Exception taken
 ```
 
+Finally, the `:coverage` command is used to test equivalence of the partial evaluator and the interpreter.
+It takes a regular expression of an instruction group, then generates and evaluates the partially evaluated
+ASL as well as the original ASL and compares the final states. 
+Instruction groups can be found in the [mra_tools/arch/arch_instrs.asl](mra_tools/arch/arch_instrs.asl) file.
+```
+ASLi> :coverage A64 aarch64_integer.+
+[...]
+0x1ac04c3f: [sf=0 ; Rm=0 ; C=0 ; sz=3 ; Rn=1 ; Rd=31] --> UNDEFINED (file "./mra_tools/arch/arch_decode.asl" line 3715 char 66 - line 3716 char 28)
+0x1ac04fe0: [sf=0 ; Rm=0 ; C=0 ; sz=3 ; Rn=31 ; Rd=0] --> UNDEFINED (file "./mra_tools/arch/arch_decode.asl" line 3715 char 66 - line 3716 char 28)
+0x1ac04fe1: [sf=0 ; Rm=0 ; C=0 ; sz=3 ; Rn=31 ; Rd=1] --> UNDEFINED (file "./mra_tools/arch/arch_decode.asl" line 3715 char 66 - line 3716 char 28)
+0x1ac04fff: [sf=0 ; Rm=0 ; C=0 ; sz=3 ; Rn=31 ; Rd=31] --> UNDEFINED (file "./mra_tools/arch/arch_decode.asl" line 3715 char 66 - line 3716 char 28)
+0x1ac05000: [sf=0 ; Rm=0 ; C=1 ; sz=0 ; Rn=0 ; Rd=0] --> OK
+0x1ac05001: [sf=0 ; Rm=0 ; C=1 ; sz=0 ; Rn=0 ; Rd=1] --> OK
+0x1ac0501f: [sf=0 ; Rm=0 ; C=1 ; sz=0 ; Rn=0 ; Rd=31] --> OK
+0x1ac05020: [sf=0 ; Rm=0 ; C=1 ; sz=0 ; Rn=1 ; Rd=0] --> OK
+[...]
+```
+
+"OK" indicates the machine state after both executions are the same, 
+as we would expect if the partial evaluation is correct.
+UNDEFINED means that particular bytecode is an undefined case in the architecture.
+If an exception occurs somewhere else in the process, that will be reported as well.
 
 Enjoy!
+
+## License and contribution
+
+The software is provided under the [BSD-3-Clause licence](https://spdx.org/licenses/BSD-3-Clause.html).
+Contributions to this project are accepted under the same licence.
+
+This software includes code from one other open source projects
+
+ * The [CIL project](https://people.eecs.berkeley.edu/~necula/cil/)
+   defines a useful
+   [visitor class](https://github.com/cil-project/cil/blob/936b04103eb573f320c6badf280e8bb17f6e7b26/src/cil.ml#L931)
+   for traversing C ASTs.
+   The file `visitor.ml` is a modified copy of this class that generalizes
+   the type to work with an arbitrary AST.
+
+   CIL is distributed under a [BSD-3-Clause licence](https://github.com/cil-project/cil/blob/develop/LICENSE).
