@@ -76,6 +76,11 @@ This interpreter consists of a single directory organized as follows
   * Code copied from other open source projects
       * `libASL/visitor.ml`
 
+### Installing with Nix
+
+ASLp can be installed as a Nix package from https://github.com/katrinafyi/pac-nix.
+_asli_ provides the base ASLp and _aslp_ provides ASLp bundled with ARM's specifications.
+If you don't plan on modifying the tool, this is a fast and easy way to get started.
 
 ### Installing dependencies
 
