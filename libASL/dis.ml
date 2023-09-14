@@ -1465,4 +1465,4 @@ let retrieveDisassembly ?(address:string option) (env: Eval.Env.t) (lenv: env) (
     let lenv = match address with
     | Some v -> setPC env lenv (Z.of_string v)
     | None -> lenv in
-    dis_decode_entry env lenv decoder (Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int (int_of_string opcode))))
+    dis_decode_entry env lenv decoder (Value.VBits (Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_string opcode)))

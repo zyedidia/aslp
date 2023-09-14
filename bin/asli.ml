@@ -164,7 +164,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         List.iter (fun (nm, v) -> Printf.printf "  %s%s\n" (if !v then "+" else "-") nm) flags
     | [":opcode"; iset; opcode] ->
         (* todo: make this code more robust *)
-        let op = Z.of_int (int_of_string opcode) in
+        let op = Z.of_string opcode in
         Printf.printf "Decoding and executing instruction %s %s\n" iset (Z.format "%x" op);
         cpu.opcode iset op
     | [":opcodes"; iset; instr] ->
@@ -189,7 +189,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
         ) encodings;
     | [":sem"; iset; opcode] ->
         let cpu' = Cpu.mkCPU cpu.env cpu.denv in
-        let op = Z.of_int (int_of_string opcode) in
+        let op = Z.of_string opcode in
         Printf.printf "Decoding instruction %s %s\n" iset (Z.format "%x" op);
         cpu'.sem iset op
     | ":dump" :: iset :: opcode :: rest ->
@@ -200,7 +200,7 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
             | _ -> invalid_arg "expected at most 3 arguments to :dump")
         in
         let cpu' = Cpu.mkCPU (Eval.Env.copy cpu.env) cpu.denv in
-        let op = Z.of_int (int_of_string opcode) in
+        let op = Z.of_string opcode in
         let bits = VBits (Primops.prim_cvt_int_bits (Z.of_int 32) op) in
         let decoder = Eval.Env.getDecoder cpu'.env (Ident iset) in
         let stmts = Dis.dis_decode_entry cpu'.env cpu.denv decoder bits in
