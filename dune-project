@@ -17,7 +17,7 @@
   (depends
     ("ocaml"     (>= "4.09"))
     ("menhir"    :build)
-    ("ott"       :build)
+    ("ott"       (and :build (>= "0.31")))
     "linenoise"
     "pprint"
     "zarith"
