@@ -122,6 +122,46 @@ module RWSBase (T : S) = struct
         let bt = Printexc.get_raw_backtrace () in
         (Error (e, bt), s, mempty)
 
+  let rec traverse (f: 'a -> 'b rws) (x: 'a list) (r: r) (s: s) =
+    match x with
+    | [] -> ([],s,mempty)
+    | x::xs ->
+        let (i,s,w) = (f x) r s in
+        let (is,s,w') = traverse f xs r s in
+        (i::is,s,mappend w w')
+
+  let rec traverse_r (w: w) (f: 'a -> 'b rws) (x: 'a list) (r: r) (s: s) =
+    match x with
+    | [] -> ((),s,w)
+    | x::xs ->
+        let (_,s',w') = (f x) r s in
+        traverse_r (mappend w w') f xs r s'
+
+  let traverse_ (f: 'a -> 'b rws) (x: 'a list): unit rws =
+    traverse_r mempty f x
+
+  let rec traverse2_r (w: w) (f: 'a -> 'b -> 'c rws) (x: 'a list) (y: 'b list) (r: r) (s: s) =
+    match x, y with
+    | [], [] -> ((),s,w)
+    | x::xs, y::ys ->
+        let (_,s',w') = (f x y) r s in
+        traverse2_r (mappend w w') f xs ys r s'
+    | _ -> invalid_arg "traverse2_"
+
+  let traverse2_ (f: 'a -> 'b -> 'c rws) (x: 'a list) (y: 'b list): unit rws =
+    traverse2_r mempty f x y
+
+  let rec traverse3_r (w: w) (f: 'a -> 'b -> 'c -> 'd rws) (x: 'a list) (y: 'b list) (z: 'c list) (r: r) (s: s) =
+    match x, y, z with
+    | [], [], [] -> ((),s,w)
+    | x::xs, y::ys, z::zs ->
+        let (_,s',w') = (f x y z) r s in
+        traverse3_r (mappend w w') f xs ys zs r s'
+    | _ -> invalid_arg "traverse3_"
+
+  let traverse3_ (f: 'a -> 'b -> 'c -> 'd rws) (x: 'a list) (y: 'b list) (z: 'c list): unit rws =
+    traverse3_r mempty f x y z
+
 end
 
 (** Constructs a RWS monad using the given signature.  *)
