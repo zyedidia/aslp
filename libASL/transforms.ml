@@ -1285,8 +1285,42 @@ module RedundantSlice = struct
     | Expr_LitHex _ -> false
     | _ -> true
 
-  class expression_walk = object
+  type ty_option = Just of ty | Clobbered
+
+  class expression_walk (vartypes: ty Bindings.t) = object (self)
     inherit Asl_visitor.nopAslVisitor
+
+    (** map of variable name to type. 
+      a value of "Clobbered" means that variable is declared multiple times with different types
+      and we should not remove any of its slices. *)
+    val mutable lvartypes : ty_option Bindings.t = Bindings.empty;
+
+    method update_lvar_types (s: stmt): unit =
+      match s with 
+      | Stmt_VarDecl(ty,id,_,l) 
+      | Stmt_ConstDecl(ty,id,_,l) ->
+        (match Bindings.find_opt id lvartypes with
+        | Some (Just ty') -> if ty = ty' then () else lvartypes <- Bindings.add id (Clobbered) lvartypes
+        | Some (Clobbered) -> ()
+        | None -> lvartypes <- Bindings.add id (Just ty) lvartypes)
+      | Stmt_VarDeclsNoInit(ty,ids,l) -> 
+        List.iter (fun id -> self#update_lvar_types (Stmt_VarDecl(ty,id,Expr_LitInt("ignored"),l))) ids
+      | _ -> ()
+
+    method var_type (id: ident): ty option = 
+      match Bindings.find_opt id lvartypes with
+      | (Some (Just x)) -> Some x
+      | _ -> Bindings.find_opt id vartypes 
+
+    method array_val_type (id: ident): ty option = 
+      (* XXX: use of Tcheck.env0 global mutable state *)
+      (* let env = Tcheck.env0 in *)
+      match self#var_type id with
+      | Some (Type_Array(_ix,ty)) -> Some ty
+      | _ -> None
+
+    method! vstmt (s: stmt): stmt visitAction = 
+      ChangeDoChildrenPost(s, fun s -> self#update_lvar_types s; s)
 
     method! vexpr (e: expr): expr visitAction =
       ChangeDoChildrenPost(e, fun e ->
@@ -1299,14 +1333,22 @@ module RedundantSlice = struct
               Expr_Slices(e, [Slice_LoWd (Expr_LitInt "0", w)])
           | _ -> e)
       | Expr_Slices(e', [Slice_LoWd (Expr_LitInt "0", wd)]) ->
-          (match infer_type e' with
-          | Some(Type_Bits(num)) when num = wd -> e'
-          | _ -> e)
+          let try_match (opt: ty option): expr = 
+            match opt with
+            | Some(Type_Bits(num)) when num = wd -> e'
+            | _ -> e
+          in
+          (match e' with
+          (* note: no fall-through from var_type case to infer_type case, 
+             but infer_type only works for builtins anyway. *)
+          | Expr_Var id -> try_match (self#var_type id) 
+          | Expr_Array (Expr_Var id, _) -> try_match (self#array_val_type id) 
+          | _ -> try_match (infer_type e'))
       | _ -> e)
   end
 
-  let do_transform (xs: stmt list): stmt list =
-    Asl_visitor.visit_stmts (new expression_walk) xs
+  let do_transform (vartypes: ty Bindings.t) (xs: stmt list): stmt list =
+    Asl_visitor.visit_stmts (new expression_walk(vartypes)) xs
 
 end
 
