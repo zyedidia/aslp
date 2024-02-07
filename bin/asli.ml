@@ -19,12 +19,24 @@ module TC     = Tcheck
 module PP     = Asl_parser_pp
 module AST    = Asl_ast
 
-let opt_prelude : string ref = ref "prelude.asl"
+let opt_prelude : string ref = ref ""
 let opt_filenames : string list ref = ref []
 let opt_print_version = ref false
 let opt_verbose = ref false
 
 let opt_debug_level = ref 0
+
+
+let file_load_order =  ["mra_tools/arch/regs.asl"; "mra_tools/types.asl"; "mra_tools/arch/arch.asl"; "mra_tools/arch/arch_instrs.asl"; 
+        "mra_tools/arch/arch_decode.asl"; "mra_tools/support/aes.asl";"mra_tools/support/barriers.asl";"mra_tools/support/debug.asl"; 
+        "mra_tools/support/feature.asl"; "mra_tools/support/hints.asl";"mra_tools/support/interrupts.asl"; "mra_tools/support/memory.asl"; 
+        "mra_tools/support/stubs.asl"; "mra_tools/support/fetchdecode.asl"; "tests/override.asl";"tests/override.prj"]
+
+
+let default_asl_files : string option = match (Res.Sites.aslfiles) with 
+    | hd :: _ -> Some hd
+    | _ -> None
+
 
 let () = Printexc.register_printer
     (function
@@ -315,6 +327,13 @@ let _ =
 let main () =
     if !opt_print_version then Printf.printf "%s\n" version
     else begin
+        if (List.length !opt_filenames) == 0 then 
+            (opt_filenames := match default_asl_files with 
+                | Some s -> List.map  (fun file -> (s) ^ "/" ^ (file)) file_load_order
+            | None -> []);
+        if (!opt_prelude == "") then opt_prelude := (match default_asl_files with 
+                | Some s -> s ^ "/"  
+                | None -> "") ^ "prelude.asl";
         if !opt_verbose then List.iter print_endline banner;
         if !opt_verbose then print_endline "\nType :? for help";
         let t  = LoadASL.read_file !opt_prelude true !opt_verbose in
