@@ -26,6 +26,7 @@
     "pcre"
     ("alcotest"  :with-test)
     "dune-site"
+    "lwt"
   )
   (sites (share aslfiles))
 )

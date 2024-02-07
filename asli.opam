@@ -27,6 +27,7 @@ depends: [
   "pcre"
   "alcotest" {with-test}
   "dune-site"
+  "lwt"
   "odoc" {with-doc}
 ]
 build: [

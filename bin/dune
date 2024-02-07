@@ -9,6 +9,15 @@
  )
 
 (executable
+ (name server)
+ (public_name server)
+ (modes exe)
+ (modules server)
+ (flags (-cclib -lstdc++))
+ (libraries libASL pprint pcre lwt.unix))
+
+
+(executable
  (name testlexer)
  (modes exe)
  ; (public_name test_asl_lexer)
