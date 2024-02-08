@@ -27,6 +27,7 @@
     ("alcotest"  :with-test)
     "dune-site"
     "lwt"
+    "cohttp-lwt-unix"
   )
   (sites (share aslfiles))
 )

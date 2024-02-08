@@ -10,11 +10,11 @@
 
 (executable
  (name server)
- (public_name server)
+ (public_name aslp-server)
  (modes exe)
  (modules server)
  (flags (-cclib -lstdc++))
- (libraries libASL pprint pcre lwt.unix))
+ (libraries libASL pprint pcre lwt.unix yojson cohttp-lwt cohttp-lwt-unix))
 
 
 (executable
