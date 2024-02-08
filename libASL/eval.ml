@@ -1183,6 +1183,8 @@ and eval_encoding (env: Env.t) (x: encoding) (op: value): bool =
         false
     end
 
+
+
 (****************************************************************)
 (** {2 Creating environment from global declarations}           *)
 (****************************************************************)
@@ -1307,6 +1309,45 @@ let build_evaluation_environment (ds: AST.declaration list): Env.t = begin
     env
 end
 
+
+
+
+let evaluation_environment (prelude: string) (files: string list) (verbose: bool) = 
+    let t  = LoadASL.read_file prelude true verbose in
+    let ts = List.map (fun filename ->
+        if Utils.endswith filename ".spec" then begin
+            LoadASL.read_spec filename verbose 
+        end else if Utils.endswith filename ".asl" then begin
+            LoadASL.read_file filename false verbose 
+        end else if Utils.endswith filename ".prj" then begin
+            [] (* ignore project files here and process later *)
+        end else begin
+            failwith ("Unrecognized file suffix on "^filename)
+        end
+    ) files 
+    in
+    if verbose then Printf.printf "Building evaluation environment\n";
+    (try
+        Some (build_evaluation_environment (List.concat (t::ts)))
+    with
+    | Value.EvalError (loc, msg) ->
+        Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg; 
+        None
+    )
+
+
+let aarch64_evaluation_environment (): Env.t option  = 
+    let aarch64_file_load_order =  ["mra_tools/arch/regs.asl"; "mra_tools/types.asl"; "mra_tools/arch/arch.asl"; "mra_tools/arch/arch_instrs.asl"; 
+            "mra_tools/arch/arch_decode.asl"; "mra_tools/support/aes.asl"; "mra_tools/support/barriers.asl"; "mra_tools/support/debug.asl"; 
+            "mra_tools/support/feature.asl"; "mra_tools/support/hints.asl"; "mra_tools/support/interrupts.asl"; "mra_tools/support/memory.asl"; 
+            "mra_tools/support/stubs.asl"; "mra_tools/support/fetchdecode.asl"; "tests/override.asl"; "tests/override.prj"] in
+    let aarch64_default_asl_files : string option = match (Res.Sites.aslfiles) with 
+        | hd :: _ -> Some hd
+        | _ -> None in
+    Option.bind aarch64_default_asl_files (fun s -> (
+        (let filenames =  List.map  (fun file -> Filename.concat s file) aarch64_file_load_order in
+        let prelude = Filename.concat s "prelude.asl" in
+        (evaluation_environment prelude filenames false))))
 
 (****************************************************************
  * End

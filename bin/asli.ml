@@ -19,23 +19,13 @@ module TC     = Tcheck
 module PP     = Asl_parser_pp
 module AST    = Asl_ast
 
-let opt_prelude : string ref = ref ""
+let opt_prelude : string ref = ref "prelude.asl"
 let opt_filenames : string list ref = ref []
 let opt_print_version = ref false
+let opt_use_default_aarch64 = ref false
 let opt_verbose = ref false
 
 let opt_debug_level = ref 0
-
-
-let file_load_order =  ["mra_tools/arch/regs.asl"; "mra_tools/types.asl"; "mra_tools/arch/arch.asl"; "mra_tools/arch/arch_instrs.asl"; 
-        "mra_tools/arch/arch_decode.asl"; "mra_tools/support/aes.asl";"mra_tools/support/barriers.asl";"mra_tools/support/debug.asl"; 
-        "mra_tools/support/feature.asl"; "mra_tools/support/hints.asl";"mra_tools/support/interrupts.asl"; "mra_tools/support/memory.asl"; 
-        "mra_tools/support/stubs.asl"; "mra_tools/support/fetchdecode.asl"; "tests/override.asl";"tests/override.prj"]
-
-
-let default_asl_files : string option = match (Res.Sites.aslfiles) with 
-    | hd :: _ -> Some hd
-    | _ -> None
 
 
 let () = Printexc.register_printer
@@ -300,6 +290,7 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
 let options = Arg.align ([
     ( "-x", Arg.Set_int opt_debug_level,      "       Debugging output");
     ( "-v", Arg.Set opt_verbose,              "       Verbose output");
+    ( "--aarch64", Arg.Set opt_use_default_aarch64 , "       Use bundled AArch64 Semantics");
     ( "--version", Arg.Set opt_print_version, "       Print version");
     ( "--prelude", Arg.Set_string opt_prelude,"       ASL prelude file (default: ./prelude.asl)");
 ] )
@@ -324,40 +315,18 @@ let _ =
     (fun s -> opt_filenames := (!opt_filenames) @ [s])
     usage_msg
 
+
 let main () =
     if !opt_print_version then Printf.printf "%s\n" version
     else begin
-        if (List.length !opt_filenames) == 0 then 
-            (opt_filenames := match default_asl_files with 
-                | Some s -> List.map  (fun file -> (s) ^ "/" ^ (file)) file_load_order
-            | None -> []);
-        if (!opt_prelude == "") then opt_prelude := (match default_asl_files with 
-                | Some s -> s ^ "/"  
-                | None -> "") ^ "prelude.asl";
         if !opt_verbose then List.iter print_endline banner;
         if !opt_verbose then print_endline "\nType :? for help";
-        let t  = LoadASL.read_file !opt_prelude true !opt_verbose in
-        let ts = List.map (fun filename ->
-            if Utils.endswith filename ".spec" then begin
-                LoadASL.read_spec filename !opt_verbose
-            end else if Utils.endswith filename ".asl" then begin
-                LoadASL.read_file filename false !opt_verbose
-            end else if Utils.endswith filename ".prj" then begin
-                [] (* ignore project files here and process later *)
-            end else begin
-                failwith ("Unrecognized file suffix on "^filename)
-            end
-        ) !opt_filenames
-        in
-
-        if !opt_verbose then Printf.printf "Building evaluation environment\n";
-        let env = (try
-            Eval.build_evaluation_environment (List.concat (t::ts))
-        with
-        | Value.EvalError (loc, msg) ->
-            Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg;
-            exit 1
-        ) in
+        let env =  (match (if (!opt_use_default_aarch64)  
+            then (aarch64_evaluation_environment ())
+            else (evaluation_environment !opt_prelude !opt_filenames !opt_verbose))
+        with 
+            | Some e ->  e
+            | None -> failwith "Unable to load bundled ASL.") in
         if !opt_verbose then Printf.printf "Built evaluation environment\n";
         Dis.debug_level := !opt_debug_level;
 

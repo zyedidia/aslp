@@ -3,9 +3,9 @@
  (name asli)
  (public_name asli)
  (modes exe byte)
- (modules asli res)
+ (modules asli)
  (flags (-cclib -lstdc++))
- (libraries libASL linenoise pprint pcre dune-site)
+ (libraries libASL linenoise pprint pcre)
  )
 
 (executable
@@ -24,6 +24,3 @@
  (flags (-cclib -lstdc++))
  (libraries libASL unix))
 
-(generate_sites_module
- (module res)
- (sites asli))
