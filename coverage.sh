@@ -1,14 +1,12 @@
 #!/bin/bash
 
 # performs regression testing based on :coverage of particular groups of instructions
-
-INSTRUCTION_GROUPS="aarch64_integer.+ aarch64_branch.+"
+INSTRUCTION_GROUPS=''
+INSTRUCTION_GROUPS+='aarch64_integer.+'
+INSTRUCTION_GROUPS+=' aarch64_branch.+'
 INSTRUCTION_GROUPS+=' aarch64_float_.+'
 INSTRUCTION_GROUPS+=' aarch64_vector_.+'
 INSTRUCTION_GROUPS+=' aarch64_memory_.+'
-ASL_FILES="prelude.asl ./mra_tools/arch/regs.asl ./mra_tools/types.asl ./mra_tools/arch/arch.asl ./mra_tools/arch/arch_instrs.asl ./mra_tools/arch/arch_decode.asl ./mra_tools/support/aes.asl ./mra_tools/support/barriers.asl ./mra_tools/support/debug.asl ./mra_tools/support/feature.asl ./mra_tools/support/hints.asl ./mra_tools/support/interrupts.asl ./mra_tools/support/memory.asl ./mra_tools/support/stubs.asl ./mra_tools/support/fetchdecode.asl"
-ASL_FILES+=" tests/override.asl"
-ASL_FILES+=" tests/override.prj"
 
 COVERAGE_DIR="./tests/coverage"
 COVERAGE_TEMP=$(mktemp -d)
@@ -26,21 +24,28 @@ fi
 mkdir -p "$COVERAGE_DIR"
 mkdir -p "$COVERAGE_TEMP"
 
+asl_dir="$(dune exec asli -- --aarch64-dir)"
+
+tar xf encodings.tar.gz || exit 1
 
 RESULT=0
 for inst in $INSTRUCTION_GROUPS; do 
     fname="$(tr -c '[:alnum:]_' _ <<< "$inst")"
     new="$COVERAGE_TEMP/$fname"
+    diff="$COVERAGE_TEMP/$fname.diff"
     echo "::group::$inst"
     echo "$new"
-    time echo ":coverage A64 $inst" | dune exec asli $ASL_FILES > "$new"
+    time echo ":coverage A64 $inst" | dune exec asli > "$new"
     old="$COVERAGE_DIR/$fname"
+
+    sed -i "s#$asl_dir#.#g" "$new"
 
     if [[ $MODE == update ]]; then
         echo "overwriting coverage results with updated results."
         cp -v "$new" "$old"
     else
         echo "testing coverage with previous results."
+        diff -Nu "$old" "$new" > "$diff"
         diff -Nu --color=auto "$old" "$new"
         RESULT=$(($RESULT + $?))
     fi

@@ -22,9 +22,12 @@ module AST    = Asl_ast
 let opt_prelude : string ref = ref "prelude.asl"
 let opt_filenames : string list ref = ref []
 let opt_print_version = ref false
+let opt_no_default_aarch64 = ref false
+let opt_print_aarch64_dir = ref false
 let opt_verbose = ref false
 
 let opt_debug_level = ref 0
+
 
 let () = Printexc.register_printer
     (function
@@ -288,6 +291,8 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
 let options = Arg.align ([
     ( "-x", Arg.Set_int opt_debug_level,      "       Debugging output");
     ( "-v", Arg.Set opt_verbose,              "       Verbose output");
+    ( "--no-aarch64", Arg.Set opt_no_default_aarch64 , "       Disable bundled AArch64 semantics");
+    ( "--aarch64-dir", Arg.Set opt_print_aarch64_dir, "       Print directory of bundled AArch64 semantics");
     ( "--version", Arg.Set opt_print_version, "       Print version");
     ( "--prelude", Arg.Set_string opt_prelude,"       ASL prelude file (default: ./prelude.asl)");
 ] )
@@ -312,33 +317,32 @@ let _ =
     (fun s -> opt_filenames := (!opt_filenames) @ [s])
     usage_msg
 
+
 let main () =
     if !opt_print_version then Printf.printf "%s\n" version
+    else if !opt_print_aarch64_dir then 
+        match aarch64_asl_dir with 
+        | Some d -> Printf.printf "%s\n" d
+        | None -> (Printf.eprintf "Unable to retrieve installed asl directory\n"; exit 1)
     else begin
         if !opt_verbose then List.iter print_endline banner;
         if !opt_verbose then print_endline "\nType :? for help";
-        let t  = LoadASL.read_file !opt_prelude true !opt_verbose in
-        let ts = List.map (fun filename ->
-            if Utils.endswith filename ".spec" then begin
-                LoadASL.read_spec filename !opt_verbose
-            end else if Utils.endswith filename ".asl" then begin
-                LoadASL.read_file filename false !opt_verbose
-            end else if Utils.endswith filename ".prj" then begin
-                [] (* ignore project files here and process later *)
-            end else begin
-                failwith ("Unrecognized file suffix on "^filename)
-            end
-        ) !opt_filenames
-        in
-
-        if !opt_verbose then Printf.printf "Building evaluation environment\n";
-        let env = (try
-            Eval.build_evaluation_environment (List.concat (t::ts))
-        with
-        | Value.EvalError (loc, msg) ->
-            Printf.printf "  %s: Evaluation error: %s\n" (pp_loc loc) msg;
-            exit 1
-        ) in
+        let env_opt =
+            if (!opt_no_default_aarch64)  
+            then evaluation_environment !opt_prelude !opt_filenames !opt_verbose
+            else begin
+                if List.length (!opt_filenames) != 0 then
+                    Printf.printf
+                        "Warning: asl file arguments ignored without --no-aarch64 (%s)\n"
+                        (String.concat " " !opt_filenames)
+                else ();
+                aarch64_evaluation_environment ~verbose:!opt_verbose ();
+            end in
+        let env = (match env_opt with 
+            | Some e -> e
+            | None -> failwith "Unable to build evaluation environment.") in
+        if not !opt_no_default_aarch64 then
+            opt_filenames := snd (Option.get aarch64_asl_files); (* (!) should be safe if environment built successfully. *)
         if !opt_verbose then Printf.printf "Built evaluation environment\n";
         Dis.debug_level := !opt_debug_level;
 
@@ -352,7 +356,7 @@ let main () =
         repl tcenv cpu
     end
 
-let _ =ignore(main ())
+let _ = ignore (main ())
 
 (****************************************************************
  * End

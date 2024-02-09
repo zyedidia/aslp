@@ -16,7 +16,7 @@ license: "BSD-3-Clause"
 homepage: "https://github.com/alastairreid/asl-interpreter"
 bug-reports: "https://github.com/alastairreid/asl-interpreter/issues"
 depends: [
-  "dune" {>= "2.5"}
+  "dune" {>= "2.8"}
   "ocaml" {>= "4.09"}
   "menhir" {build}
   "ott" {build & >= "0.31"}
@@ -26,9 +26,11 @@ depends: [
   "z3" {>= "4.8.7"}
   "pcre"
   "alcotest" {with-test}
+  "dune-site"
+  "odoc" {with-doc}
 ]
 build: [
-  ["dune" "subst"] {pinned}
+  ["dune" "subst"] {dev}
   [
     "dune"
     "build"
