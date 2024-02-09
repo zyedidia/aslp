@@ -1461,6 +1461,7 @@ let dis_decode_entry (env: Eval.Env.t) ((lenv,globals): env) (decode: decode_cas
     (* List.iter (fun (v,t) -> Printf.printf ("%s:%s\n") v (pp_type t)) varentries; *)
     let stmts = flatten stmts [] in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
+    let stmts' = Transforms.RedundantSlice.do_transform bindings stmts' in
     let stmts' = Transforms.StatefulIntToBits.run stmts' in
     let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
     let stmts' = Transforms.CommonSubExprElim.do_transform stmts' in
