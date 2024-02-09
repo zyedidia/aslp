@@ -44,6 +44,7 @@ let get_resp (opcode: string) : string =
     get_reply opcode
 
 let server addr port =
+  print_endline "Started server.";
   let callback _conn req body =
     let uri = req |> Request.uri in
     let meth = req |> Request.meth |> Code.string_of_method in
