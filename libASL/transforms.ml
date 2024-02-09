@@ -1285,6 +1285,11 @@ module RedundantSlice = struct
     | Expr_LitHex _ -> false
     | _ -> true
 
+  let option_or x y =
+    match x with
+    | Some x' -> Some x'
+    | None -> y
+
   type ty_option = Just of ty | Clobbered
 
   class expression_walk (vartypes: ty Bindings.t) = object (self)
@@ -1312,6 +1317,11 @@ module RedundantSlice = struct
       | (Some (Just x)) -> Some x
       | _ -> Bindings.find_opt id vartypes 
 
+    method var_type' (e: expr): ty option =
+      match e with
+      | Expr_Var id -> self#var_type id
+      | _ -> None
+
     method array_val_type (id: ident): ty option = 
       (* XXX: use of Tcheck.env0 global mutable state *)
       (* let env = Tcheck.env0 in *)
@@ -1327,7 +1337,7 @@ module RedundantSlice = struct
       match e with
       (* Last chance to convert dynamic slices into shift & static slice *)
       | Expr_Slices(x, [Slice_LoWd(l,w)]) when non_const l ->
-          (match infer_type x with
+          (match option_or (infer_type x) (self#var_type' x) with
           | Some (Type_Bits xw) ->
               let e = Expr_TApply (FIdent ("LSR", 0), [xw], [x; l]) in
               Expr_Slices(e, [Slice_LoWd (Expr_LitInt "0", w)])
