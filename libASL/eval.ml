@@ -1335,19 +1335,22 @@ let evaluation_environment (prelude: string) (files: string list) (verbose: bool
         None
     )
 
+let aarch64_asl_files: (string * string list) option = 
+    let aarch64_file_load_order = 
+        ["mra_tools/arch/regs.asl"; "mra_tools/types.asl"; "mra_tools/arch/arch.asl"; "mra_tools/arch/arch_instrs.asl"; 
+        "mra_tools/arch/arch_decode.asl"; "mra_tools/support/aes.asl"; "mra_tools/support/barriers.asl"; "mra_tools/support/debug.asl"; 
+        "mra_tools/support/feature.asl"; "mra_tools/support/hints.asl"; "mra_tools/support/interrupts.asl"; "mra_tools/support/memory.asl"; 
+        "mra_tools/support/stubs.asl"; "mra_tools/support/fetchdecode.asl"; "tests/override.asl"; "tests/override.prj"]
+    in match Res.Sites.aslfiles with
+    | [dir] ->
+        let filenames = List.map (Filename.concat dir) aarch64_file_load_order in
+        let prelude = Filename.concat dir "prelude.asl" in
+        Some (prelude, filenames)
+    | _ -> None
 
-let aarch64_evaluation_environment (): Env.t option  = 
-    let aarch64_file_load_order =  ["mra_tools/arch/regs.asl"; "mra_tools/types.asl"; "mra_tools/arch/arch.asl"; "mra_tools/arch/arch_instrs.asl"; 
-            "mra_tools/arch/arch_decode.asl"; "mra_tools/support/aes.asl"; "mra_tools/support/barriers.asl"; "mra_tools/support/debug.asl"; 
-            "mra_tools/support/feature.asl"; "mra_tools/support/hints.asl"; "mra_tools/support/interrupts.asl"; "mra_tools/support/memory.asl"; 
-            "mra_tools/support/stubs.asl"; "mra_tools/support/fetchdecode.asl"; "tests/override.asl"; "tests/override.prj"] in
-    let aarch64_default_asl_files : string option = match (Res.Sites.aslfiles) with 
-        | hd :: _ -> Some hd
-        | _ -> None in
-    Option.bind aarch64_default_asl_files (fun s -> (
-        (let filenames =  List.map  (fun file -> Filename.concat s file) aarch64_file_load_order in
-        let prelude = Filename.concat s "prelude.asl" in
-        (evaluation_environment prelude filenames false))))
+let aarch64_evaluation_environment ?(verbose = false) (): Env.t option = 
+    Option.bind aarch64_asl_files 
+        (fun (prelude, filenames) -> evaluation_environment prelude filenames verbose)
 
 (****************************************************************
  * End

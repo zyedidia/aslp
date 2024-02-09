@@ -22,7 +22,7 @@ module AST    = Asl_ast
 let opt_prelude : string ref = ref "prelude.asl"
 let opt_filenames : string list ref = ref []
 let opt_print_version = ref false
-let opt_use_default_aarch64 = ref false
+let opt_no_default_aarch64 = ref false
 let opt_verbose = ref false
 
 let opt_debug_level = ref 0
@@ -290,7 +290,7 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
 let options = Arg.align ([
     ( "-x", Arg.Set_int opt_debug_level,      "       Debugging output");
     ( "-v", Arg.Set opt_verbose,              "       Verbose output");
-    ( "--aarch64", Arg.Set opt_use_default_aarch64 , "       Use bundled AArch64 Semantics");
+    ( "--no-aarch64", Arg.Set opt_no_default_aarch64 , "       Disable bundled AArch64 semantics");
     ( "--version", Arg.Set opt_print_version, "       Print version");
     ( "--prelude", Arg.Set_string opt_prelude,"       ASL prelude file (default: ./prelude.asl)");
 ] )
@@ -321,12 +321,20 @@ let main () =
     else begin
         if !opt_verbose then List.iter print_endline banner;
         if !opt_verbose then print_endline "\nType :? for help";
-        let env =  (match (if (!opt_use_default_aarch64)  
-            then (aarch64_evaluation_environment ())
-            else (evaluation_environment !opt_prelude !opt_filenames !opt_verbose))
-        with 
-            | Some e ->  e
-            | None -> failwith "Unable to load bundled ASL.") in
+        let env_opt =
+            if (!opt_no_default_aarch64)  
+            then evaluation_environment !opt_prelude !opt_filenames !opt_verbose
+            else begin
+                if List.length (!opt_filenames) != 0 then
+                    Printf.printf
+                        "Warning: asl file arguments ignored without --no-aarch64 (%s)\n"
+                        (String.concat " " !opt_filenames)
+                else ();
+                aarch64_evaluation_environment ~verbose:!opt_verbose () 
+            end in
+        let env = (match env_opt with 
+            | Some e -> e
+            | None -> failwith "Unable to build evaluation environment.") in
         if !opt_verbose then Printf.printf "Built evaluation environment\n";
         Dis.debug_level := !opt_debug_level;
 
@@ -340,7 +348,7 @@ let main () =
         repl tcenv cpu
     end
 
-let _ =ignore(main ())
+let _ = ignore (main ())
 
 (****************************************************************
  * End
