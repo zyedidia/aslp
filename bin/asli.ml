@@ -23,6 +23,7 @@ let opt_prelude : string ref = ref "prelude.asl"
 let opt_filenames : string list ref = ref []
 let opt_print_version = ref false
 let opt_no_default_aarch64 = ref false
+let opt_print_aarch64_dir = ref false
 let opt_verbose = ref false
 
 let opt_debug_level = ref 0
@@ -291,6 +292,7 @@ let options = Arg.align ([
     ( "-x", Arg.Set_int opt_debug_level,      "       Debugging output");
     ( "-v", Arg.Set opt_verbose,              "       Verbose output");
     ( "--no-aarch64", Arg.Set opt_no_default_aarch64 , "       Disable bundled AArch64 semantics");
+    ( "--aarch64-dir", Arg.Set opt_print_aarch64_dir, "       Print directory of bundled AArch64 semantics");
     ( "--version", Arg.Set opt_print_version, "       Print version");
     ( "--prelude", Arg.Set_string opt_prelude,"       ASL prelude file (default: ./prelude.asl)");
 ] )
@@ -318,6 +320,10 @@ let _ =
 
 let main () =
     if !opt_print_version then Printf.printf "%s\n" version
+    else if !opt_print_aarch64_dir then 
+        match aarch64_asl_dir with 
+        | Some d -> Printf.printf "%s\n" d
+        | None -> (Printf.eprintf "Unable to retrieve installed asl directory\n"; exit 1)
     else begin
         if !opt_verbose then List.iter print_endline banner;
         if !opt_verbose then print_endline "\nType :? for help";
@@ -330,11 +336,13 @@ let main () =
                         "Warning: asl file arguments ignored without --no-aarch64 (%s)\n"
                         (String.concat " " !opt_filenames)
                 else ();
-                aarch64_evaluation_environment ~verbose:!opt_verbose () 
+                aarch64_evaluation_environment ~verbose:!opt_verbose ();
             end in
         let env = (match env_opt with 
             | Some e -> e
             | None -> failwith "Unable to build evaluation environment.") in
+        if not !opt_no_default_aarch64 then
+            opt_filenames := snd (Option.get aarch64_asl_files); (* (!) should be safe if environment built successfully. *)
         if !opt_verbose then Printf.printf "Built evaluation environment\n";
         Dis.debug_level := !opt_debug_level;
 
