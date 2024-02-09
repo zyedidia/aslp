@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE language SYSTEM "language.dtd"
+[
+    <!ENTITY int "(?:[0-9]++)">
+    <!ENTITY hex_int "(?:[0-9A-Fa-f]++)">
+    <!ENTITY exp_float "(?:[eE][+-]?&int;)">
+    <!ENTITY exp_hexfloat "(?:[pP][-+]?&int;)">
+
+    <!ENTITY ispphash "(?:#|&#37;\:|\?\?=)">
+    <!ENTITY pphash "&ispphash;\s*">
+]>
+<language name="ARM Specification Language" section="Assembler"
+          version="1" kateversion="5.0"
+          indenter="normal"
+          extensions="*.asl"
+          mimetype="text/x-asl"
+          priority="5">
+  <highlighting>
+    <list name="controlflow">
+      <item>break</item>
+      <item>case</item>
+      <item>do</item>
+      <item>else</item>
+      <item>for</item>
+      <item>goto</item>
+      <item>if</item>
+      <item>elsif</item>
+      <item>return</item>
+      <item>switch</item>
+      <item>while</item>
+      <item>to</item>
+      <item>downto</item>
+      <item>then</item>
+      <item>assert</item>
+      <item>try</item>
+      <item>catch</item>
+      <item>when</item>
+      <item>of</item>
+      <item>throw</item>
+      <item>repeat</item>
+      <item>until</item>
+      <item>throw</item>
+      <item>catch</item>
+      <item>otherwise</item>
+    </list>
+    <list name="keywords">
+      <item>dis_expr</item>
+      <item>dis_call</item>
+      <item>dis_stmt</item>
+      <item>dis_decode_case</item>
+      <item>dis_decode_alt</item>
+      <item>dis_load</item>
+      <item>dis_type</item>
+      <item>dis_lexpr</item>
+
+      <item>record</item>
+      <item>enumeration</item>
+      <item>type</item>
+      <item>array</item>
+
+      <item>__array</item>
+      <item>__read</item>
+      <item>__readwrite</item>
+
+      <item>FALSE</item>
+      <item>TRUE</item>
+      <item>__NOP</item>
+      <item>__UNPREDICTABLE</item>
+      <item>__UNALLOCATED</item>
+      <item>SEE</item>
+      <item>UNKNOWN</item>
+      <item>UNDEFINED</item>
+      <item>UNINITIALIZED</item>
+
+      <item>__builtin</item>
+      <item>__operator</item>
+      <item>__operator1</item>
+      <item>__operator2</item>
+
+      <item>__register</item>
+
+      <item>__instruction</item>
+      <item>__encoding</item>
+      <item>__instruction_set</item>
+      <item>__field</item>
+      <item>__opcode</item>
+      <item>__guard</item>
+      <item>__unpredictable_unless</item>
+      <item>__decode</item>
+      <item>__postdecode</item>
+      <item>__execute</item>
+      <item>__conditional</item>
+    </list>
+    <list name="types">
+      <item>locals</item>
+      <item>constant</item>
+      <item>bits</item>
+      <item>integer</item>
+      <item>boolean</item>
+      <item>real</item>
+      <item>string</item>
+      <item>unknown</item>
+    </list>
+    <list name="operators">
+      <item>AND</item>
+      <item>CONSTRAINED_UNPREDICTABLE</item>
+      <item>DIV</item>
+      <item>EOR</item>
+      <item>IMPLEMENTATION_DEFINED</item>
+      <item>IN</item>
+      <item>IFF</item>
+      <item>IMPLIES</item>
+      <item>MOD</item>
+      <item>NOT</item>
+      <item>OR</item>
+      <item>QUOT</item>
+      <item>REM</item>
+    </list>
+    <contexts>
+      <context attribute="Normal Text" lineEndContext="#stay" name="Normal">
+        <!-- ASL: match header to avoid inconsistent colouring in header. -->
+        <StringDetect attribute="Comment" context="#stay" String="            _____  _       _    ___________________________________" />
+        <StringDetect attribute="Comment" context="#stay" String="    /\     / ____|| |     (_)   ASL interpreter" />
+        <StringDetect attribute="Comment" context="#stay" String="   /  \   | (___  | |      _    Copyright Arm Limited (c) 2017-2019" />
+        <StringDetect attribute="Comment" context="#stay" String="  / /\ \   \___ \ | |     | |" />
+        <StringDetect attribute="Comment" context="#stay" String=" / ____ \  ____) || |____ | |   ASL 0.2.0 alpha" />
+        <StringDetect attribute="Comment" context="#stay" String="/_/    \_\|_____/ |______||_|   ___________________________________" />
+
+        <DetectSpaces />
+
+        <keyword attribute="Control Flow" context="#stay" String="controlflow"/>
+        <keyword attribute="Keyword" context="#stay" String="keywords"/>
+        <keyword attribute="Data Type" context="#stay" String="types"/>
+        <keyword attribute="Symbol" context="#stay" String="operators"/>
+
+        <DetectIdentifier />
+
+        <DetectChar attribute="Symbol" context="#stay" char="{" />
+        <DetectChar attribute="Symbol" context="#stay" char="}" />
+
+        <RegExpr attribute="Decimal" context="Number" String="\.?[0-9]" lookAhead="true" />
+
+        <DetectChar attribute="String" context="Bits" char="'" />
+
+        <HlCChar attribute="Char" context="#stay"/>
+        <DetectChar attribute="String" context="String" char="&quot;"/>
+        <IncludeRules context="FindComments" />
+        <!-- ASL: allow folding on log nesting levels. -->
+        <DetectChar attribute="Keyword" context="#stay" char="╭" beginRegion="LogLevel" />
+        <DetectChar attribute="Keyword" context="#stay" char="╰" endRegion="LogLevel" />
+
+        <AnyChar attribute="Symbol" context="#stay" String=":!%&amp;()+,-/.*&lt;=&gt;?[]|~^&#59;"/>
+      </context>
+
+      <!-- ASL: highlight bit strings and masks. -->
+      <context attribute="String" lineEndContext="#pop" name="Bits">
+        <AnyChar attribute="String" context="#stay" String="x01 " />
+        <DetectChar attribute="String" context="#pop" char="'"/>
+      </context>
+
+      <context attribute="String" lineEndContext="#pop" name="String">
+        <LineContinue attribute="String" context="#stay"/>
+        <HlCStringChar attribute="String Char" context="#stay"/>
+        <DetectChar attribute="String" context="#pop" char="&quot;"/>
+      </context>
+
+      <context name="FindComments" attribute="Normal Text" lineEndContext="#pop">
+        <Detect2Chars attribute="Comment" context="MatchComment" char="/" char1="/" lookAhead="true" />
+        <Detect2Chars attribute="Comment" context="MatchComment" char="/" char1="*" lookAhead="true" />
+      </context>
+
+      <context name="MatchComment" attribute="Normal Text" lineEndContext="#pop" fallthrough="true" fallthroughContext="#pop">
+        <StringDetect attribute="Region Marker" context="#pop!Region Marker" String="//BEGIN" beginRegion="Region1" firstNonSpace="true" />
+        <StringDetect attribute="Region Marker" context="#pop!Region Marker" String="//END" endRegion="Region1" firstNonSpace="true" />
+        <IncludeRules context="##Doxygen" />
+        <Detect2Chars attribute="Comment" context="#pop!Commentar 1" char="/" char1="/" />
+        <Detect2Chars attribute="Comment" context="#pop!Commentar 2" char="/" char1="*" beginRegion="Comment" />
+      </context>
+
+      <context attribute="Region Marker" lineEndContext="#pop" name="Region Marker">
+      </context>
+
+      <context attribute="Comment" lineEndContext="#pop" name="Commentar 1">
+        <LineContinue attribute="Comment" context="#stay"/>
+        <IncludeRules context="##Comments" />
+      </context>
+
+      <context attribute="Comment" lineEndContext="#stay" name="Commentar 2">
+        <Detect2Chars attribute="Comment" context="#pop" char="*" char1="/" endRegion="Comment"/>
+        <IncludeRules context="##Comments" />
+      </context>
+
+      <context attribute="Comment" lineEndContext="#stay" name="Outscoped" >
+        <DetectSpaces />
+        <IncludeRules context="##Comments" />
+        <DetectIdentifier />
+        <DetectChar attribute="String" context="String" char="&quot;"/>
+        <IncludeRules context="FindComments" />
+        <RegExpr attribute="Comment" context="Outscoped intern" String="&pphash;if" beginRegion="PP" firstNonSpace="true" />
+        <RegExpr attribute="Preprocessor" context="#pop" String="&pphash;el(?:se|if)" firstNonSpace="true" />
+        <RegExpr attribute="Preprocessor" context="#pop" String="&pphash;endif" endRegion="PP" firstNonSpace="true" />
+      </context>
+
+      <context attribute="Comment" lineEndContext="#stay" name="Outscoped intern">
+        <DetectSpaces />
+        <IncludeRules context="##Comments" />
+        <DetectIdentifier />
+        <DetectChar attribute="String" context="String" char="&quot;"/>
+        <IncludeRules context="FindComments" />
+        <RegExpr attribute="Comment" context="Outscoped intern" String="&pphash;if" beginRegion="PP" firstNonSpace="true" />
+        <RegExpr attribute="Comment" context="#pop" String="&pphash;endif" endRegion="PP" firstNonSpace="true" />
+      </context>
+
+      <context name="Number" attribute="Normal Text" lineEndContext="#pop" fallthrough="true" fallthroughContext="#pop">
+        <RegExpr attribute="Float" context="FloatSuffix" String="\.&int;&exp_float;?|0[xX](?:\.&hex_int;&exp_hexfloat;?|&hex_int;(?:&exp_hexfloat;|\.&hex_int;?&exp_hexfloat;?))|&int;(?:&exp_float;|\.&int;?&exp_float;?)" />
+        <IncludeRules context="Integer" />
+      </context>
+
+      <context name="Integer" attribute="Normal Text" lineEndContext="#pop" fallthrough="true" fallthroughContext="#pop">
+        <RegExpr attribute="Hex" context="IntSuffix" String="0[xX]&hex_int;" />
+        <RegExpr attribute="Binary" context="IntSuffix" String="0[Bb][01]++" />
+        <RegExpr attribute="Octal" context="IntSuffix" String="0[0-7]++" />
+        <RegExpr attribute="Decimal" context="IntSuffix" String="0(?![xXbB0-9])|[1-9][0-9]*+" />
+        <RegExpr attribute="Error" context="#pop" String="[._0-9A-Za-z']++" />
+      </context>
+
+      <context name="IntSuffix" attribute="Error" lineEndContext="#pop#pop" fallthrough="true" fallthroughContext="NumericSuffixError">
+        <!-- ASL: allow bitstring immediately following a number, e.g. 4'1010'. -->
+        <DetectChar attribute="String" context="Bits" char="'" />
+        <AnyChar attribute="Error" context="#pop!IntSuffixPattern" String="uUlLimunshyd_" lookAhead="true" />
+      </context>
+
+      <context name="IntSuffixPattern" attribute="Error" lineEndContext="#pop#pop" fallthrough="true" fallthroughContext="NumericSuffixError">
+        <RegExpr attribute="Standard Suffix" context="NumericSuffixError" String="[Uu][Ll]{0,2}|[Ll]{0,2}[Uu]?" />
+      </context>
+
+      <context name="FloatSuffix" attribute="Error" lineEndContext="#pop#pop" fallthrough="true" fallthroughContext="NumericSuffixError">
+        <DetectChar attribute="Float" context="#pop" char="." />
+        <AnyChar attribute="Standard Suffix" context="NumericSuffixError" String="fFlL" />
+      </context>
+
+      <context name="NumericSuffixError" attribute="Error" lineEndContext="#pop#pop#pop" fallthrough="true" fallthroughContext="#pop#pop#pop">
+        <RegExpr attribute="Error" context="#pop#pop#pop" String="\.[_0-9A-Za-z]*|[_0-9A-Za-z]+" />
+      </context>
+    </contexts>
+    <itemDatas>
+      <itemData name="Normal Text"  defStyleNum="dsNormal" spellChecking="false"/>
+      <itemData name="Control Flow" defStyleNum="dsControlFlow" spellChecking="false"/>
+      <itemData name="Keyword"      defStyleNum="dsKeyword" spellChecking="false"/>
+      <itemData name="Data Type"    defStyleNum="dsDataType" spellChecking="false"/>
+      <itemData name="Decimal"      defStyleNum="dsDecVal" spellChecking="false"/>
+      <itemData name="Octal"        defStyleNum="dsBaseN" spellChecking="false"/>
+      <itemData name="Hex"          defStyleNum="dsBaseN" spellChecking="false"/>
+      <itemData name="Binary"       defStyleNum="dsBaseN" spellChecking="false"/>
+      <itemData name="Float"        defStyleNum="dsFloat" spellChecking="false"/>
+      <itemData name="Standard Suffix" defStyleNum="dsBuiltIn" spellChecking="false" />
+      <itemData name="Char"         defStyleNum="dsChar" spellChecking="false"/>
+      <itemData name="String"       defStyleNum="dsString"/>
+      <itemData name="String Char"  defStyleNum="dsSpecialChar"/>
+      <itemData name="Comment"      defStyleNum="dsComment"/>
+      <itemData name="Symbol"       defStyleNum="dsOperator" spellChecking="false"/>
+      <itemData name="Preprocessor" defStyleNum="dsPreprocessor" spellChecking="false"/>
+      <itemData name="Prep. Lib"    defStyleNum="dsImport" spellChecking="false"/>
+      <itemData name="Region Marker" defStyleNum="dsRegionMarker" spellChecking="false"/>
+      <itemData name="Error"        defStyleNum="dsError" spellChecking="false"/>
+    </itemDatas>
+  </highlighting>
+  <general>
+    <comments>
+      <comment name="singleLine" start="//" />
+      <comment name="multiLine" start="/*" end="*/" region="Comment" />
+    </comments>
+    <keywords casesensitive="1" additionalDeliminator="'&quot;" />
+  </general>
+</language>
+<!-- kate: replace-tabs on; tab-width 2; indent-width 2; -->
