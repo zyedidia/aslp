@@ -18,18 +18,19 @@ open Lwt
 let persistent_env     = Option.get (aarch64_evaluation_environment ())
 
 let eval_instr (opcode: string) : string =
-    let praw a : string = Utils.to_string (Asl_parser_pp.pp_raw_stmt a) |> String.trim  in
+    let pp_raw stmt : string = Utils.to_string (Asl_parser_pp.pp_raw_stmt stmt) |> String.trim  in
     let address = None                                     in
-    let res :Asl_ast.stmt list  = Dis.retrieveDisassembly ?address persistent_env (Dis.build_env persistent_env) opcode in
-    let ascii   = List.map praw res                                                 in
-    let indiv (s: string) = List.init (String.length s) (String.get s) |> List.map (String.make 1)  in
-    List.map indiv ascii |>  List.map (String.concat "") |> String.concat "\n"
+    let stmts : Asl_ast.stmt list  = Dis.retrieveDisassembly ?address persistent_env (Dis.build_env persistent_env) opcode in
+    let stmts'   = List.map pp_raw stmts                                                 in
+    String.concat "\n" stmts'
 
 
 let get_reply (jsonin: string) : Cohttp.Code.status_code * string =
   (*let json  = Yojson.Safe.from_string jsonin in *)
   let make_reply code tail =
     (code, Yojson.Safe.to_string (`Assoc [("instruction", `String jsonin); tail])) in
+  Printf.printf "Disassembling '%s'\n" jsonin;
+  flush stdout;
   match (eval_instr jsonin) with
   | exception e -> make_reply `Internal_server_error ("error", `String (Printexc.to_string e))
   | x -> make_reply `OK ("semantics", `String x)
