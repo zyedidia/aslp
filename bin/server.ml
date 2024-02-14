@@ -15,12 +15,13 @@ open Asl_utils
 open Lwt
 
 
-let persistent_env     = Option.get (aarch64_evaluation_environment ())
+let persistent_env = lazy (Option.get (aarch64_evaluation_environment ()))
 
 let eval_instr (opcode: string) : string =
     let pp_raw stmt : string = Utils.to_string (Asl_parser_pp.pp_raw_stmt stmt) |> String.trim  in
     let address = None                                     in
-    let stmts : Asl_ast.stmt list  = Dis.retrieveDisassembly ?address persistent_env (Dis.build_env persistent_env) opcode in
+    let env' = Lazy.force persistent_env                    in
+    let stmts : Asl_ast.stmt list  = Dis.retrieveDisassembly ?address env' (Dis.build_env env') opcode in
     let stmts'   = List.map pp_raw stmts                                                 in
     String.concat "\n" stmts'
 
