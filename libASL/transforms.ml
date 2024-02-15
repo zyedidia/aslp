@@ -1290,6 +1290,18 @@ module RedundantSlice = struct
     | Some x' -> Some x'
     | None -> y
 
+  let width_of_slice (slice : slice) : int =
+    match slice with
+    | Slice_LoWd (lo, wd) -> int_of_expr wd
+    | Slice_HiLo (hi, lo) -> int_of_expr hi - int_of_expr lo + 1
+    | Slice_Single _ -> 1
+
+  let width_of_slices slices = List.fold_left (+) 0 (List.map width_of_slice slices)
+
+  let bits_type_of_reg_type = function
+    | Type_Register (wd, _) -> Type_Bits (Expr_LitInt wd)
+    | x -> x
+
   type ty_option = Just of ty | Clobbered
 
   class expression_walk (vartypes: ty Bindings.t) = object (self)
@@ -1313,9 +1325,10 @@ module RedundantSlice = struct
       | _ -> ()
 
     method var_type (id: ident): ty option = 
-      match Bindings.find_opt id lvartypes with
-      | (Some (Just x)) -> Some x
-      | _ -> Bindings.find_opt id vartypes 
+      Option.map bits_type_of_reg_type
+        (match Bindings.find_opt id lvartypes with
+        | Some (Just x) -> Some x
+        | _ -> Bindings.find_opt id vartypes)
 
     method var_type' (e: expr): ty option =
       match e with
@@ -1323,8 +1336,6 @@ module RedundantSlice = struct
       | _ -> None
 
     method array_val_type (id: ident): ty option = 
-      (* XXX: use of Tcheck.env0 global mutable state *)
-      (* let env = Tcheck.env0 in *)
       match self#var_type id with
       | Some (Type_Array(_ix,ty)) -> Some ty
       | _ -> None
