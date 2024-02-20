@@ -519,10 +519,16 @@ let sym_insert_bits loc (old_width: int) (old: sym) (lo: sym) (wd: sym) (v: sym)
   | _ ->
       failwith "sym_insert_bits: Width of inserted bitvector is unknown"
 
+let sym_concat (loc: AST.l) (xs: (int * sym) list): sym =
+  let body = fun (w,x) (yw,y) -> let b = sym_append_bits loc w yw x y in (w + yw,b) in
+  match xs with
+  | [] -> Val (VBits empty_bits)
+  | x::xs -> let (_,r) = List.fold_left body x xs in r
+
 (** Append a list of bitvectors together
     TODO: Will inject invalid widths due to unsafe sym_append_bits call.
  *)
-let sym_concat (loc: AST.l) (xs: sym list): sym =
+let sym_concat_unsafe (loc: AST.l) (xs: sym list): sym =
   match xs with
   | [] -> Val (VBits empty_bits)
   | x::xs -> List.fold_left (sym_append_bits_unsafe loc) x xs
