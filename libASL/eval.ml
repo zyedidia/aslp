@@ -1340,7 +1340,7 @@ let aarch64_asl_dir: string option =
 
 let aarch64_asl_files: (string * string list) option = 
     let aarch64_file_load_order = 
-        ["mra_tools/arch/regs.asl"; "mra_tools/types.asl"; "mra_tools/arch/arch.asl"; "mra_tools/arch/arch_instrs.asl"; 
+       ["mra_tools/arch/regs.asl"; "mra_tools/types.asl"; "mra_tools/arch/arch.asl"; "mra_tools/arch/arch_instrs.asl"; "mra_tools/arch/regs_access.asl";
         "mra_tools/arch/arch_decode.asl"; "mra_tools/support/aes.asl"; "mra_tools/support/barriers.asl"; "mra_tools/support/debug.asl"; 
         "mra_tools/support/feature.asl"; "mra_tools/support/hints.asl"; "mra_tools/support/interrupts.asl"; "mra_tools/support/memory.asl"; 
         "mra_tools/support/stubs.asl"; "mra_tools/support/fetchdecode.asl"; "tests/override.asl"; "tests/override.prj"]

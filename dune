@@ -5,6 +5,7 @@
    (mra_tools/arch/arch_decode.asl    as   mra_tools/arch/arch_decode.asl   )
    (mra_tools/arch/arch_instrs.asl    as   mra_tools/arch/arch_instrs.asl   )
    (mra_tools/arch/regs.asl           as   mra_tools/arch/regs.asl          )
+   (mra_tools/arch/regs_access.asl    as   mra_tools/arch/regs_access.asl   )
    (mra_tools/support/aes.asl         as   mra_tools/support/aes.asl        )
    (mra_tools/support/barriers.asl    as   mra_tools/support/barriers.asl   )
    (mra_tools/support/debug.asl       as   mra_tools/support/debug.asl      )
