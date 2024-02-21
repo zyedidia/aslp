@@ -813,8 +813,8 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     | Expr_Slices(e, ss) ->
             let@ e' = dis_expr loc e in
             let+ ss' = DisEnv.traverse (dis_slice loc) ss in
-            let vs = List.map (fun (i,w) -> sym_extract_bits loc e' i w) ss' in
-            sym_concat_unsafe loc vs
+            let vs = List.map (fun (i,w) -> (int_of_sym w, sym_extract_bits loc e' i w)) ss' in
+            sym_concat loc vs
     | Expr_In(e, p) ->
             let@ e' = dis_expr loc e in
             let@ p' = dis_pattern loc e' p in
