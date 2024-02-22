@@ -1557,3 +1557,78 @@ module CommonSubExprElim = struct
     let xs = visit_stmts expression_replacer xs in
     xs
 end
+
+(* A brute force match for total value mappings, implemented as a series of chained ifs *)
+module CaseSimp = struct
+  module StringMap = Map.Make(String);;
+
+  (* Match a 'X = BV_CONSTANT' comparison, returning X and BV_CONSTANT *)
+  let valid_guard e =
+    match e with
+    | Expr_TApply (FIdent ("eq_bits", 0), [Expr_LitInt w], [x; Expr_LitBits b]) ->
+        Some (int_of_string w, x, b)
+    | _ -> None
+
+  (* Match a 'R := BV_CONSTANT' statement, returning R and BV_CONSTANT *)
+  let valid_body b =
+    match b with
+    | Stmt_Assign (LExpr_Var r, Expr_LitBits c, _) -> Some(r, c)
+    | _ -> None
+
+  (* Match a chain of 'if X = BV_CONSTANT then R := BV_CONSTANT else if ... else assert FALSE'
+     given specific X and R expressions, returning a map from test values to assigned values *)
+  let rec match_inner stmt x r =
+    match stmt with
+    | Stmt_If (e, [c], [], [f], _) ->
+        (match valid_guard e, valid_body c, match_inner f x r with
+        | Some (w, x', b), Some (r', c), Some res when x' = x && r = r' -> Some (StringMap.add b c res)
+        | _ -> None)
+    | Stmt_Assert (Expr_Var(Ident "FALSE"), _) -> Some StringMap.empty
+    | _ -> None
+
+  (* Match a chain of 'if X = BV_CONSTANT then R := BV_CONSTANT else if ... else assert FALSE',
+     returning X, R and a map from test values to assigned values *)
+  let match_outer stmt =
+    match stmt with
+    | Stmt_If (e, [t], [], [f], loc) ->
+        (match valid_guard e, valid_body t with
+        | Some (w, x, b), Some (r, c) -> 
+            (match match_inner f x r with
+            | Some res -> Some (x, r, w, loc, StringMap.add b c res)
+            | _ -> None)
+        | _ -> None)
+    | _ -> None
+
+  (* Mapping is total if there is an entry for all possible bv values *)
+  let is_total w res = Z.to_int (Z.shift_left Z.one w) = (StringMap.cardinal res)
+
+  (* Guesses for the possible mapping from key to value. This is incredibly dumb. *)
+  let fn_guess = [
+    (fun x y -> x = y), 
+    (fun r x _ loc -> Stmt_Assign(LExpr_Var r, x, loc));
+    (fun x y -> "0" ^ x = y), 
+    (fun r x w loc -> 
+      let nw = expr_of_int (w + 1) in
+      Stmt_Assign(LExpr_Var r, expr_prim' "ZeroExtend" [expr_of_int w; nw] [x; nw], loc));
+  ]
+
+  class visit_if = object
+    inherit Asl_visitor.nopAslVisitor
+
+    (* Assumes x is pure, as it is referenced within a branch condition *)
+    method! vstmt (s: stmt): stmt visitAction =
+      match match_outer s with
+      | Some (x, r, w, loc, res) when is_total w res ->
+          (match List.find_opt (fun (test,_) -> StringMap.for_all test res) fn_guess with
+          | Some (_,fn) -> ChangeTo (fn r x w loc)
+          | _ -> DoChildren)
+      | _ -> DoChildren
+
+  end
+
+  let do_transform (xs: stmt list): stmt list = 
+    let stmt_visitor = new visit_if in
+    let xs = visit_stmts stmt_visitor xs in
+    xs
+
+end
