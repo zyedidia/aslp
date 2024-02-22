@@ -671,8 +671,9 @@ module StatefulIntToBits = struct
           let (n,w) = force_signed (bv_of_int_expr vars n) in
           expr_prim' "asr_bits" [size; expr_of_abs w] [x;sym_expr n]
 
-      | e -> e in
-    ChangeDoChildrenPost(e', fun e -> e)
+      | e -> e
+      in
+      ChangeDoChildrenPost(e', fun e -> e)
   end
 
   (** Cleanup pass to remove wrapper and introduce necessary bit->int conversions *)
@@ -680,8 +681,7 @@ module StatefulIntToBits = struct
     inherit Asl_visitor.nopAslVisitor
     method! vexpr e =
       match e with
-      | Expr_TApply (f, [], [e]) when f = wrapper_ident ->
-          ChangeTo e
+      | Expr_TApply (f, [], [e]) when f = wrapper_ident -> ChangeTo e
       | Expr_Var v ->
           (match Bindings.find_opt v vars with
           | Some w ->
