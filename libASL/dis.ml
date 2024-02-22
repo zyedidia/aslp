@@ -734,12 +734,17 @@ and dis_slice (loc: l) (x: slice): (sym * sym) rws =
   These structures are not supported by the target and must be removed for successful translation.
   TODO: This does not appear to be a problem at the moment, but requires greater testing to be sure.
   *)
-and dis_load loc x =
-  let body = dis_load_chain loc x []  in
+and dis_load (loc: l) (x: expr): sym rws =
+  let body = (let+ (_,s) = dis_load_chain loc x [] in s) in
   if no_debug() then body
   else DisEnv.scope loc "dis_load" (pp_expr x) pp_sym body
 
-and dis_load_chain (loc: l) (x: expr) (ref: access_chain list): sym rws =
+and dis_load_with_type (loc: l) (x: expr): (ty * sym) rws =
+  let body = dis_load_chain loc x []  in
+  if no_debug() then body
+  else DisEnv.scope loc "dis_load_with_type" (pp_expr x) (fun (t,s) -> pp_sym s) body
+
+and dis_load_chain (loc: l) (x: expr) (ref: access_chain list): (ty * sym) rws =
   (match x with
   | Expr_Var(id) ->
       let@ (var,local) = DisEnv.gets (LocalEnv.resolveGetVar loc id) in
@@ -759,12 +764,12 @@ and dis_load_chain (loc: l) (x: expr) (ref: access_chain list): sym rws =
                  (as a minor optimisation). *)
               let@ () = DisEnv.if_ (ref = [])
                 (DisEnv.modify (LocalEnv.setVar loc var var')) in
-              DisEnv.pure var'
-          | v' -> DisEnv.pure (Val v')
+              DisEnv.pure (t', var')
+          | v' -> DisEnv.pure (t, Val v')
           )
       (* Variable is local with a symbolic value, should not expect a structure *)
       | (t, Exp e) ->
-          if ref = [] then DisEnv.pure @@ Exp e
+          if ref = [] then DisEnv.pure @@ local
           else unsupported loc "Local variable with dynamic structure"
       )
   | Expr_Field(e,f) -> dis_load_chain loc e (Field f::ref)
@@ -802,12 +807,13 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
                    ^ Utils.to_string (PP.pp_expr x)))
     | Expr_Field(_, _) -> dis_load loc x
     | Expr_Fields(e, fs) ->
-            let+ vs = DisEnv.traverse (fun f -> dis_load loc (Expr_Field(e,f))) fs in
-            sym_concat loc vs
+            let+ vs = DisEnv.traverse (fun f -> dis_load_with_type loc (Expr_Field(e,f))) fs in
+            let vs' = List.map (fun (t,x) -> (width_of_type loc t, x)) vs in
+            sym_concat loc vs'
     | Expr_Slices(e, ss) ->
             let@ e' = dis_expr loc e in
             let+ ss' = DisEnv.traverse (dis_slice loc) ss in
-            let vs = List.map (fun (i,w) -> sym_extract_bits loc e' i w) ss' in
+            let vs = List.map (fun (i,w) -> (int_of_sym w, sym_extract_bits loc e' i w)) ss' in
             sym_concat loc vs
     | Expr_In(e, p) ->
             let@ e' = dis_expr loc e in

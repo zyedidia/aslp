@@ -73,9 +73,6 @@ bits(64) AArch64.SysInstrWithResult(integer op0, integer op1, integer crn, integ
     assert FALSE;
     return Zeros(64);
 
-AArch64.SysRegWrite(integer op0, integer op1, integer crn, integer crm, integer op2, bits(64) val)
-    assert FALSE;
-
 bits(64) System_Get(integer op0, integer op1, integer crn, integer crm, integer op2)
     assert FALSE;
     return Zeros(64);
