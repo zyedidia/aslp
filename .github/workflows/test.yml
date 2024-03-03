@@ -27,12 +27,6 @@ jobs:
     - uses: cachix/install-nix-action@v25
     - run: echo 'preparing nix shell environment'
 
-    # it will be nice to make this work, just in case we aslp adds new dependencies 
-    # - uses: ocaml/setup-ocaml@v2
-    #   with:
-    #     ocaml-compiler: ocaml-system.4.09.1 # must match nix develop's ocaml version!
-    # - run: opam install . --deps-only --with-test
-
     - run: dune build --profile release
     - run: ./coverage.sh test
       id: coverage
