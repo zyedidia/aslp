@@ -87,6 +87,8 @@ let infer_type (e: expr): ty option =
     | "cvt_bits_sint"      -> Some(type_integer)
     | "eq_bits"            -> Some(type_bool)
     | "ne_bits"            -> Some(type_bool)
+    | "sle_bits"           -> Some(type_bool)
+    | "slt_bits"           -> Some(type_bool)
     | _ -> None
     end
   | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(v1) as num1; Expr_LitInt(v2) as num2], _) -> begin
