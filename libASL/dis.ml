@@ -1175,11 +1175,11 @@ and stmt_append (xs: stmt list) (ys: stmt list): stmt list =
     | [] -> ys
 
     (* these interrupt control flow so we shouldn't append after them. *)
-    | [Stmt_FunReturn _]
-    | [Stmt_ProcReturn _]
-    | [Stmt_Throw _]
-    | [Stmt_Dep_Undefined _]
-    | [Stmt_Undefined _] -> xs
+    | (Stmt_FunReturn _ as x)::xs
+    | (Stmt_ProcReturn _ as x)::xs
+    | (Stmt_Throw _ as x)::xs
+    | (Stmt_Dep_Undefined _ as x)::xs
+    | (Stmt_Undefined _ as x)::xs -> [x]
 
     | x::xs -> x :: stmt_append xs ys
 
@@ -1206,6 +1206,16 @@ and dis_stmts (stmts: AST.stmt list): unit rws =
             S_Elsif_Cond(e,stmt_append ss dup)) elsif
         and fstmts' = stmt_append fstmts dup in
         dis_stmt (Stmt_If (c, tstmts', elsif', fstmts', loc)) >> dis_stmts post
+
+        (*
+    | (Stmt_Case(e, alts, odefault, loc)::rest) ->
+        let (dup,post) = duplicate_up_to rest in
+        let alts' = List.map (fun (Alt_Alt(ps, oc, ss)) ->
+          Alt_Alt(ps, oc,stmt_append ss dup)) alts in
+        let odefault' = match odefault with Some s -> Some (stmt_append s dup) | _ -> None in
+        dis_stmt (Stmt_Case(e, alts', odefault', loc)) >> dis_stmts post
+        *)
+
     | (Stmt_FunReturn _ | Stmt_ProcReturn _) as ret :: rest ->
         (match rest with
         | [] -> dis_stmt ret
