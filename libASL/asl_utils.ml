@@ -538,6 +538,28 @@ let masklength (x: string): int =
     String.iter (function ' ' -> () | _ -> r := !r + 1) x;
     !r
 
+(****************************************************************)
+(** {2 Function signature accessors}                            *)
+(****************************************************************)
+
+let fnsig_get_rt         (a,b,c,d,e,f) = a
+let fnsig_get_typed_args (a,b,c,d,e,f) = b
+let fnsig_get_targs      (a,b,c,d,e,f) = c
+let fnsig_get_args       (a,b,c,d,e,f) = d
+let fnsig_get_body       (a,b,c,d,e,f) = f
+
+let fnsig_set_rt         (_,b,c,d,e,f) a = (a,b,c,d,e,f)
+let fnsig_set_typed_args (a,_,c,d,e,f) b = (a,b,c,d,e,f)
+let fnsig_set_targs      (a,b,_,d,e,f) c = (a,b,c,d,e,f)
+let fnsig_set_args       (a,b,c,_,e,f) d = (a,b,c,d,e,f)
+let fnsig_set_body       (a,b,c,d,e,_) f = (a,b,c,d,e,f)
+
+let fnsig_upd_rt         upd (a,b,c,d,e,f) = (upd a,b,c,d,e,f)
+let fnsig_upd_typed_args upd (a,b,c,d,e,f) = (a,upd b,c,d,e,f)
+let fnsig_upd_targs      upd (a,b,c,d,e,f) = (a,b,upd c,d,e,f)
+let fnsig_upd_args       upd (a,b,c,d,e,f) = (a,b,c,upd d,e,f)
+let fnsig_upd_body       upd (a,b,c,d,e,f) = (a,b,c,d,e,upd f)
+
 (****************************************************************
  * End
  ****************************************************************)
