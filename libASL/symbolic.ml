@@ -793,11 +793,13 @@ let stmt_loc (s: stmt): l =
 type access_chain =
   | Field of ident
   | Index of value
+  | SymIndex of expr
 
 let pp_access_chain =
   function
   | Field id -> "Field " ^ pprint_ident id
   | Index v -> "Index " ^ pp_value v
+  | SymIndex e -> "SymIndex " ^ pp_expr e
 
 let pp_access_chain_list = Utils.pp_list pp_access_chain
 
@@ -814,6 +816,11 @@ let rec get_access_chain (loc: l) (v: value) (a: access_chain list) : value =
   (match a with
   | (Field f)::a -> (get_access_chain loc (get_field loc v f) a)
   | (Index i)::a -> (get_access_chain loc (get_array loc v i) a)
+  | (SymIndex e)::a ->
+      assert (a = []);
+      (match v with
+      | VArray (x, d) -> assert (ImmutableArray.cardinal x = 0); d
+      | _ -> failwith "unreachable")
   | [] -> v)
 
 (** "set_access_chain loc v a r" sets the reference defined by "a"
@@ -822,6 +829,11 @@ let rec set_access_chain (loc: l) (v: value) (a: access_chain list) (r: value): 
   (match a with
   | (Field f)::a -> set_field loc v f (set_access_chain loc (get_field loc v f) a r)
   | (Index i)::a -> set_array loc v i (set_access_chain loc (get_array loc v i) a r)
+  | (SymIndex e)::a ->
+      assert (a = []);
+      (match v with
+      | VArray (x, d) -> assert (ImmutableArray.cardinal x = 0); VArray(x, d)
+      | _ -> failwith "unreachable")
   | [] -> r)
 
 (** Returns an lexpr for accessing the given reference within the given lexpr. *)
@@ -829,6 +841,7 @@ let rec lexpr_access_chain (x: lexpr) (a: access_chain list): lexpr =
   (match a with
   | (Field f)::a -> lexpr_access_chain (LExpr_Field(x,f)) a
   | (Index i)::a -> lexpr_access_chain (LExpr_Array(x,val_expr i)) a
+  | (SymIndex e)::a -> lexpr_access_chain (LExpr_Array(x,e)) a
   | [] -> x)
 
 (** Returns an expr for accessing the given reference within the given expr. *)
@@ -836,4 +849,5 @@ let rec expr_access_chain (x: expr) (a: access_chain list): expr =
   (match a with
   | (Field f)::a -> expr_access_chain (Expr_Field(x,f)) a
   | (Index i)::a -> expr_access_chain (Expr_Array(x,val_expr i)) a
+  | (SymIndex e)::a -> expr_access_chain (Expr_Array(x,e)) a
   | [] -> x)

@@ -789,7 +789,7 @@ and dis_load_chain (loc: l) (x: expr) (ref: access_chain list): (ty * sym) rws =
       let@ i = dis_expr loc i in
       (match i with
       | Val i -> dis_load_chain loc a (Index i::ref)
-      | _ -> unsupported loc "Dynamic array index")
+      | Exp e -> dis_load_chain loc a (SymIndex e::ref))
   | x -> unsupported loc @@ "Unknown Exp chain: " ^ pp_expr x)
 
 (** Dissassemble expression. This should never return Result VUninitialized *)
@@ -1040,7 +1040,7 @@ and resolve_lexpr (loc: l) (x: lexpr): lexpr rws =
       let+ l = resolve_lexpr loc l in
       (match e with
       | Val i -> LExpr_Array(l, val_expr i)
-      | _ -> unsupported loc @@ "Dynamic array index in LExpr")
+      | Exp e -> LExpr_Array(l, e))
   | _ -> DisEnv.pure(x))
 
 (* TODO: Missing ReadWrite LExpr, which introduces some complications for Fields case *)
@@ -1051,7 +1051,7 @@ and dis_lexpr_chain (loc: l) (x: lexpr) (ref: access_chain list) (r: sym): unit 
       let@ e = dis_expr loc i in
       (match e with
       | Val i -> dis_lexpr_chain loc l (Index i::ref) r
-      | _ -> unsupported loc @@ "Dynamic array index in LExpr")
+      | Exp e -> dis_lexpr_chain loc l (SymIndex e::ref) r)
   | LExpr_Var(id) ->
       let@ var,local = DisEnv.gets (LocalEnv.resolveGetVar loc id) in
       (match local with
