@@ -17610,7 +17610,7 @@ bits(64) AArch64.SysRegRead(integer op0, integer op1, integer CRn, integer CRm, 
         when '111001010001000' return AFSR0_EL3_reg_read(op0, op1, CRn, CRm, op2);
         otherwise Unreachable();
 
-AArch64.SysRegWrite(integer op0, integer op1, integer CRn, integer CRm, integer op2, bit(64) val)
+AArch64.SysRegWrite(integer op0, integer op1, integer CRn, integer CRm, integer op2, bits(64) val)
     case op0[0:0]:op1[2:0]:CRn[3:0]:CRm[3:0]:op2[2:0] of
         when '111111100010001' CNTPS_CTL_EL1_reg_write(op0, op1, CRn, CRm, op2, val[63:0]);
         when '100001010101010' ERXMISC2_EL1_reg_write(op0, op1, CRn, CRm, op2, val[63:0]);

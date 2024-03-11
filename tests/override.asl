@@ -404,3 +404,15 @@ bits(size) MemAtomicCompareAndSwap(bits(64) address, bits(size) expectedvalue,
         Mem[address, size DIV 8, stacctype] = newvalue;
     AtomicEnd();
     return oldvalue;
+
+// Stub this out, beyond the bounds of the model
+CheckSVEEnabled()
+  return;
+
+// Exactly the same as the real impl, but current dis does not support an ITE that returns a tuple
+(bits(N), boolean) SatQ(integer i, integer N, boolean unsigned)
+    if unsigned then
+        return UnsignedSatQ(i, N);
+    else
+        return SignedSatQ(i, N);
+
