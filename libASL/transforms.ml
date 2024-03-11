@@ -1634,5 +1634,30 @@ module CaseSimp = struct
     let stmt_visitor = new visit_if in
     let xs = visit_stmts stmt_visitor xs in
     xs
+end
+
+(* Rewrite expressions with temporary dynamic width bitvectors into equivalent versions with only static bitvectors *)
+module RemoveTempBVs = struct
+
+  class expr_walker debug = object
+    inherit Asl_visitor.nopAslVisitor
+    method !vslice s =
+      match s with
+      | Slice_HiLo(Expr_TApply(FIdent("add_int", 0), [], [a;Expr_LitInt b]),lo) when a = lo ->
+          ChangeTo( Slice_LoWd(lo, Expr_LitInt (string_of_int (int_of_string b + 1))) )
+      | _ -> DoChildren
+    method !vexpr e =
+      match e with
+      | Expr_TApply (FIdent("ZeroExtend", 0), [m;Expr_LitInt n], (Expr_TApply(FIdent("Ones", 0), [zw], ones)::xs)) ->
+          let ne = Expr_TApply (FIdent("LSR", 0), [Expr_LitInt n], [Expr_TApply(FIdent("Ones", 0), [Expr_LitInt n], [Expr_LitInt n]); 
+            Expr_TApply (FIdent ("sub_int", 0), [], [Expr_LitInt n; m])]) in
+          if debug then Printf.printf "RemoveTempBVs: Changing '%s' to '%s'\n" (pp_expr e) (pp_expr ne);
+          ChangeDoChildrenPost(ne, fun e -> e)
+      | _ -> DoChildren
+  end
+
+  let do_transform debug (xs: stmt list): stmt list =
+    let visitor = new expr_walker debug in
+    visit_stmts visitor xs
 
 end
