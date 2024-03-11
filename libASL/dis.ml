@@ -103,7 +103,18 @@ let no_inline = [
   "Mem.read",0;
   "Mem.set",0;
   "AtomicStart",0;
-  "AtomicEnd",0]
+  "AtomicEnd",0;
+  "AArch64.MemTag.read",0;
+  "AArch64.MemTag.set",0;
+]
+
+let no_inline_pure = [
+  "LSL",0;
+  "LSR",0;
+  "ASR",0;
+  "SignExtend",0;
+  "ZeroExtend",0;
+]
 
 (** A variable's stack level and original identifier name.
     The "stack level" is how many scopes deep it is.
@@ -879,14 +890,15 @@ and dis_expr' (loc: l) (x: AST.expr): sym rws =
     | Expr_LitString(s) -> DisEnv.pure (Val (from_stringLit s))
     )
 
-and no_inline_pure = List.map (fun (x,y) -> FIdent(x,y))
-  ["LSL",0; "LSR",0; "ASR",0; "SignExtend",0; "ZeroExtend",0]
-and no_inline_impure = List.map (fun (x,y) -> FIdent (x,y))
+and no_inline_pure_ids = List.map (fun (x,y) -> FIdent(x,y))
+  no_inline_pure
+
+and no_inline_ids = List.map (fun (x,y) -> FIdent (x,y))
   no_inline
 
 (** Disassemble call to function *)
 and dis_funcall (loc: l) (f: ident) (tvs: sym list) (vs: sym list): sym rws =
-    if List.mem f no_inline_pure &&
+    if List.mem f no_inline_pure_ids &&
       ((List.exists (function Exp _ -> true | _ -> false) tvs) ||
         (List.exists (function Exp _ -> true | _ -> false) vs)) then
       let expr = Exp (Expr_TApply (f, List.map sym_expr tvs, List.map sym_expr vs)) in
@@ -915,7 +927,7 @@ and dis_call (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws 
 and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws =
     let@ fn = DisEnv.getFun loc f in
     (match fn with
-    | Some (rty, _, targs, _, _, _) when List.mem f no_inline_impure -> 
+    | Some (rty, _, targs, _, _, _) when List.mem f no_inline_ids ->
         (* impure functions are not visited. *)
         (match sym_prim_simplify (name_of_FIdent f) tes es with 
         | Some x -> DisEnv.pure (Some x) 
