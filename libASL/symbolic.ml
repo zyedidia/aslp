@@ -67,6 +67,10 @@ let rec val_expr (v: Value.value): AST.expr =
   | VBits {n; v} -> Expr_LitBits(Z.format ("%0" ^ string_of_int n ^ "b") v)
   | VString s -> Expr_LitString(s)
   | VTuple vs -> Expr_Tuple(List.map val_expr vs)
+  | VMask {n; v; m} ->
+      let v = Z.format ("%0" ^ string_of_int n ^ "b") v in
+      let m = Z.format ("%0" ^ string_of_int n ^ "b") m in
+      Expr_LitMask (String.mapi (fun i c -> if String.get m i = '1' then c else 'x') v)
   | _ -> failwith @@ "Casting unhandled value type to expression: " ^ pp_value v
 
 let rec val_initialised (v: value): bool =
@@ -245,9 +249,18 @@ let sym_eq_int   = prim_binop "eq_int"
 let sym_le_int   = prim_binop "le_int"
 
 let sym_eq_bits  = prim_binop "eq_bits"
-let sym_inmask   = prim_binop "in_mask"
 
 let sym_eq_real  = prim_binop "eq_real"
+
+let sym_inmask loc v mask =
+  match v with
+  | Val x -> Val (VBool (prim_in_mask (to_bits loc x) mask))
+  | Exp e ->
+      let n = mask.n in
+      let ne = Expr_LitInt (string_of_int n) in
+      let m = val_expr (VBits {v = mask.m; n}) in
+      let v = val_expr (VBits {v = mask.v; n}) in
+      Exp (Expr_TApply (FIdent ("eq_bits", 0), [ne], [(Expr_TApply (FIdent ("and_bits", 0), [ne], [e; m]));v]))
 
 let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
   (match (x,y) with

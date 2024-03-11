@@ -689,7 +689,7 @@ and dis_pattern (loc: l) (v: sym) (x: AST.pattern): sym rws =
     | Pat_LitInt(l)  -> DisEnv.pure (sym_eq_int  loc v (Val (from_intLit l)))
     | Pat_LitHex(l)  -> DisEnv.pure (sym_eq_int  loc v (Val (from_hexLit l)))
     | Pat_LitBits(l) -> DisEnv.pure (sym_eq_bits loc v (Val (from_bitsLit l)))
-    | Pat_LitMask(l) -> DisEnv.pure (sym_inmask  loc v (Val (from_maskLit l)))
+    | Pat_LitMask(l) -> DisEnv.pure (sym_inmask  loc v (to_mask loc (from_maskLit l)))
     | Pat_Const(c)   ->
             let+ c' = dis_load loc (Expr_Var c) in
             sym_eq loc v c'
