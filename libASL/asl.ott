@@ -516,11 +516,13 @@ stmts :: 'Stmts_' ::=
 
 indented_block :: 'Block_' ::=
     {{ phantom }} {{ ocaml stmt list }}
-    {{ pp-raw x = (nest 4 (lbracket
-                          ^^ hardline
-                          ^^ (separate hardline (List.map pp_raw_stmt x))))
-                  ^^ hardline
-                  ^^ rbracket
+    {{ pp-raw x = match x with
+                  | [] -> string "[]"
+                  | _ -> (nest 4 (lbracket
+                                  ^^ hardline
+                                  ^^ (separate hardline (List.map pp_raw_stmt x))))
+                         ^^ hardline
+                         ^^ rbracket
     }}
     {{ pp     x = (nest 4 (lbrace
                               ^^ hardline
