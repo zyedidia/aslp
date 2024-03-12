@@ -42,3 +42,4 @@
 ; (documentation ...)
 
 (generate_opam_files true)
+(cram enable)
