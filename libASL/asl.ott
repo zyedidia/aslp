@@ -520,7 +520,7 @@ indented_block :: 'Block_' ::=
                   | [] -> string "[]"
                   | _ -> (nest 4 (lbracket
                                   ^^ hardline
-                                  ^^ (separate hardline (List.map pp_raw_stmt x))))
+                                  ^^ (separate (string ";" ^^ hardline) (List.map pp_raw_stmt x))))
                          ^^ hardline
                          ^^ rbracket
     }}
