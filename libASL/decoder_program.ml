@@ -15,10 +15,18 @@ open Symbolic
 let enc = Ident("enc")
 let enc_type = Type_Bits (expr_of_int 32)
 
+let expr_in_bits e b =
+  let bv = Value.to_bits Unknown (Value.from_bitsLit b) in
+  Expr_TApply (FIdent("eq_bits", 0), [Expr_LitInt (string_of_int bv.n)], [e; Expr_LitBits b])
+
+let expr_in_mask e b =
+  let bv = Value.to_mask Unknown (Value.from_maskLit b) in
+  sym_expr @@ sym_inmask Unknown (Exp e) bv
+
 let enc_expr opcode =
   match opcode with
-  | Opcode_Bits b -> Expr_In (Expr_Var enc, Pat_LitBits b)
-  | Opcode_Mask m -> Expr_In (Expr_Var enc, Pat_LitMask m)
+  | Opcode_Bits b -> expr_in_bits (Expr_Var enc) b
+  | Opcode_Mask m -> expr_in_mask (Expr_Var enc) m
 
 let enc_slice lo wd = 
   Expr_Slices (Expr_Var enc, [Slice_LoWd (expr_of_int lo, expr_of_int wd)])
@@ -39,24 +47,19 @@ let decode_slice_expr s =
 
 let rec decode_pattern_expr p e =
   match p with
-  | DecoderPattern_Bits b     -> Expr_In (e,Pat_LitBits b)
-  | DecoderPattern_Mask b     -> Expr_In (e,Pat_LitMask b)
+  | DecoderPattern_Bits b     -> expr_in_bits e b
+  | DecoderPattern_Mask b     -> expr_in_mask e b
   | DecoderPattern_Wildcard _ -> expr_true
   | DecoderPattern_Not p      -> not_expr (decode_pattern_expr p e)
 
 let get_test_fn nm = FIdent (pprint_ident nm ^ "_decode_test", 0)
 let build_test_fn ((Encoding_Block (nm, _, fields, opcode, guard, unpreds, b, loc)),opost,cond,exec) =
+  (* Assert no unpredictable bits and return true *)
+  let stmts = List.map (unpred_test loc) unpreds @ [Stmt_FunReturn(expr_true, loc)] in
+  (* Run the encoding guard given the extracted fields *)
+  let stmts = List.map (field_extract loc) fields @ [Stmt_If (guard, stmts, [], [Stmt_FunReturn(expr_false, loc)], loc)] in
   (* Sanity test the opcode *)
-  let stmts = [Stmt_If(enc_expr opcode, [], [], [Stmt_FunReturn(expr_false, loc)], loc)] in
-  (* Extract all of the instructions fields *)
-  let stmts = stmts @ List.map (field_extract loc) fields in
-  (* Run the encoding guard *)
-  let stmts = stmts @ [Stmt_If (guard, [], [], [Stmt_FunReturn(expr_false, loc)], loc)] in
-  (* Assert no unpredictable bits *)
-  let stmts = stmts @ List.map (unpred_test loc) unpreds in
-  (* Return true otherwise *)
-  let stmts = stmts @ [Stmt_FunReturn(expr_true, loc)] in
-  (* Build the function decl *)
+  let stmts = [Stmt_If(enc_expr opcode, stmts, [], [Stmt_FunReturn(expr_false, loc)], loc)] in
   let fid = get_test_fn nm in
   (fid, (Some type_bool, [enc_type, enc], [], [enc], loc, stmts))
 
