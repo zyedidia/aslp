@@ -3,6 +3,11 @@ open Asl_utils
 open Asl_visitor
 open Visitor
 
+(* TODO: 
+  - Decoder is way too big, reduce its where possible
+  - Better simp using equiv conditions in dis
+*)
+
 (* Set of functions we do not want to analyse / inline due to their complexity *)
 (* TODO: It would be better to remove these using the override file, rather than hardcoding this set *)
 let unsupported_set = IdentSet.of_list [
@@ -267,10 +272,92 @@ let rec stmt_count s =
 and stmts_count s =
   List.fold_right (fun s acc -> stmt_count s + acc) s 0
 
+module Cleanup = struct
+
+  let rec zip_pre a b =
+    match a, b with
+    | x::xs, y::ys when x = y ->
+        let (common,xs,ys) = zip_pre xs ys in
+        (x::common,xs,ys)
+    | _ -> ([],a,b)
+
+  let zip_post a b =
+    let (common,a,b) = zip_pre (List.rev a) (List.rev b) in
+    (List.rev common, List.rev a, List.rev b)
+
+  let rec walk_stmt s =
+    match s with
+    | Stmt_If(c, t, els, f, loc) when t = f && List.for_all (function S_Elsif_Cond(_,b) -> b = t) els ->
+        t
+
+    | Stmt_If(c, t, [], f, loc) ->
+      let (common_pre,t,f) = zip_pre t f in
+      let (common_post,t,f) = zip_post t f in
+      let common_pre = walk_stmts common_pre in
+      let common_post = walk_stmts common_post in
+      let t = walk_stmts t in
+      let f = walk_stmts f in
+      (* TODO: c & common_pre *)
+      common_pre @ Stmt_If(c, t, [], f, loc) :: common_post
+
+    | Stmt_If(c, t, els, f, loc) ->
+        let t = walk_stmts t in
+        let els = List.map (function S_Elsif_Cond(c,b) -> S_Elsif_Cond(c,walk_stmts b)) els in
+        let f = walk_stmts f in 
+        [Stmt_If(c, t, els, f, loc)]
+
+    | _ -> [s]
+
+  and walk_stmts s =
+    List.fold_left (fun acc s -> 
+      let s = walk_stmt s in
+      acc@s) [] s
+
+  let run = walk_stmts
+
+end
+
+module DecoderCleanup = struct
+
+  (* Remove unsupported decode tests *)
+  class expr_visitor unsupported = object
+    inherit nopAslVisitor
+    method! vexpr e =
+      (match e with
+      | Expr_TApply (f, _, _) ->
+          let suffix = "_decode_test" in
+          if String.ends_with ~suffix (name_of_FIdent f) && unsupported f then ChangeTo (Symbolic.expr_true)
+          else DoChildren
+      | _ -> DoChildren)
+  end 
+
+  (* Remove unsupported instr bodies *)
+  class call_visitor unsupported  = object
+    inherit nopAslVisitor
+    method! vstmt e =
+      (match e with
+      | Stmt_TCall (f, _, _, loc) ->
+          if unsupported f then ChangeTo (RemoveUnsupported.assert_false loc)
+          else DoChildren
+      | _ -> DoChildren)
+  end
+
+  let run unsupported dsig =
+    let v = new expr_visitor unsupported in
+    let dsig = (visit_stmts v) dsig in
+    let v = new call_visitor unsupported in
+    let dsig = (visit_stmts v) dsig in
+    dsig
+end
+
+let unsupported_inst tests instrs f = 
+  let r = not (List.exists (fun (f',_) -> f' = f) (tests@instrs))  in
+  r
+
 (* Produce a lifter for the desired parts of the instruction set *)
 let run iset pat env =
   Printf.printf "Stage 1: Mock decoder & instruction encoding definitions\n";
-  let (decoder,tests,instrs) = Decoder_program.run iset pat env problematic_enc in
+  let ((did,dsig),tests,instrs) = Decoder_program.run iset pat env problematic_enc in
   let entry_set = List.fold_right (fun (k,s) -> IdentSet.add k) instrs IdentSet.empty in
   Printf.printf "  Collected %d instructions\n\n" (IdentSet.cardinal entry_set);
 
@@ -285,6 +372,12 @@ let run iset pat env =
   let fns = Bindings.map (fnsig_upd_body (Transforms.RemoveTempBVs.do_transform false)) fns in
   (* Remove calls to problematic functions *)
   let fns = Bindings.map (fnsig_upd_body (RemoveUnsupported.run unsupported)) fns in
+  (* Prune unsupported instructions from decoder *)
+  let dsig = fnsig_upd_body (DecoderCleanup.run (unsupported_inst tests instrs)) dsig in
+  (* Dead code elim on decoder & tests *)
+  let dsig = fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) dsig in
+  let dsig = fnsig_upd_body (Cleanup.run) dsig in
+  let tests = List.map (fun (f,s) -> (f,fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) s)) tests in
 
   Printf.printf "Stage 4: Specialisation\n";
   (* Run requirement collection over the full set *)
@@ -303,7 +396,9 @@ let run iset pat env =
     | None -> acc) entry_set Bindings.empty in
   Printf.printf "  Succeeded for %d instructions\n\n" (Bindings.cardinal fns);
 
+  let fns = Bindings.map (fnsig_upd_body (Cleanup.run)) fns in
+
   Printf.printf "Stmt Counts\n"; 
   Bindings.iter (fun fn fnsig -> Printf.printf "  %d : %s\n" (stmts_count (fnsig_get_body fnsig)) (name_of_FIdent fn)) fns;
 
-  (decoder,tests,fns)
+  ((did,dsig),tests,fns)

@@ -1,31 +1,6 @@
 open Asl_utils
 open Asl_ast
 open Utils
-open Asl_visitor
-
-module LocalVarTypes = struct
-  class var_visitor = object
-    inherit Asl_visitor.nopAslVisitor
-    val mutable types = Bindings.empty
-    method! vstmt s =
-      (match s with
-      | Stmt_VarDeclsNoInit(ty, [v], _)
-      | Stmt_VarDecl(ty, v, _, _)
-      | Stmt_ConstDecl(ty, v, _, _) -> types <- Bindings.add v ty types
-      | _ -> ());
-      DoChildren
-    method get_types = types
-  end
-
-  let run args targs body =
-    let v = new var_visitor in
-    let _ = visit_stmts v body in
-    let types = v#get_types in
-    let types = List.fold_right (fun (t,i) -> Bindings.add i t) args types in
-    List.fold_right (fun i -> Bindings.add i Value.type_integer) targs types
-
-end
-
 
 type taint = LiftTime | RunTime
 
@@ -194,9 +169,19 @@ let join_state (a: state) (b: state): state =
     log = a.log;
   }
 
+let extra_prims = [
+  "ZeroExtend";
+  "lsr_bits";
+  "sle_bits";
+  "lsl_bits";
+  "asr_bits";
+  "slt_bits";
+  "SignExtend";
+]
+
 let is_prim f = 
   match f with
-  | FIdent(f,0) -> List.mem f Value.prims_pure
+  | FIdent(f,0) -> List.mem f Value.prims_pure || List.mem f extra_prims
   | _ -> false
 
 let prim_ops (f: ident) (targs: taint list) (args: taint list): taint option =
@@ -206,14 +191,15 @@ let prim_ops (f: ident) (targs: taint list) (args: taint list): taint option =
 (* Transfer function for a call, pulling a primop def or looking up registered fn signature.
    If no signature is available, register it for later analysis and assume its result is bot/LiftTime. *)
 let call_tf (f: ident) (targs: taint list) (args: taint list) (st: state): (state * taint) =
-  let s = (f, targs, args) in
   match prim_ops f targs args with
   | Some t -> (st,t)
   | None ->
-      let st = upd_calls (SigSet.add s) st in
+      Printf.printf "Missing %s\n" (name_of_FIdent f);
+      (st, LiftTime)
+      (*let st = upd_calls (SigSet.add s) st in
       match SigMap.find_opt s st.results with
       | Some (_,v) -> (st, v)
-      | None -> (st, LiftTime)
+      | None -> (st, LiftTime) *)
 
 (* Determine the taint of an expr *)
 let rec expr_tf (e: expr): taint stm =
@@ -654,6 +640,8 @@ let rec traverse2_ (f: 'a -> 'b -> unit wrm) (l: 'a list) (l2: 'b list): unit wr
   | _, _ -> invalid_arg "traverse2_"
 let get_env = fun s ->
   Either.Left (s,[],s.env)
+let get_types = fun s ->
+  Either.Left (s,[],s.var_type)
 
 let is_rt_var v = wstate (is_runtime_var v)
 let is_rt_expr v = wstate (is_runtime_expr v)
@@ -663,26 +651,22 @@ let is_rt_slice v = wstate (is_runtime_slice v)
 let rt_var_ty = Type_Constructor (Ident "rt_sym")
 let rt_label_ty = Type_Constructor (Ident "rt_label")
 
-let rt_decl_bv = FIdent("decl_bv", 0) (* int -> sym *)
-let rt_decl_int = FIdent("decl_int", 0) (* sym *)
-let rt_decl_real = FIdent("decl_real", 0) (* sym *)
-let rt_gen_int_lit = FIdent("gen_int_lit", 0) (* 'a lt -> 'a rt *)
-let rt_gen_bool_lit = FIdent("gen_bool_lit", 0) (* 'a lt -> 'a rt *)
-let rt_gen_bit_lit = FIdent("gen_bit_lit", 0) (* 'a lt -> 'a rt *)
-let rt_gen_branch = FIdent("gen_branch", 0) (* bool rt -> (true label, false label, merge label) *)
+let rt_decl_bv        = FIdent("decl_bv", 0) (* int -> sym *)
+let rt_gen_bit_lit    = FIdent("gen_bit_lit", 0) (* 'a lt -> 'a rt *)
+let rt_gen_branch     = FIdent("gen_branch", 0) (* bool rt -> (true label, false label, merge label) *)
 let rt_switch_context = FIdent("switch_context", 0) (* label -> () *)
-let rt_gen_load = FIdent("gen_load", 0) (* sym -> 'a rt -> () *)
-let rt_gen_store = FIdent("gen_store", 0) (* sym -> 'a rt -> () *)
-let rt_gen_assert = FIdent("gen_assert", 0) (* bool rt -> () *)
+let rt_gen_load       = FIdent("gen_load", 0) (* sym -> 'a rt -> () *)
+let rt_gen_store      = FIdent("gen_store", 0) (* sym -> 'a rt -> () *)
+let rt_gen_assert     = FIdent("gen_assert", 0) (* bool rt -> () *)
 
-let rt_gen_slice = FIdent("gen_slice", 0) (* bv rt -> lo: int lt -> wd: int lt -> bv rt *)
+let rt_gen_slice        = FIdent("gen_slice", 0) (* bv rt -> lo: int lt -> wd: int lt -> bv rt *)
 let rt_gen_slice_update = FIdent("gen_slice_update", 0) (* bv rt -> lo lt -> wd lt -> bv rt -> bv rt *)
-let rt_gen_concat = FIdent("gen_concat", 0) (* bv rt list -> bv rt *)
-let rt_gen_eq = FIdent("gen_eq", 0) (* 'a rt -> 'b rt -> bool *)
+let rt_gen_concat       = FIdent("gen_concat", 0) (* bv rt list -> bv rt *)
+let rt_gen_eq           = FIdent("gen_eq", 0) (* 'a rt -> 'b rt -> bool *)
 
 
-let rt_gen_array_assign = FIdent("gen_array_assign", 0)
-
+let rt_gen_array_store  = FIdent("gen_array_store", 0)
+let rt_gen_array_load   = FIdent("gen_array_load", 0)
 
 let arg_of_ident v = Expr_LitString(pprint_ident v)
 
@@ -699,12 +683,6 @@ let gen_var_decl loc ty v =
       let@ c = is_rt_expr w in
       if c then fail @@ "gen_var_decl: Runtime variable width " ^ (pp_expr w)
       else pure (Expr_TApply (rt_decl_bv, [], [arg_of_ident v; w]))
-  | Type_Constructor(Ident("integer")) -> 
-      (* TODO: Runtime ints are also problematic *)
-      pure (Expr_TApply (rt_decl_int, [], [arg_of_ident v]))
-  | Type_Constructor(Ident("real")) -> 
-      (* TODO: Runtime ints are also problematic *)
-      pure (Expr_TApply (rt_decl_real, [], [arg_of_ident v]))
   | Type_Constructor(Ident("boolean")) -> 
       pure (Expr_TApply (rt_decl_bv, [], [arg_of_ident v; Expr_LitInt "1"]))
   | Type_Constructor(id) ->
@@ -741,11 +719,19 @@ let gen_branch loc c =
 let switch_context loc t =
   write [Stmt_TCall(rt_switch_context, [], [Expr_Var t], loc)]
 
-(* Generate a variable store *)
-let gen_var_assign loc v e =
+(* Generate a variable store/load *)
+let gen_var_store loc v e =
   write [Stmt_TCall(rt_gen_store, [], [Expr_Var v; e], loc)]
 let gen_var_load v =
   pure (Expr_TApply(rt_gen_load, [], [Expr_Var v]))
+
+(* Generate an array store/load *)
+let gen_array_assign loc a i e =
+  write [Stmt_TCall(rt_gen_array_store, [], [Expr_Var a;i;e], loc)]
+let gen_array_load a i =
+  pure (Expr_TApply(rt_gen_array_load, [], [Expr_Var a;i]))
+
+
 
 (* Generate a slice e[lo:wd] *)
 let gen_slice_expr e lo wd =
@@ -755,102 +741,17 @@ let gen_slice_expr e lo wd =
 let gen_slice_update loc v lo wd e =
   pure (Expr_TApply (rt_gen_slice_update, [], [v; lo; wd; e]))
 
-let get_ret_type f targs =
-  let@ e = get_env in
-  match Eval.Env.getFun Unknown e f with
-  | (Some ty,_,targs_s,_,_,_) -> 
-      let subst = List.fold_right2 Bindings.add targs_s targs Bindings.empty in
-      pure (subst_type subst ty)
-  | _ -> fail "Unit return type"
-
 let get_var_type v = fun st ->
   Either.Left (st,[], Bindings.find_opt v st.var_type)
 
-let prim_type fi targs =
-  match name_of_FIdent fi, targs with
-    | ("eq_enum",           [      ])     -> Some (Symbolic.type_bool )
-    | ("ne_enum",           [      ])     -> Some (Symbolic.type_bool )
-    | ("eq_bool",           [      ])     -> Some (Symbolic.type_bool )
-    | ("ne_bool",           [      ])     -> Some (Symbolic.type_bool )
-    | ("equiv_bool",        [      ])     -> Some (Symbolic.type_bool )
-    | ("not_bool",          [      ])     -> Some (Symbolic.type_bool )
-    | ("eq_int",            [      ])     -> Some (Symbolic.type_bool )
-    | ("ne_int",            [      ])     -> Some (Symbolic.type_bool )
-    | ("le_int",            [      ])     -> Some (Symbolic.type_bool )
-    | ("lt_int",            [      ])     -> Some (Symbolic.type_bool )
-    | ("ge_int",            [      ])     -> Some (Symbolic.type_bool )
-    | ("gt_int",            [      ])     -> Some (Symbolic.type_bool )
-    | ("is_pow2_int",       [      ])     -> Some (Symbolic.type_bool )
-    | ("neg_int",           [      ])     -> Some (Value.type_integer )
-    | ("add_int",           [      ])     -> Some (Value.type_integer )
-    | ("sub_int",           [      ])     -> Some (Value.type_integer )
-    | ("shl_int",           [      ])     -> Some (Value.type_integer )
-    | ("shr_int",           [      ])     -> Some (Value.type_integer )
-    | ("mul_int",           [      ])     -> Some (Value.type_integer )
-    | ("zdiv_int",          [      ])     -> Some (Value.type_integer )
-    | ("zrem_int",          [      ])     -> Some (Value.type_integer )
-    | ("fdiv_int",          [      ])     -> Some (Value.type_integer )
-    | ("frem_int",          [      ])     -> Some (Value.type_integer )
-    | ("mod_pow2_int",      [      ])     -> Some (Value.type_integer )
-    | ("align_int",         [      ])     -> Some (Value.type_integer )
-    | ("pow2_int",          [      ])     -> Some (Value.type_integer )
-    | ("pow_int_int",       [      ])     -> Some (Value.type_integer )
-    | ("round_tozero_real", [      ])     -> Some (Value.type_integer)
-    | ("round_down_real",   [      ])     -> Some (Value.type_integer )
-    | ("round_up_real",     [      ])     -> Some (Value.type_integer )
-    | ("cvt_bits_sint",     [     n])     -> Some (Value.type_integer )
-    | ("cvt_bits_uint",     [     n])     -> Some (Value.type_integer )
-    | ("eq_real",           [      ])     -> Some (Symbolic.type_bool )
-    | ("ne_real",           [      ])     -> Some (Symbolic.type_bool )
-    | ("le_real",           [      ])     -> Some (Symbolic.type_bool )
-    | ("lt_real",           [      ])     -> Some (Symbolic.type_bool )
-    | ("ge_real",           [      ])     -> Some (Symbolic.type_bool )
-    | ("gt_real",           [      ])     -> Some (Symbolic.type_bool )
-    | ("in_mask",           [     n])     -> Some (Symbolic.type_bool )
-    | ("notin_mask",        [     n])     -> Some (Symbolic.type_bool )
-    | ("eq_bits",           [     n])     -> Some (Symbolic.type_bool )
-    | ("ne_bits",           [     n])     -> Some (Symbolic.type_bool )
-    | ("add_bits",          [     n])     -> Some (Type_Bits n)
-    | ("sub_bits",          [     n])     -> Some (Type_Bits n)
-    | ("mul_bits",          [     n])     -> Some (Type_Bits n)
-    | ("and_bits",          [     n])     -> Some (Type_Bits n)
-    | ("or_bits",           [     n])     -> Some (Type_Bits n)
-    | ("eor_bits",          [     n])     -> Some (Type_Bits n)
-    | ("not_bits",          [     n])     -> Some (Type_Bits n)
-    | ("zeros_bits",        [     n])     -> Some (Type_Bits n)
-    | ("ones_bits",         [     n])     -> Some (Type_Bits n)
-    | ("replicate_bits",    [n; m  ])     -> Some (Type_Bits (Expr_TApply (FIdent ("mul_int", 0), [], [n;m])))
-    | ("append_bits",       [n; m  ])     -> Some (Type_Bits (Expr_TApply (FIdent ("add_int", 0), [], [n;m])))
-    | ("cvt_int_bits",      [     n])     -> Some (Type_Bits n)
-    | _ -> None
-
-let infer_type (e: expr) =
-  match e with
-  | Expr_Var (Ident "TRUE")
-  | Expr_Var (Ident "FALSE") -> pure (Some(Type_Constructor(Ident ("boolean"))))
-  | Expr_Var v -> get_var_type v
-  | Expr_LitInt _ -> pure (Some(Value.type_integer))
-  | Expr_LitBits bv -> pure (Some(Type_Bits(Expr_LitInt (string_of_int (String.length bv)))))
-  | Expr_Slices(x, [Slice_LoWd(l,w)]) -> pure (Some(Type_Bits(w)))
-  | Expr_If(ty, c, t, els, e) -> pure (Some(ty))
-  | Expr_Unknown(ty) -> pure (Some(ty))
-
-  | Expr_TApply(FIdent("extract_int", 0), _, [_;_;w]) -> pure (Some(Type_Bits(w)))
-  | Expr_TApply(FIdent("cvt_bool_bv", 0), _, _) -> pure (Some(Type_Bits(Expr_LitInt "1")))
-
-  | Expr_TApply(f, targs, args) when is_prim f -> pure (prim_type f targs)
-
-  | Expr_TApply(f, targs, args) -> let+ ty = get_ret_type f targs in Some ty
-
-  | _ -> pure None
-
 (* Generate a literal *)
 let gen_lit e =
-  let@ t = infer_type e in
+  let@ env = get_env in
+  let@ vars = get_types in
+  let t = Dis_tc.infer_type e vars env in
   match t with
-  | Some t when t = Value.type_integer -> pure (Expr_TApply (rt_gen_int_lit, [], [e]))
   | Some (Type_Bits(w)) -> pure (Expr_TApply (rt_gen_bit_lit, [w], [e]))
-  | Some (Type_Constructor(Ident("boolean"))) -> pure (Expr_TApply (rt_gen_bool_lit, [], [e]))
+  | Some (Type_Constructor(Ident("boolean"))) -> pure (Expr_TApply (rt_gen_bit_lit, [Expr_LitInt "1"], [e]))
   | Some t -> fail @@ "gen_lit: " ^ (pp_expr e) ^ " " ^ (pp_type t)
   | _ -> fail @@ "gen_lit: " ^ (pp_expr e)
 
@@ -874,22 +775,37 @@ let emit_field_store loc e f v =
       let name = Ident (var ^ "." ^ f) in
       write [Stmt_TCall(rt_gen_store, [], [arg_of_ident name;v], loc)]
   | _ -> fail "emit_field_store"
-let emit_array_load e i =
-  match e with
-  | Expr_Var (Ident var) -> pure ( Expr_Array(e, i) )
-  | _ -> fail "emit_array_load"
 let emit_assert loc e =
   write [Stmt_TCall(rt_gen_assert, [], [e], loc)]
+
 let emit_prim f tes es =
   let f = FIdent( "gen_" ^name_of_FIdent f, 0) in
   pure (Expr_TApply(f,tes,es))
-let emit_array_assign loc a i =
-  write [Stmt_TCall(rt_gen_array_assign, [], [arg_of_ident a;i], loc)]
+
+
+let rec rt_prim loc f tes es =
+  match (f, tes, es) with
+  | (FIdent ("replicate_bits", 0), [m; n], [x; y]) ->
+      let@ m = lt_expr loc m in
+      let@ n = lt_expr loc n in
+      let@ x = rt_expr loc x in
+      let@ y = lt_expr loc y in
+      emit_prim f [m;n] [x;y]
+  | (FIdent ("ZeroExtend", 0), [m; n], [x; y]) ->
+      let@ m = lt_expr loc m in
+      let@ n = lt_expr loc n in
+      let@ x = rt_expr loc x in
+      let@ y = lt_expr loc y in
+      emit_prim f [m;n] [x;y]
+  | _ ->
+      let@ tes = traverse (lt_expr loc) tes in
+      let@ es = traverse (rt_expr loc) es in
+      emit_prim f tes es
 
 (* Generate a trivial ITE *)
 (* TODO: Avoid creation of temp if possible? *)
 (* TODO: Injected assertions should be infliuenced by runtime reachability *)
-let rec emit_ite loc ty (c: expr) (tcase: expr wrm) (fcase: expr wrm) =
+and emit_ite loc ty (c: expr) (tcase: expr wrm) (fcase: expr wrm) =
   let@ b = is_rt_expr c in
   let@ temp = gen_fresh_var loc ty in
   if b then
@@ -904,8 +820,8 @@ let rec emit_ite loc ty (c: expr) (tcase: expr wrm) (fcase: expr wrm) =
     let+ _ = switch_context loc lm in
     Expr_Var temp
   else 
-    let@ (tstmts,tcase) = wrap (let@ e = tcase in gen_var_assign loc temp e) in
-    let@ (fstmts,fcase) = wrap (let@ e = fcase in gen_var_assign loc temp e) in
+    let@ (tstmts,tcase) = wrap (let@ e = tcase in gen_var_store loc temp e) in
+    let@ (fstmts,fcase) = wrap (let@ e = fcase in gen_var_store loc temp e) in
     let+ _ = write [Stmt_If(c, tstmts, [], fstmts, loc)] in
     Expr_Var temp
 
@@ -947,52 +863,62 @@ and gen_expr loc e : (taint * expr) wrm =
             | E_Elsif_Cond (c,b)::xs -> emit_ite loc ty c (* then *) (rt_expr loc b) (* else *) (iter xs))
           in
           iter (E_Elsif_Cond(c, t) :: els)
-      | Expr_Field(e, f) ->
-          emit_field_load e f
       | Expr_Slices(e, [s]) ->
           let@ e = rt_expr loc e in
           gen_slice loc e s
       | Expr_Var(v) -> gen_var_load (v)
-      | Expr_TApply(f,tes,es) ->
-          if is_prim f then
-            let@ tes = traverse (rt_expr loc) tes in
-            let@ es = traverse (rt_expr loc) es in
-            emit_prim f tes es
-          else
-            let@ tes = traverse (gen_expr loc) tes in
-            let+ es = traverse (gen_expr loc) es in
-            let s = (f, List.map fst tes, List.map fst es) in
-            let i = ident_of_sig s in
-            Expr_TApply(i, List.map snd tes, List.map snd es)
+      | Expr_TApply(f,tes,es) -> rt_prim loc f tes es
+
+
+      | Expr_Field(e, f) ->
+          emit_field_load e f
       | Expr_Tuple(es) ->
           let+ r = traverse (rt_expr loc) es in
           Expr_Tuple r
-      | Expr_Array(a, i) ->
+
+      (* Support trivial array loads *)
+      | Expr_Array(Expr_Var a, i) ->
           let@ (t,e) = gen_expr loc i in
           let@ _ = test (t <> LiftTime) @@ "gen_expr: runtime array access: " ^ (pp_expr e) in
-          emit_array_load a e
+          gen_array_load a e
+
       | _ -> fail @@ "gen_expr: unsupported expr " ^ (pp_expr e)
     in (RunTime, r)
 
+and lt_expr loc e =
+  Printf.printf "lt_expr: %s\n" (pp_expr e);
+  let@ (t,e) = gen_expr loc e in
+  if t = LiftTime then pure e
+  else fail @@ "Unexpected runtime expression: " ^ (pp_expr e)
+
 (* Generate an expression, forcing it to be runtime via a cast *)
 and rt_expr loc e =
+  Printf.printf "rt_expr: %s\n" (pp_expr e);
   let@ (t,e) = gen_expr loc e in
   if t = LiftTime then gen_lit e
   else pure e
 
 and gen_stmt s : unit wrm =
+  Printf.printf "gen_stmt: %s\n" (pp_stmt s);
   let@ c = is_rt_stmt s in
   if not c then write [s]
   else match s with
-    (* Must be a runtime variable *)
+    (* Runtime decls create symbols for later assignmet *)
     | Stmt_VarDeclsNoInit(ty, [v], loc) ->
-        write [Stmt_VarDeclsNoInit(rt_var_ty, [v], loc)]
+        gen_var_decl loc ty v
+
+    (* Var decls create symbols and introduce an initial assingment *)
     | Stmt_VarDecl(ty, v, e, loc) ->
+        let@ _ = gen_var_decl loc ty v in
         let@ e = rt_expr loc e in
-        write [Stmt_VarDecl(rt_var_ty, v, e, loc)]
+        gen_var_store loc v e
+
+    (* Do the same for const TODO: Extend gen API to be explicit about const/var *)
     | Stmt_ConstDecl(ty, v, e, loc) ->
+        let@ _ = gen_var_decl loc ty v in
         let@ e = rt_expr loc e in
-        write [Stmt_ConstDecl(rt_var_ty, v, e, loc)]
+        gen_var_store loc v e
+
     | Stmt_Assign(l, r, loc) ->
         let@ r = rt_expr loc r in
         rt_lexpr loc l r
@@ -1034,14 +960,11 @@ and gen_stmts s: unit wrm =
 and rt_lexpr loc l e =
   match l with
   | LExpr_Wildcard -> pure ()
-  | LExpr_Var(v) -> gen_var_assign loc v e
-  | LExpr_Tuple(es) -> (* TODO: This isn't quite right *)
-      write [Stmt_Assign(l,e,loc)]
-
-  | LExpr_Array(LExpr_Var(v),e) ->
-      let@ (t,e) = gen_expr loc e in
-      let@ _ = test (t = RunTime) @@ "rt_lexpr: Runtime array: " ^ (pp_lexpr l) in
-      emit_array_assign loc v e
+  | LExpr_Var(v) -> 
+      gen_var_store loc v e
+  | LExpr_Array(LExpr_Var(v),i) ->
+      let@ i = lt_expr loc i in
+      gen_array_assign loc v i e
 
   | LExpr_Field(LExpr_Var(l), f) ->
       emit_field_store loc (Expr_Var l) f e
@@ -1051,18 +974,20 @@ and rt_lexpr loc l e =
       let@ c = is_rt_expr wd in
       let@ _ = test (b || c) @@ "rt_lexpr: Runtime slice write: " ^ (pp_lexpr l) in
       let@ e = gen_slice_update loc (Expr_Var v) lo wd e in
-      gen_var_assign loc v e
+      gen_var_store loc v e
 
   | LExpr_Slices(LExpr_Array (LExpr_Var v,i), [Slice_LoWd (lo, wd)]) ->
       let@ b = is_rt_expr lo in
       let@ c = is_rt_expr wd in
       let@ _ = test (b || c) @@ "rt_lexpr: Runtime slice write: " ^ (pp_lexpr l) in
 
-      let@ (t,i) = gen_expr loc i in
-      let@ _ = test (t = RunTime) @@ "rt_lexpr: Runtime array: " ^ (pp_lexpr l) in
-      let@ va = emit_array_load (Expr_Var v) i in
+      let@ i = lt_expr loc i in
+      let@ va = gen_array_load v i in
       let@ e = gen_slice_update loc va lo wd e in
-      emit_array_assign loc v e 
+      gen_array_assign loc v i e
+
+  | LExpr_Tuple(es) -> (* TODO: This isn't quite right *)
+      write [Stmt_Assign(l,e,loc)]
 
   | _ -> fail @@ "rt_lexpr: Unsupported lexpr " ^ (pp_lexpr l)
 
@@ -1080,7 +1005,7 @@ let gen_prog fns results env =
     match Bindings.find_opt fn fns with
     | None -> (None)
     | Some (a,b,c,d,e,body) ->
-        let types = LocalVarTypes.run b c body in
+        let types = Dis_tc.LocalVarTypes.run b c body in
         let st = init_gen_state prev globals results env ret types in
         match gen_stmts body st with
         | Either.Left (_,w,_) -> Some (a,b,c,d,e,w)

@@ -17,6 +17,8 @@ let dec_depth st =
 let write_preamble env st =
   Printf.fprintf st.oc "open Gen_prelude\n\n"
 
+
+
 let replace s =
   String.fold_left (fun acc c ->
     if c = '.' then acc ^ "_"
@@ -67,6 +69,15 @@ let rec prints_expr e st =
       let w = prints_expr w st in
       let r = prints_expr (Expr_Slices(e,xs)) st in
       Printf.sprintf "prim_append (extract_bits (%s) (%s) (%s)) (%s)" e' i w r
+  | Expr_TApply(FIdent("and_bool", 0), [], [a;b]) ->
+      let a = prints_expr a st in
+      let b = prints_expr b st in
+      "(" ^ a ^ ") && (" ^ b ^ ")"
+  | Expr_TApply(FIdent("or_bool", 0), [], [a;b]) ->
+      let a = prints_expr a st in
+      let b = prints_expr b st in
+      "(" ^ a ^ ") && (" ^ b ^ ")"
+
   | Expr_TApply(f, targs, args) ->
       let f = name_of_ident f in
       let args = List.map (fun e -> prints_expr e st) (targs @ args) in
@@ -201,6 +212,11 @@ let write_if_start c st =
   let s = Printf.sprintf "if %s then begin\n" c in
   write_line s st
 
+let write_if_elsif c st =
+  write_nl st;
+  let s = Printf.sprintf "end else if %s then begin\n" c in
+  write_line s st
+
 let write_if_else st =
   write_nl st;
   write_line "end else begin\n" st
@@ -269,7 +285,6 @@ let rec write_stmt s st =
       write_if_start c st;
       inc_depth st;
       write_stmts t st;
-      (* if we get here with seq skip, means we just introduce a let for no reason *)
       if st.skip_seq then (write_return st; st.skip_seq <- false);
       dec_depth st;
       write_if_end st
@@ -280,23 +295,39 @@ let rec write_stmt s st =
       write_if_start c st;
       inc_depth st;
       write_stmts t st;
-      (* if we get here with seq skip, means we just introduce a let for no reason *)
       if st.skip_seq then (write_return st; st.skip_seq <- false);
       dec_depth st;
       write_if_end st
 
-  | Stmt_If(c, t, [], f, loc) ->
+  | Stmt_If(c, t, els, f, loc) ->
+      let rec iter = function
+      | S_Elsif_Cond(c,b)::xs ->
+          let c = prints_expr c st in
+          write_if_elsif c st;
+          inc_depth st;
+          write_stmts b st;
+          if st.skip_seq then (write_return st; st.skip_seq <- false);
+          dec_depth st;
+          iter xs
+      | [] -> () in
+
+      (* True branch *)
+      assert (List.length t <> 0);
       let c = prints_expr c st in
       write_if_start c st;
       inc_depth st;
       write_stmts t st;
-      (* if we get here with seq skip, means we just introduce a let for no reason *)
       if st.skip_seq then (write_return st; st.skip_seq <- false);
       dec_depth st;
+
+      (* Else cases *)
+      iter els;
+
+      (* Default branch *)
+      assert (List.length f <> 0);
       write_if_else st;
       inc_depth st;
       write_stmts f st;
-      (* if we get here with seq skip, means we just introduce a let for no reason *)
       if st.skip_seq then (write_return st; st.skip_seq <- false);
       dec_depth st;
       write_if_end st
@@ -305,7 +336,13 @@ let rec write_stmt s st =
       let e = prints_expr e st in
       write_assert e st
 
-  | Stmt_Throw _ ->
+  | Stmt_Throw _ 
+  | Stmt_Unpred _ 
+  | Stmt_Dep_Unpred _
+  | Stmt_Dep_ImpDef _
+  | Stmt_Dep_Undefined _
+  | Stmt_Undefined _
+  | Stmt_ConstrainedUnpred _ ->
       let s = Printf.sprintf "failwith \"unsupported\"" in
       write_line s st
  
@@ -346,10 +383,17 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
     clear_ref_vars st;
     Printf.fprintf st.oc "\n\n"
 
-let run fns env (filename: string) =
+let write_epilogue fid env st =
+  Printf.fprintf st.oc "let run enc =\n  clear_res ();\n  %s enc;\n  get_res ()\n" (name_of_ident fid)
+
+let run fid fns env (filename: string) =
   let oc = open_out filename in
   let st = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty } in
   write_preamble env st;
+  let dsig = Bindings.find fid fns in
+  let fns = Bindings.remove fid fns in
   Bindings.iter (fun k b -> write_fn k b st) fns;
+  write_fn fid dsig st;
+  write_epilogue fid env st;
   close_out oc;
 

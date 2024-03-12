@@ -61,13 +61,15 @@ let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
         let (decoder,tests,fns) = Symbolic_lifter.run iset pat env in
 
         (* Perform offline PE *)
-        (*let fns = List.fold_right (fun (f,s) -> Bindings.add f s) tests instrs in
-        let fns = Bindings.add (fst decoder) (snd decoder) fns in*)
         let offline_fns = Offline_transform.run fns env in
+
+        (* Add trivial offline functions *)
+        let offline_fns = List.fold_right (fun (f,s) -> Bindings.add f s) tests offline_fns in
+        let offline_fns = Bindings.add (fst decoder) (snd decoder) offline_fns in
 
         (* Dump the resulting program as OCaml *)
         if not (Sys.file_exists "output") then Sys.mkdir "output" 755;
-        Ocaml_backend.run offline_fns env "output/offline.ml"
+        Ocaml_backend.run (fst decoder) offline_fns env "output/offline.ml"
 
     in
     {
