@@ -647,7 +647,7 @@ alt :: 'Alt_' ::=
 
 opt_otherwise :: 'OptOtherwise_' ::=
     {{ phantom }} {{ ocaml (stmt list) option }}
-    {{ pp-raw x = match x with Some(ys) -> string "Some(" ^^ separate (string "\n") (List.map pp_raw_stmt ys) ^^ string ")" | None -> string "None" }}
+    {{ pp-raw x = match x with Some(ys) -> string "Some(" ^^ pp_raw_indented_block ys ^^ string ")" | None -> string "None" }}
     {{ pp     x = match x with Some(ys) -> string "otherwise" ^^ hardline
                                            ^^ (nest 4 (separate (string "\n") (List.map pp_stmt ys)))
                              | None -> string "" }}
@@ -812,10 +812,10 @@ sfactor :: 'Factor_' ::= {{ quotient-with factor }}
     | binop bexpr :: :: BinOp2 {{ quotient-remove }} {{ ocaml Factor_BinOp([[binop]], [[bexpr]]) }}
 
 literal_expression :: 'Expr_' ::= {{ quotient-with expr }}
-    | intLit                                     :: :: LitInt    {{ com literal decimal integer }}
+    | intLit                                     :: :: LitInt    {{ com literal decimal integer }} {{ pp-raw x -> string Z.(to_string @@ of_string x) }}
     | hexLit                                     :: :: LitHex    {{ com literal hexadecimal integer }}
     | realLit                                    :: :: LitReal   {{ com literal real }}
-    | bitsLit                                    :: :: LitBits   {{ com literal bitvector }}
+    | bitsLit                                    :: :: LitBits   {{ com literal bitvector }} {{ pp-raw x -> string ("'" ^ x ^ "'") }}
     | maskLit                                    :: :: LitMask   {{ com literal bitmask }}
     | stringLit                                  :: :: LitString {{ com literal string }}
 
