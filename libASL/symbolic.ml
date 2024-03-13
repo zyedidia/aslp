@@ -334,7 +334,7 @@ let rec find_elim_term loc (e: expr) (f: expr -> sym option) =
                   | _ -> None))
       | _ -> None)
 
-let sym_sub_int loc (x: sym) (y: sym) =
+let rec sym_sub_int loc (x: sym) (y: sym) =
   let x = eval_lit x in
   let y = eval_lit y in
   let t = Exp (Expr_TApply (FIdent ("sub_int", 0), [], [sym_expr x; sym_expr y])) in
@@ -342,6 +342,11 @@ let sym_sub_int loc (x: sym) (y: sym) =
   | (Val (VInt x), Val (VInt y)) -> Val (VInt (Z.sub x y))
   (* Zero Identity *)
   | (Exp x, Val z) when is_zero z -> Exp x
+  (* Breakdown RHS *)
+  | (Exp x, Exp (Expr_TApply (FIdent ("add_int", 0), _, [y; z]))) ->
+      let x' = sym_sub_int loc (Exp x) (Exp y) in
+      let y' = sym_sub_int loc x' (Exp z) in
+      y'
   (* Chained constant add *)
   | (Exp (Expr_TApply (FIdent ("add_int", 0), _, [x1; Expr_LitInt v])), Val (VInt y)) ->
       let n = Z.of_string v in
