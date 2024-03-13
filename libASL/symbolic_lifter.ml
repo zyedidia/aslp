@@ -9,7 +9,7 @@ open Visitor
   - For loop support
   - Identities on gen_ prims
   - Remove unsupported_set with overrides
-  - Remove PSTATE fields we don't want to model
+  - Remove unsupported globals
 *)
 
 (* Set of functions we do not want to analyse / inline due to their complexity *)
@@ -26,6 +26,10 @@ let problematic_enc = [
   (* >10k lines due to unrolling/splitting *)
   "aarch64_memory_vector_multiple_no_wb";
   "aarch64_memory_vector_multiple_post_inc";
+
+  (* Need to extend RemoveUnsupported to remove all undesirable global variables & fields *)
+  "aarch64_system_register_system";
+  "aarch64_system_register_cpsr";
 ]
 
 (* Model doesn't need these globals *)
@@ -40,7 +44,7 @@ let dead_globals =  IdentSet.of_list [
 module RemoveUnsupported = struct
   let assert_false loc = Stmt_Throw(Ident ("UNSUPPORTED"), loc)
 
-  class expr_visitor unsupported = object
+  class expr_visitor unsupported env = object
     inherit Asl_visitor.nopAslVisitor
     val mutable seen = false
     method! vexpr e =
@@ -48,64 +52,70 @@ module RemoveUnsupported = struct
       | Expr_TApply (f, _, _) -> 
           if unsupported f then (seen <- true; SkipChildren)
           else DoChildren
+      | Expr_ImpDef(t, Some(s)) ->
+          (try
+            let _ = Eval.Env.getImpdef Unknown env s in
+            DoChildren
+          with _ -> (seen <- true; DoChildren))
+      | Expr_ImpDef _ -> (seen <- true; DoChildren)
       | _ -> DoChildren)
     method has_unsupported = seen
   end 
 
-  let contains_unsupported e unsupported =
-    let v = new expr_visitor unsupported in
+  let contains_unsupported e unsupported env =
+    let v = new expr_visitor unsupported env in
     let _ = visit_expr v e in
     v#has_unsupported
 
-  class call_visitor unsupported  = object
+  class call_visitor unsupported env = object
     inherit Asl_visitor.nopAslVisitor
 
     method! vstmt e =
       (match e with
       | Stmt_Assert(e, loc) ->
-          if contains_unsupported e unsupported then ChangeTo (assert_false loc)
+          if contains_unsupported e unsupported env then ChangeTo (assert_false loc)
           else DoChildren
 
       | Stmt_VarDeclsNoInit _
       | Stmt_ProcReturn _ -> DoChildren
 
       | Stmt_FunReturn (e, loc) ->
-          if contains_unsupported e unsupported then ChangeTo (assert_false loc)
+          if contains_unsupported e unsupported env then ChangeTo (assert_false loc)
           else DoChildren
 
       | Stmt_VarDecl(ty, v, e, loc) ->
-          if contains_unsupported e unsupported then ChangeTo (assert_false loc)
+          if contains_unsupported e unsupported env then ChangeTo (assert_false loc)
           else DoChildren
 
       | Stmt_ConstDecl(ty, v, e, loc) ->
-          if contains_unsupported e unsupported then ChangeTo (assert_false loc)
+          if contains_unsupported e unsupported env then ChangeTo (assert_false loc)
           else DoChildren
 
       | Stmt_Assign(v, e, loc) ->
-          if contains_unsupported e unsupported then ChangeTo (assert_false loc)
+          if contains_unsupported e unsupported env then ChangeTo (assert_false loc)
           else DoChildren
 
       | Stmt_TCall (f, tes, es, loc) -> 
           if unsupported f then ChangeTo (assert_false loc)
-          else if List.exists (fun e -> contains_unsupported e unsupported) (tes @ es) then ChangeTo (assert_false loc)
+          else if List.exists (fun e -> contains_unsupported e unsupported env) (tes @ es) then ChangeTo (assert_false loc)
           else DoChildren
 
       | Stmt_If (c, t, alts, f, loc) ->
-          if contains_unsupported c unsupported then ChangeTo (assert_false loc)
-          else if List.exists (fun (S_Elsif_Cond(c,_)) -> contains_unsupported c unsupported) alts then ChangeTo (assert_false loc)
+          if contains_unsupported c unsupported env then ChangeTo (assert_false loc)
+          else if List.exists (fun (S_Elsif_Cond(c,_)) -> contains_unsupported c unsupported env) alts then ChangeTo (assert_false loc)
           else DoChildren
 
       | Stmt_Case (e, alts, odefault, loc) ->
-          if contains_unsupported e unsupported then ChangeTo (assert_false loc)
+          if contains_unsupported e unsupported env then ChangeTo (assert_false loc)
           else DoChildren
 
       | Stmt_While (c, b, loc) ->
-          if contains_unsupported c unsupported then ChangeTo (assert_false loc)
+          if contains_unsupported c unsupported env then ChangeTo (assert_false loc)
           else DoChildren
 
       | Stmt_For(var, start, dir, stop, body, loc) ->
-          if contains_unsupported start unsupported then ChangeTo (assert_false loc)
-          else if contains_unsupported stop unsupported then ChangeTo (assert_false loc)
+          if contains_unsupported start unsupported env then ChangeTo (assert_false loc)
+          else if contains_unsupported stop unsupported env then ChangeTo (assert_false loc)
           else DoChildren
 
       | Stmt_Dep_Undefined loc
@@ -123,8 +133,8 @@ module RemoveUnsupported = struct
       | _ -> failwith @@ "Unknown stmt: " ^ (pp_stmt e))
   end
 
-  let run unsupported =
-    let v = new call_visitor unsupported in
+  let run unsupported env =
+    let v = new call_visitor unsupported env in
     visit_stmts v
 
 end
@@ -310,8 +320,8 @@ let run iset pat env =
   Printf.printf "Stage 3: Simplification\n\n";
   (* Remove temporary dynamic bitvectors where possible *)
   let fns = Bindings.map (fnsig_upd_body (Transforms.RemoveTempBVs.do_transform false)) fns in
-  (* Remove calls to problematic functions *)
-  let fns = Bindings.map (fnsig_upd_body (RemoveUnsupported.run unsupported)) fns in
+  (* Remove calls to problematic functions & impdefs *)
+  let fns = Bindings.map (fnsig_upd_body (RemoveUnsupported.run unsupported env)) fns in
 
   Printf.printf "Stage 4: Specialisation\n";
   (* Run requirement collection over the full set *)
