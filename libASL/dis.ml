@@ -1207,15 +1207,6 @@ and dis_stmts (stmts: AST.stmt list): unit rws =
         and fstmts' = stmt_append fstmts dup in
         dis_stmt (Stmt_If (c, tstmts', elsif', fstmts', loc)) >> dis_stmts post
 
-        (*
-    | (Stmt_Case(e, alts, odefault, loc)::rest) ->
-        let (dup,post) = duplicate_up_to rest in
-        let alts' = List.map (fun (Alt_Alt(ps, oc, ss)) ->
-          Alt_Alt(ps, oc,stmt_append ss dup)) alts in
-        let odefault' = match odefault with Some s -> Some (stmt_append s dup) | _ -> None in
-        dis_stmt (Stmt_Case(e, alts', odefault', loc)) >> dis_stmts post
-        *)
-
     | (Stmt_FunReturn _ | Stmt_ProcReturn _) as ret :: rest ->
         (match rest with
         | [] -> dis_stmt ret
