@@ -4,6 +4,11 @@ adds x1, x2, x3:
 sub sp, sp, #32:
   $ echo 0xd10083ff >> input
 
+ldp x1, x2, [x3], #128
+  $ echo 0xa8c80861 >> input
+stp x1, x2, [x3], #128
+  $ echo 0xa8880861 >> input
+
 ucvtf d0, w2:
   $ echo 0x1e630040 >> input
 
@@ -41,6 +46,28 @@ note: concatenate all commands to avoid aslp startup overhead
   SP_EL0 = add_bits.0 {{ 64 }} ( SP_EL0,'1111111111111111111111111111111111111111111111111111111111100000' ) ;
   ""
   Stmt_Assign(LExpr_Var("SP_EL0"),Expr_TApply("add_bits.0",[(64)],[(Expr_Var("SP_EL0"));('1111111111111111111111111111111111111111111111111111111111100000')]))
+  "
+  0xa8c80861
+  "
+  Decoding instruction A64 a8c80861
+  __array _R [ 1 ] = Mem.read.0 {{ 8 }} ( __array _R [ 3 ],8,0 ) ;
+  __array _R [ 2 ] = Mem.read.0 {{ 8 }} ( add_bits.0 {{ 64 }} ( __array _R [ 3 ],'0000000000000000000000000000000000000000000000000000000000001000' ),8,0 ) ;
+  __array _R [ 3 ] = add_bits.0 {{ 64 }} ( __array _R [ 3 ],'0000000000000000000000000000000000000000000000000000000010000000' ) ;
+  ""
+  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),1),Expr_TApply("Mem.read.0",[(8)],[(Expr_Array(Expr_Var("_R"),3));(8);(0)]))
+  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),2),Expr_TApply("Mem.read.0",[(8)],[(Expr_TApply("add_bits.0",[(64)],[(Expr_Array(Expr_Var("_R"),3));('0000000000000000000000000000000000000000000000000000000000001000')]));(8);(0)]))
+  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),3),Expr_TApply("add_bits.0",[(64)],[(Expr_Array(Expr_Var("_R"),3));('0000000000000000000000000000000000000000000000000000000010000000')]))
+  "
+  0xa8880861
+  "
+  Decoding instruction A64 a8880861
+  Mem.set.0 {{ 8 }} ( __array _R [ 3 ],8,0,__array _R [ 1 ] ) ;
+  Mem.set.0 {{ 8 }} ( add_bits.0 {{ 64 }} ( __array _R [ 3 ],'0000000000000000000000000000000000000000000000000000000000001000' ),8,0,__array _R [ 2 ] ) ;
+  __array _R [ 3 ] = add_bits.0 {{ 64 }} ( __array _R [ 3 ],'0000000000000000000000000000000000000000000000000000000010000000' ) ;
+  ""
+  Stmt_TCall("Mem.set.0",[(8)],[(Expr_Array(Expr_Var("_R"),3));(8);(0);(Expr_Array(Expr_Var("_R"),1))])
+  Stmt_TCall("Mem.set.0",[(8)],[(Expr_TApply("add_bits.0",[(64)],[(Expr_Array(Expr_Var("_R"),3));('0000000000000000000000000000000000000000000000000000000000001000')]));(8);(0);(Expr_Array(Expr_Var("_R"),2))])
+  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),3),Expr_TApply("add_bits.0",[(64)],[(Expr_Array(Expr_Var("_R"),3));('0000000000000000000000000000000000000000000000000000000010000000')]))
   "
   0x1e630040
   "
