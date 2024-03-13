@@ -3,7 +3,7 @@
   (public_name asli.offlineASL)
   (flags
     (:standard -w -27 -cclib -lstdc++))
-  (modules offline gen_prelude)
+  (modules offline utils)
   (libraries zarith libASL))
 
 (executable
