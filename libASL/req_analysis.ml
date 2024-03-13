@@ -328,6 +328,14 @@ let rec possible_int = function
       (match (possible_int a), (possible_int b) with
       | Some a, Some b -> Some ((a + b))
       | _, _ -> None)
+  | Expr_TApply (FIdent("sub_int",0), [], [a;b]) ->
+      (match (possible_int a), (possible_int b) with
+      | Some a, Some b -> Some ((a - b))
+      | _, _ -> None)
+  | Expr_TApply (FIdent("mul_int",0), [], [a;b]) ->
+      (match (possible_int a), (possible_int b) with
+      | Some a, Some b -> Some ((a * b))
+      | _, _ -> None)
   | _ -> None
 
 let rec collapse_e_if e =
@@ -370,7 +378,9 @@ let rec enumerate e =
   | Expr_TApply (FIdent ("add_int", 0), [], [a;b]) ->
       (match enumerate b with
       | Some w -> Some (List.map (fun (test,expr) -> (test,Expr_TApply (FIdent ("add_int", 0), [], [a; expr]))) w)
-      | None -> None)
+      | _ -> (match enumerate a with
+              | Some w -> Some (List.map (fun (test,expr) -> (test,Expr_TApply (FIdent ("add_int", 0), [], [b; expr]))) w)
+              | None -> None))
  
   | _ -> None
 
