@@ -62,11 +62,35 @@ let _ =
     (fun s -> opt_instr := (!opt_instr) @ [s])
     usage_msg
 
+let rec process_command tcenv env cmd =
+  match String.split_on_char ' ' cmd with
+  | (":set" :: "impdef" :: rest) ->
+        let cmd = String.concat " " rest in
+        let (x, e) = LoadASL.read_impdef tcenv Unknown cmd in
+        let v = Eval.eval_expr Unknown env e in
+        Eval.Env.setImpdef env x v
+  | [":project"; prj] ->
+      let inchan = open_in prj in
+      (try
+          while true do
+              process_command tcenv env (input_line inchan)
+          done
+      with
+      | End_of_file ->
+          close_in inchan
+      )
+  | [""] -> ()
+  | _ -> Printf.printf "Ignoring: %s\n" cmd
+
 let main () = 
   let opt_verbose = ref false in
   let env = match Eval.aarch64_evaluation_environment ~verbose:!opt_verbose () with
   | Some e -> e
   | _ -> failwith "Unable to build evaluation environment." in
+  let filenames = Option.get Eval.aarch64_asl_files in
+  let prj_files = List.filter (fun f -> Utils.endswith f ".prj") (snd filenames) in
+  let tcenv = Tcheck.Env.mkEnv Tcheck.env0 in
+  List.iter (fun f -> process_command tcenv env (":project " ^ f)) prj_files;
   List.map (fun instr -> run opt_verbose instr env) !opt_instr
 
 let _ = ignore (main())
