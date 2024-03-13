@@ -7,7 +7,9 @@ open Visitor
   - Break into many files, better comp + debugging
   - Better simp using equiv conditions in dis
   - For loop support
+  - Identities on gen_ prims
   - Remove unsupported_set with overrides
+  - Remove PSTATE fields we don't want to model
 *)
 
 (* Set of functions we do not want to analyse / inline due to their complexity *)
@@ -24,6 +26,14 @@ let problematic_enc = [
   (* >10k lines due to unrolling/splitting *)
   "aarch64_memory_vector_multiple_no_wb";
   "aarch64_memory_vector_multiple_post_inc";
+]
+
+(* Model doesn't need these globals *)
+let dead_globals =  IdentSet.of_list [
+  Ident "BTypeCompatible";
+  Ident "__BranchTaken";
+  Ident "BTypeNext";
+  Ident "__ExclusiveLocal";
 ]
 
 (** Trival walk to replace unsupported calls with a corresponding throw *)
@@ -265,6 +275,7 @@ let dis_wrapper fn fnsig env =
     let sym = Symbolic.Exp (Expr_Var (Decoder_program.enc)) in
     let (_,lenv,_) = (Dis.declare_assign_var Unknown (Type_Bits (Expr_LitInt "32")) (Ident "enc") sym) env lenv in
     let ((),lenv',stmts) = (Dis.dis_stmts body) env lenv in
+    let globals = IdentSet.diff globals dead_globals in
     let stmts = Dis.flatten stmts [] in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
     let stmts' = Transforms.RedundantSlice.do_transform Bindings.empty stmts' in
