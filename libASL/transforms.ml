@@ -609,9 +609,13 @@ module StatefulIntToBits = struct
 
       (* Other translation from int to bit *)
       | Expr_TApply (FIdent ("cvt_int_bits", 0), [t], [e;_]) -> 
-          let e' = bv_of_int_expr vars e in
-          let abs = (int_of_expr t,true,(Z.zero,Z.zero)) in
-          sym_expr @@ extend abs e'
+          let (e,a) = force_signed (bv_of_int_expr vars e) in
+          let w = int_of_expr t in
+          if w < width a then
+            sym_expr @@ sym_slice Unknown e 0 w
+          else
+            let abs = (int_of_expr t,true,(Z.zero,Z.zero)) in
+            sym_expr @@ extend abs (e,a)
 
       | Expr_TApply (FIdent ("eq_int", 0), [], [x;y]) ->
           let x = bv_of_int_expr vars x in
