@@ -223,8 +223,6 @@ module RemoveUnsupported = struct
 end
 
 let dis_wrapper fn fnsig env =
-  Printf.printf "  Running %s\n" (name_of_FIdent fn);
-  flush stdout;
   let (lenv,globals) = Dis.build_env env in
   try
     let body = fnsig_get_body fnsig in
