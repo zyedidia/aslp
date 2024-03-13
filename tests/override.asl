@@ -409,10 +409,16 @@ bits(size) MemAtomicCompareAndSwap(bits(64) address, bits(size) expectedvalue,
 CheckSVEEnabled()
   return;
 
+// Beyond bounds
+bits(64) AuthIA(bits(64) X, bits(64) Y, boolean is_combined)
+  return X;
+
+bits(64) AuthIB(bits(64) X, bits(64) Y, boolean is_combined)
+  return X;
+
 // Exactly the same as the real impl, but current dis does not support an ITE that returns a tuple
 (bits(N), boolean) SatQ(integer i, integer N, boolean unsigned)
     if unsigned then
         return UnsignedSatQ(i, N);
     else
         return SignedSatQ(i, N);
-

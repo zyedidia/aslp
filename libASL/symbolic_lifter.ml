@@ -41,7 +41,6 @@ let problematic_enc = [
   "aarch64_system_exceptions_runtime_svc";
   "aarch64_vector_crypto_sm4_sm4enc";
   "aarch64_vector_crypto_sm4_sm4enckey";
-  "aarch64_branch_unconditional_dret";
 
   (* Tuple Problems *)
   "aarch64_float_convert_int";

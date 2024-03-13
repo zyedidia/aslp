@@ -59,7 +59,9 @@ let v_SP_EL0   = Expr_Var(Ident "SP_EL0")
 
 (* TODO: How best to prune these? *)
 let v_PSTATE_BTYPE = Expr_Field(Expr_Var(Ident "PSTATE"), Ident "BTYPE")
-let v_BTypeCompatible = Expr_Var (Ident "v_BTypeCompatible")
+let v_BTypeCompatible = Expr_Var (Ident "BTypeCompatible")
+let v___BranchTaken = Expr_Var (Ident "__BranchTaken")
+let v_BTypeNext = Expr_Var (Ident "BTypeNext")
 
 (* Program construction *)
 
@@ -172,6 +174,8 @@ let f_gen_or_bool e1 e2 =
   Expr_TApply (FIdent ("or_bool", 0), [], [e1;e2])
 let f_gen_not_bool e1 =
   Expr_TApply (FIdent ("not_bool", 0), [], [e1])
+let f_gen_eq_enum e1 e2 =
+  Expr_TApply (FIdent ("eq_enum", 0), [], [e1;e2])
 
 (* Prim bit ops *)
 let f_gen_eq_bits w e1 e2 =
