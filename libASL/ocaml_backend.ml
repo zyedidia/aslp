@@ -76,7 +76,7 @@ let rec prints_expr e st =
   | Expr_TApply(FIdent("or_bool", 0), [], [a;b]) ->
       let a = prints_expr a st in
       let b = prints_expr b st in
-      "(" ^ a ^ ") && (" ^ b ^ ")"
+      "(" ^ a ^ ") || (" ^ b ^ ")"
 
   | Expr_TApply(f, targs, args) ->
       let f = name_of_ident f in
@@ -395,5 +395,4 @@ let run fid fns env (filename: string) =
   Bindings.iter (fun k b -> write_fn k b st) fns;
   write_fn fid dsig st;
   write_epilogue fid env st;
-  close_out oc;
-
+  close_out oc

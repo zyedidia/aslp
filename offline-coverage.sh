@@ -3,10 +3,10 @@
 # performs regression testing based on :coverage of particular groups of instructions
 INSTRUCTION_GROUPS=''
 INSTRUCTION_GROUPS+='aarch64_integer.+'
-#INSTRUCTION_GROUPS+=' aarch64_branch.+'
+INSTRUCTION_GROUPS+=' aarch64_branch.+'
 #INSTRUCTION_GROUPS+=' aarch64_float_.+'
 #INSTRUCTION_GROUPS+=' aarch64_vector_.+'
-#INSTRUCTION_GROUPS+=' aarch64_memory_.+'
+INSTRUCTION_GROUPS+=' aarch64_memory_.+'
 
 COVERAGE_DIR="./tests/coverage"
 COVERAGE_TEMP=$(mktemp -d)

@@ -23,6 +23,8 @@ let problematic_enc = [
   (* >10k lines due to unrolling/splitting *)
   "aarch64_memory_vector_multiple_no_wb";
   "aarch64_memory_vector_multiple_post_inc";
+  "aarch64_memory_vector_single_post_inc";
+  "aarch64_memory_vector_single_no_wb";
 
   (* mkBits called with negative width during disassembly *)
   "FADDV_V_P_Z__";
@@ -222,29 +224,6 @@ module RemoveUnsupported = struct
 
 end
 
-let dis_wrapper fn fnsig env =
-  let (lenv,globals) = Dis.build_env env in
-  try
-    let body = fnsig_get_body fnsig in
-    let sym = Symbolic.Exp (Expr_Var (Decoder_program.enc)) in
-    let (_,lenv,_) = (Dis.declare_assign_var Unknown (Type_Bits (Expr_LitInt "32")) (Ident "enc") sym) env lenv in
-    let ((),lenv',stmts) = (Dis.dis_stmts body) env lenv in
-    let stmts = Dis.flatten stmts [] in
-    let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
-    let stmts' = Transforms.RedundantSlice.do_transform Bindings.empty stmts' in
-    let stmts' = Transforms.StatefulIntToBits.run (Dis.enum_types env) stmts' in
-    let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
-    (* TODO: This would be nice to run, but makes a mess right now *)
-    (*let stmts' = Transforms.CommonSubExprElim.do_transform stmts' in*)
-    let stmts' = Transforms.CopyProp.copyProp stmts' in
-    let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts' in 
-    let stmts' = Transforms.RemoveRegisters.run stmts' in
-    Some stmts'
-  with 
-  | e ->
-    Printf.printf "Error: %s %s\n" (name_of_FIdent fn) (Printexc.to_string e);
-    None
-
 let unsupported f = IdentSet.mem f unsupported_set
 
 let get_inlining_frontier =
@@ -419,6 +398,31 @@ let unsupported_inst tests instrs f =
   let r = not (List.exists (fun (f',_) -> f' = f) (tests) || Bindings.mem f instrs)  in
   r
 
+let dis_wrapper fn fnsig env =
+  let (lenv,globals) = Dis.build_env env in
+  try
+    let body = fnsig_get_body fnsig in
+    let sym = Symbolic.Exp (Expr_Var (Decoder_program.enc)) in
+    let (_,lenv,_) = (Dis.declare_assign_var Unknown (Type_Bits (Expr_LitInt "32")) (Ident "enc") sym) env lenv in
+    let ((),lenv',stmts) = (Dis.dis_stmts body) env lenv in
+    let stmts = Dis.flatten stmts [] in
+    let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts in
+    let stmts' = Transforms.RedundantSlice.do_transform Bindings.empty stmts' in
+    let stmts' = Transforms.StatefulIntToBits.run (Dis.enum_types env) stmts' in
+    let stmts' = Transforms.IntToBits.ints_to_bits stmts' in
+    (* TODO: This would be nice to run, but makes a mess right now *)
+    (*let stmts' = Transforms.CommonSubExprElim.do_transform stmts' in*)
+    let stmts' = Transforms.CopyProp.copyProp stmts' in
+    let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts' in 
+    let stmts' = Transforms.RemoveRegisters.run stmts' in
+    let stmts' = Cleanup.run false stmts' in
+    let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts' in
+    Some stmts'
+  with 
+  | e ->
+    Printf.printf "Error: %s %s\n" (name_of_FIdent fn) (Printexc.to_string e);
+    None
+
 (* Produce a lifter for the desired parts of the instruction set *)
 let run iset pat env =
   Printf.printf "Stage 1: Mock decoder & instruction encoding definitions\n";
@@ -454,8 +458,6 @@ let run iset pat env =
     | Some body -> Bindings.add fn (fnsig_set_body fnsig body) acc
     | None -> acc) entry_set Bindings.empty in
   Printf.printf "  Succeeded for %d instructions\n\n" (Bindings.cardinal fns);
-
-  let fns = Bindings.map (fnsig_upd_body (Cleanup.run false)) fns in
 
   Printf.printf "Stmt Counts\n"; 
   Bindings.iter (fun fn fnsig -> Printf.printf "  %d : %s\n" (stmts_count (fnsig_get_body fnsig)) (name_of_FIdent fn)) fns;
