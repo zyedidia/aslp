@@ -6,10 +6,11 @@ open Visitor
 (* TODO: 
   - Break into many files, better comp + debugging
   - Better simp using equiv conditions in dis
+  - For loop support
+  - Remove unsupported_set with overrides
 *)
 
 (* Set of functions we do not want to analyse / inline due to their complexity *)
-(* TODO: It would be better to remove these using the override file, rather than hardcoding this set *)
 let unsupported_set = IdentSet.of_list [
   FIdent ("AArch64.TranslateAddress", 0);
   FIdent ("AArch64.Abort", 0);
@@ -23,112 +24,6 @@ let problematic_enc = [
   (* >10k lines due to unrolling/splitting *)
   "aarch64_memory_vector_multiple_no_wb";
   "aarch64_memory_vector_multiple_post_inc";
-  "aarch64_memory_vector_single_post_inc";
-  "aarch64_memory_vector_single_no_wb";
-
-  (* mkBits called with negative width during disassembly *)
-  "FADDV_V_P_Z__";
-  "FADD_Z_P_ZS__";
-  "FCPY_Z_P_I__";
-  "FDUP_Z_I__";
-  "FMAXNMV_V_P_Z__";
-  "FMAXNM_Z_P_ZS__";
-
-  (* Timeout in dis *)
-  "PNEXT_P_P_P__";
-
-  (* Timeout in transforms *)
-  "aarch64_vector_arithmetic_binary_element_mul_acc_complex";
-
-  (* Outside of model *)
-  "aarch64_system_exceptions_runtime_smc";
-  "aarch64_system_exceptions_debug_exception";
-  "aarch64_system_exceptions_runtime_svc";
-  "aarch64_vector_crypto_sm4_sm4enc";
-  "aarch64_vector_crypto_sm4_sm4enckey";
-
-  (* Tuple Problems *)
-  "aarch64_float_convert_int";
-
-  (* BitTuple Problems *)
-  "aarch64_vector_crypto_sha3op_sha1_hash_choose";
-  "aarch64_vector_crypto_sha3op_sha1_hash_majority";
-  "aarch64_vector_crypto_sha3op_sha1_hash_parity";
-  "aarch64_vector_crypto_sha3op_sha256_hash";
-
-  (* Unsorted *)
-  "FMAXV_V_P_Z__";
-  "FMAX_Z_P_ZS__";
-  "FMINNMV_V_P_Z__";
-  "FMINNM_Z_P_ZS__";
-  "FMINV_V_P_Z__";
-  "FMIN_Z_P_ZS__";
-  "FMUL_Z_P_ZS__";
-  "FSUBR_Z_P_ZS__";
-  "FSUB_Z_P_ZS__";
-  "LD2B_Z_P_BI_Contiguous";
-  "LD2B_Z_P_BR_Contiguous";
-  "LD2D_Z_P_BI_Contiguous";
-  "LD2D_Z_P_BR_Contiguous";
-  "LD2H_Z_P_BI_Contiguous";
-  "LD2H_Z_P_BR_Contiguous";
-  "LD2W_Z_P_BI_Contiguous";
-  "LD2W_Z_P_BR_Contiguous";
-  "LD3B_Z_P_BI_Contiguous";
-  "LD3B_Z_P_BR_Contiguous";
-  "LD3D_Z_P_BI_Contiguous";
-  "LD3D_Z_P_BR_Contiguous";
-  "LD3H_Z_P_BI_Contiguous";
-  "LD3H_Z_P_BR_Contiguous";
-  "LD3W_Z_P_BI_Contiguous";
-  "LD3W_Z_P_BR_Contiguous";
-  "LD4B_Z_P_BI_Contiguous";
-  "LD4B_Z_P_BR_Contiguous";
-  "LD4D_Z_P_BI_Contiguous";
-  "LD4D_Z_P_BR_Contiguous";
-  "LD4H_Z_P_BI_Contiguous";
-  "LD4H_Z_P_BR_Contiguous";
-  "LD4W_Z_P_BI_Contiguous";
-  "LD4W_Z_P_BR_Contiguous";
-  "ST2B_Z_P_BI_Contiguous";
-  "ST2B_Z_P_BR_Contiguous";
-  "ST2D_Z_P_BI_Contiguous";
-  "ST2D_Z_P_BR_Contiguous";
-  "ST2H_Z_P_BI_Contiguous";
-  "ST2H_Z_P_BR_Contiguous";
-  "ST2W_Z_P_BI_Contiguous";
-  "ST2W_Z_P_BR_Contiguous";
-  "ST3B_Z_P_BI_Contiguous";
-  "ST3B_Z_P_BR_Contiguous";
-  "ST3D_Z_P_BI_Contiguous";
-  "ST3D_Z_P_BR_Contiguous";
-  "ST3H_Z_P_BI_Contiguous";
-  "ST3H_Z_P_BR_Contiguous";
-  "ST3W_Z_P_BI_Contiguous";
-  "ST3W_Z_P_BR_Contiguous";
-  "ST4B_Z_P_BI_Contiguous";
-  "ST4B_Z_P_BR_Contiguous";
-  "ST4D_Z_P_BI_Contiguous";
-  "ST4D_Z_P_BR_Contiguous";
-  "ST4H_Z_P_BI_Contiguous";
-  "ST4H_Z_P_BR_Contiguous";
-  "ST4W_Z_P_BI_Contiguous";
-  "ST4W_Z_P_BR_Contiguous";
-  "WRFFR_F_P__";
-  "aarch64_system_hints";
-  "aarch64_system_register_cpsr";
-  "aarch64_system_register_system";
-  "aarch64_vector_shift_left_insert_simd";
-  "aarch64_vector_shift_left_sat_sisd";
-  "aarch64_vector_shift_right_insert_simd";
-  "aarch64_vector_shift_right_narrow_nonuniform_sisd";
-  "aarch64_vector_shift_right_narrow_uniform_sisd";
-  "aarch64_vector_transfer_integer_dup";
-  "aarch64_vector_transfer_integer_insert";
-  "aarch64_vector_transfer_vector_cpy_dup_simd";
-  "aarch64_vector_transfer_vector_cpy_dup_sisd";
-  "aarch64_vector_transfer_vector_insert";
-  "aarch64_vector_transfer_vector_table";
 ]
 
 (** Trival walk to replace unsupported calls with a corresponding throw *)
@@ -247,43 +142,6 @@ and stmts_count s =
 
 module Cleanup = struct
 
-  (*
-  let rec zip_pre a b =
-    match a, b with
-    | x::xs, y::ys when x = y ->
-        let (common,xs,ys) = zip_pre xs ys in
-        (x::common,xs,ys)
-    | _ -> ([],a,b)
-
-  let zip_post a b =
-    let (common,a,b) = zip_pre (List.rev a) (List.rev b) in
-    (List.rev common, List.rev a, List.rev b)
-
-  let rec walk_stmt verb s =
-    match s with
-    | Stmt_If(c, t, els, f, loc) when t = f && List.for_all (function S_Elsif_Cond(_,b) -> b = t) els ->
-        t
-
-    | Stmt_If(c, t, [], f, loc) ->
-      let (common_pre,t,f) = zip_pre t f in
-      let (common_post,t,f) = zip_post t f in
-      let common_pre = walk_stmts verb common_pre in
-      let common_post = walk_stmts verb common_post in
-      let t = walk_stmts verb t in
-      let f = walk_stmts verb f in
-      (* TODO: c & common_pre *)
-      common_pre @ Stmt_If(c, t, [], f, loc) :: common_post
-
-    | Stmt_If(c, t, els, f, loc) ->
-        if verb then Printf.printf "Could not match %s\n" (pp_stmt s);
-        let t = walk_stmts verb t in
-        let els = List.map (function S_Elsif_Cond(c,b) -> S_Elsif_Cond(c,walk_stmts verb b)) els in
-        let f = walk_stmts verb f in 
-        [Stmt_If(c, t, els, f, loc)]
-
-    | _ -> [s]
-  *)
-
   let rec is_throw_unsupported s =
     match s with
     | (Stmt_Throw (Ident "UNSUPPORTED", loc))::xs -> true
@@ -295,6 +153,7 @@ module Cleanup = struct
     inherit nopAslVisitor
     method! vstmt e =
       let reduce e = (match e with
+      | Stmt_Throw(_,loc)
       | Stmt_Unpred(loc) 
       | Stmt_ConstrainedUnpred(loc)
       | Stmt_ImpDef(_, loc)
@@ -364,6 +223,7 @@ module DecoderCleanup = struct
       | Stmt_TCall (f, _, _, loc) ->
           if unsupported f then (RemoveUnsupported.assert_false loc)
           else e
+      | Stmt_Throw(_, loc)
       | Stmt_Unpred(loc) 
       | Stmt_ConstrainedUnpred(loc)
       | Stmt_ImpDef(_, loc)
@@ -460,7 +320,9 @@ let run iset pat env =
   Printf.printf "  Succeeded for %d instructions\n\n" (Bindings.cardinal fns);
 
   Printf.printf "Stmt Counts\n"; 
-  Bindings.iter (fun fn fnsig -> Printf.printf "  %d : %s\n" (stmts_count (fnsig_get_body fnsig)) (name_of_FIdent fn)) fns;
+  let l = Bindings.fold (fun fn fnsig acc -> (fn, stmts_count (fnsig_get_body fnsig))::acc) fns [] in
+  let l = List.sort (fun (_,i) (_,j) -> compare i j) l in
+  List.iter (fun (fn,c) -> Printf.printf "  %d\t:\t%s\n" c (name_of_FIdent fn)) l;
 
   (* Dead code elim on decoder & tests *)
   let dsig = fnsig_upd_body (DecoderCleanup.run (unsupported_inst tests fns)) dsig in
