@@ -1,6 +1,13 @@
 open LibASL
 open Testing
 open Asl_ast
+open Value
+
+let () = Printexc.register_printer
+    (function
+    | Value.EvalError (loc, e) ->
+        Some ("EvalError at " ^ pp_loc loc ^ ": " ^ e)
+    | _ -> None)
 
 let op_dis (op: int): stmt list opresult =
   let bv = Primops.prim_cvt_int_bits (Z.of_int 32) (Z.of_int op) in
