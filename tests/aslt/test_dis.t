@@ -1,26 +1,7 @@
-adds x1, x2, x3:
-  $ echo 0xab030041 >> input
+note: concatenate to avoid aslp startup overhead
+  $ for op in $(grep '^0x' ./ops.txt); do printf '%s\n' "\"\n$op\n\"" ":sem A64 $op" '""' ":ast A64 $op"; done > commands
 
-sub sp, sp, #32:
-  $ echo 0xd10083ff >> input
-
-ldp x1, x2, [x3], #128
-  $ echo 0xa8c80861 >> input
-stp x1, x2, [x3], #128
-  $ echo 0xa8880861 >> input
-
-ucvtf d0, w2:
-  $ echo 0x1e630040 >> input
-
-mrs x0, nzcv:
-  $ echo 0xd53b4200 >> input
-
-tbl v0.8b, {v0.16b}, v0.8b:
-  $ echo 0x0e000000 >> input
-
-note: concatenate all commands to avoid aslp startup overhead
-  $ for op in $(cat input); do printf '%s\n' "\"\n$op\n\"" ":sem A64 $op" '""' ":ast A64 $op"; done > commands
-
+run asli with these commands
   $ asli < commands
   "
   0xab030041

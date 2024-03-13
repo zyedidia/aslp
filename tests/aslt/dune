@@ -1,2 +1,2 @@
 (cram
- (deps (package asli)))
+ (deps (package asli) ./ops.txt))
