@@ -14,7 +14,7 @@ assignment_stmt:
 	'Stmt_Assign' OPEN_PAREN lexpr COMMA expr CLOSE_PAREN					# Assign
 	| 'Stmt_ConstDecl' OPEN_PAREN type COMMA ident COMMA expr CLOSE_PAREN	# ConstDecl
 	| 'Stmt_VarDecl' OPEN_PAREN type COMMA ident COMMA expr CLOSE_PAREN    # VarDecl
-	| 'Stmt_VarDeclsNoInit' OPEN_PAREN type COMMA OPEN_BRACKET OPEN_PAREN (ident (COMMA ident)*)? CLOSE_PAREN CLOSE_BRACKET CLOSE_PAREN  # VarDeclsNoInit
+	| 'Stmt_VarDeclsNoInit' OPEN_PAREN type COMMA OPEN_BRACKET (ident (COMMA ident)*)? CLOSE_BRACKET CLOSE_PAREN  # VarDeclsNoInit
 	| 'Stmt_Assert' OPEN_PAREN expr CLOSE_PAREN # Assert
 	| 'Stmt_Throw' OPEN_PAREN message=ident+ CLOSE_PAREN # Throw;
 
@@ -88,12 +88,8 @@ CLOSE_PAREN: ')';
 COMMA: ',';
 OPEN_BRACKET: '[';
 CLOSE_BRACKET: ']';
-OPEN_CURLY: '{';
-CLOSE_CURLY: '}';
 SQUOTE: '\'';
 QUOTE: '"';
-EQUALS: '=';
-COLON: ':';
 SCOLON: ';';
 
 // Ignored

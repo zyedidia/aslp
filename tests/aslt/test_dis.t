@@ -58,7 +58,7 @@ run asli with these commands
   constant bits ( 64 ) Exp9__5 = FixedToFP.0 {{ 32,64 }} ( __array _R [ 2 ] [ 0 +: 32 ],0,TRUE,FPCR,cvt_bits_uint.0 {{ 3 }} ( FPDecodeRounding5__5 ) ) ;
   __array _Z [ 0 ] = ZeroExtend.0 {{ 64,128 }} ( Exp9__5,128 ) ;
   ""
-  Stmt_VarDeclsNoInit(Type_Bits(3),[("FPDecodeRounding5__5")])
+  Stmt_VarDeclsNoInit(Type_Bits(3),["FPDecodeRounding5__5"])
   Stmt_Assign(LExpr_Var("FPDecodeRounding5__5"),Expr_TApply("ZeroExtend.0",[2;3],[Expr_Slices(Expr_Var("FPCR"),[Slice_LoWd(22,2)]);3]))
   Stmt_ConstDecl(Type_Bits(64),"Exp9__5",Expr_TApply("FixedToFP.0",[32;64],[Expr_Slices(Expr_Array(Expr_Var("_R"),2),[Slice_LoWd(0,32)]);0;Expr_Var("TRUE");Expr_Var("FPCR");Expr_TApply("cvt_bits_uint.0",[3],[Expr_Var("FPDecodeRounding5__5")])]))
   Stmt_Assign(LExpr_Array(LExpr_Var("_Z"),0),Expr_TApply("ZeroExtend.0",[64;128],[Expr_Var("Exp9__5");128]))
@@ -125,7 +125,7 @@ run asli with these commands
   Stmt_ConstDecl(Type_Bits(9),"Cse2__5",Expr_TApply("ZeroExtend.0",[8;9],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(40,8)]);9]))
   Stmt_ConstDecl(Type_Bits(9),"Cse1__5",Expr_TApply("ZeroExtend.0",[8;9],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(48,8)]);9]))
   Stmt_ConstDecl(Type_Bits(9),"Cse0__5",Expr_TApply("ZeroExtend.0",[8;9],[Expr_Slices(Expr_Array(Expr_Var("_Z"),0),[Slice_LoWd(56,8)]);9]))
-  Stmt_VarDeclsNoInit(Type_Bits(64),[("result__4")])
+  Stmt_VarDeclsNoInit(Type_Bits(64),["result__4"])
   Stmt_Assign(LExpr_Var("result__4"),'0000000000000000000000000000000000000000000000000000000000000000')
   Stmt_If(Expr_TApply("slt_bits.0",[9],[Expr_Var("Cse7__5");'000010000']),[
   Stmt_Assert(Expr_TApply("and_bool.0",[],[Expr_TApply("sle_bits.0",[9],['000000000';Expr_Var("Cse7__5")]);Expr_TApply("sle_bits.0",[13],[Expr_TApply("ZeroExtend.0",[12;13],[Expr_TApply("mul_bits.0",[12],[Expr_TApply("ZeroExtend.0",[9;12],[Expr_TApply("add_bits.0",[9],[Expr_Var("Cse7__5");'000000001']);12]);'000000001000']);13]);'0000010000000'])]));

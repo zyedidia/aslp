@@ -193,6 +193,14 @@ anyident :: '' ::=     {{ phantom }}
   | id                 :: :: AnyIdent {{ ocaml Ident [[id]] }}
   | typeid             :: :: AnyTypeIdent {{ ocaml Ident [[typeid]] }}
 
+ident_list :: 'IdentList_' ::=
+    {{ phantom }} {{ ocaml ident list }}
+    {{ pp-raw es = string "[" ^^ separate (string ";") (List.map pp_raw_ident es) ^^ string "]" }}
+    {{ pp     es = separate (string ",") (List.map pp_ident es) }}
+    | ident1 , .. , identn :: :: List
+    {{ ocaml [[ident1..identn]] }}
+
+
 grammar
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -556,7 +564,7 @@ nonempty_block :: 'Block_' ::= {{ quotient-with indented_block }}
 
 assignment_stmt :: 'Stmt_' ::= {{ quotient-with stmt }}
     {{ aux _ l }}
-    | ty ident1 , ... , identn ;   :: :: VarDeclsNoInit
+    | ty ident_list ;              :: :: VarDeclsNoInit
     | ty ident = expr ;            :: :: VarDecl
     | constant ty ident = expr ;   :: :: ConstDecl
     | lexpr = expr ;               :: :: Assign
