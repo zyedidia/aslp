@@ -2,7 +2,6 @@ open LibASL
 open Asl_ast
 open Primops
 
-(* TODO: Normalise these in the IR *)
 let mkBits x y = Primops.mkBits (Z.to_int x) y
 let from_bitsLit x =
   let x' = Value.drop_chars x ' ' in
@@ -53,7 +52,6 @@ let v_SP_EL0   = Expr_Var(Ident "SP_EL0")
 let v_FPSR     = Expr_Var(Ident "FPSR")
 let v_FPCR     = Expr_Var(Ident "FPCR")
 
-(* TODO: How best to prune this? *)
 let v_PSTATE_BTYPE = Expr_Field(Expr_Var(Ident "PSTATE"), Ident "BTYPE")
 
 (****************************************************************

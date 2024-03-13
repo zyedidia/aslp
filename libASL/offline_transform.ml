@@ -28,7 +28,7 @@ module Sig = struct
     let s = compare fa fb in
     if s <> 0 then s else
     let s = List.compare compare_taint la lb in
-    if s <> 0 then s else 
+    if s <> 0 then s else
     List.compare compare_taint sa sb
 end
 module SigSet = Set.Make(Sig);;
@@ -41,7 +41,7 @@ let ident_of_sig (f,tes,es) =
   if not (List.exists (fun v -> v = RunTime) (tes @ es)) then f
   else
     match f with
-    | FIdent(n, i) -> 
+    | FIdent(n, i) ->
         let post = List.fold_left (fun acc v -> acc ^ (if v = RunTime then "R" else "L")) "" (tes @ es) in
         FIdent(n ^ post, i)
     | _ -> failwith "ident_of_sig"
@@ -74,7 +74,7 @@ let init_state prev globals results env log = {
   ctx      = LiftTime;
   calls    = SigSet.empty;
   changed  = false;
-  
+
   env      = env;
   results  = results;
   globals  = globals;
@@ -94,7 +94,7 @@ let traverse (f: 'a -> 'b stm) (l: 'a list): ('b list) stm =
 let rec traverse2_ (f: 'a -> 'b -> unit stm) (l: 'a list) (l2: 'b list) (st: state): (state * unit) =
   match l, l2 with
   | [], [] -> (st,())
-  | x::xs, y::ys -> 
+  | x::xs, y::ys ->
       let (st,_) = f x y st in
       traverse2_ f xs ys st
   | _, _ -> invalid_arg "traverse2"
@@ -105,7 +105,7 @@ let get_context st = (st,st.ctx)
 let get_return st = (st,st.ret)
 
 (* Get the taint value for a variable *)
-let get_var i st = 
+let get_var i st =
   let r = match Bindings.find_opt i (st.vars) with
   | Some v -> v
   | None ->
@@ -120,10 +120,10 @@ let get_var i st =
 (* register variables with a taint *)
 let register_var (v: ident) (t: taint) st =
   match Bindings.find_opt v (st.vars) with
-  | Some t' -> 
+  | Some t' ->
       if st.log then Printf.printf "register_var: redecl of variable: %s\n" (pprint_ident v);
       (upd_vars (Bindings.add v (join_taint t t')) st, ())
-  | None -> 
+  | None ->
       if Bindings.mem v st.globals && st.log then Printf.printf "register_var: global/local collision on %s\n" (pprint_ident v);
       let t = if Bindings.find_opt v st.prev = Some RunTime then RunTime else t in
       (upd_vars (Bindings.add v t) st, ())
@@ -131,14 +131,14 @@ let register_var (v: ident) (t: taint) st =
 (* update an existing variable *)
 let update_var (v: ident) (t: taint) st =
   match Bindings.find_opt v (st.vars) with
-  | Some t' -> 
+  | Some t' ->
       if t' = LiftTime && t = RunTime then begin
         let st = upd_changed (fun _ -> true) st in
         let st = upd_vars (Bindings.add v RunTime) st in
         (st,())
       end else
         (upd_vars (Bindings.add v (join_taint t t')) st, ())
-  | None -> 
+  | None ->
       if Bindings.mem v st.globals then (st,())
       else begin
         if st.log then Printf.printf "update_var: missing decl of variable: %s\n" (pprint_ident v);
@@ -172,8 +172,8 @@ let join_state (a: state) (b: state): state =
   }
 
 (* Produce a runtime value if any arg is runtime *)
-let pure_prims = 
-  Value.prims_pure @ 
+let pure_prims =
+  Value.prims_pure @
   (List.map fst Dis.no_inline_pure) @ [
     "lsr_bits";
     "sle_bits";
@@ -184,7 +184,7 @@ let pure_prims =
   ]
 
 (* Prims that will always produce runtime *)
-let impure_prims = 
+let impure_prims =
   List.map fst Dis.no_inline
 
 let prim_ops (f: ident) (targs: taint list) (args: taint list): taint option =
@@ -206,7 +206,7 @@ let rec expr_tf (e: expr): taint stm =
       let bodies = (E_Elsif_Cond(c, t) :: els) @ [E_Elsif_Cond(Expr_Var(Ident "TRUE"),e)] in
       let proc = fun (E_Elsif_Cond(c, e)) ->
         let@ c_t = expr_tf c in
-        let+ e_t = expr_tf e in 
+        let+ e_t = expr_tf e in
         join_taint c_t e_t
       in
       let+ bodies_t = traverse proc bodies in
@@ -258,9 +258,9 @@ and type_tf (t: ty): taint stm =
   | Type_Bits(n) -> expr_tf n
   | Type_Register(n, _) -> pure LiftTime
   | Type_Array(Index_Range(lo,hi),t) ->
-      let@ hi = expr_tf hi in 
-      let@ lo = expr_tf lo in 
-      let+ t = type_tf t in 
+      let@ hi = expr_tf hi in
+      let@ lo = expr_tf lo in
+      let+ t = type_tf t in
       join_taint_l [hi;lo;t]
   | _ -> failwith @@ "type_tf: Unsupported type: " ^ (pp_type t)
 
@@ -291,11 +291,11 @@ and lexpr_tf (l: lexpr) (t: taint): unit stm =
   | LExpr_Var(v) -> update_var v t
   | LExpr_Field(l, f) -> lexpr_mod_tf l (join_taint t)
   | LExpr_Fields(l, fs) -> lexpr_mod_tf l (join_taint t)
-  | LExpr_Slices(l, ss) -> 
+  | LExpr_Slices(l, ss) ->
       let@ ss = traverse slice_tf ss in
       let t = join_taint_l (t::ss) in
       lexpr_mod_tf l (join_taint t)
-  | LExpr_Tuple(ls) -> 
+  | LExpr_Tuple(ls) ->
       let+ _ = traverse (fun l -> lexpr_tf l t) ls in ()
   | LExpr_Array(l, i) ->
       let@ i_t = expr_tf i in
@@ -304,7 +304,7 @@ and lexpr_tf (l: lexpr) (t: taint): unit stm =
 
 and lexpr_mod_tf (l: lexpr) (f: taint -> taint): unit stm =
   match l with
-  | LExpr_Var(v) -> 
+  | LExpr_Var(v) ->
       let@ p = get_var v in
       update_var v (f p)
   | LExpr_Field(l, _) -> lexpr_mod_tf l f
@@ -329,7 +329,7 @@ and stmt_tf (s: stmt): unit stm =
       let@ ty_t = type_tf ty in
       register_var v LiftTime
 
-  | Stmt_VarDecl(ty, v, e, loc) 
+  | Stmt_VarDecl(ty, v, e, loc)
   | Stmt_ConstDecl(ty, v, e, loc) ->
       let@ ty_t = type_tf ty in
       let@ e_t = expr_tf e in
@@ -383,14 +383,14 @@ let fun_tf (f: ident) (targs: ident list) (args: ident list) (targs_t: taint lis
 let add_sig (callers, results, worklist) s st =
   (* Check if interproc sig has changed, reprocess callers if so *)
   let changed = (match SigMap.find_opt s results with
-    | Some (_,v) -> (st.ret <> v) 
+    | Some (_,v) -> (st.ret <> v)
     | None -> st.ret <> LiftTime) in
   let fns = (match SigMap.find_opt s callers with
     | Some fns -> fns
     | _ -> SigSet.empty) in
   let worklist = if changed then SigSet.union fns worklist else worklist in
   (* Register this signature as a caller of any fn calls collected *)
-  let callers = SigSet.fold (fun s' callers -> 
+  let callers = SigSet.fold (fun s' callers ->
     match SigMap.find_opt s' callers with
     | Some fns -> SigMap.add s' (SigSet.add s fns) callers
     | None -> SigMap.add s' (SigSet.add s SigSet.empty) callers) (st.calls) callers in
@@ -401,10 +401,18 @@ let add_sig (callers, results, worklist) s st =
 (* Collect new signatures from the analysis *)
 let process_missing (callers, results, worklist) st =
   let missing = SigSet.filter (fun s -> not (SigMap.mem s results)) (st.calls) in
-  let results = SigSet.fold (fun s results -> 
+  let results = SigSet.fold (fun s results ->
     SigMap.add s (Bindings.empty,LiftTime) results) missing results in
   let worklist = SigSet.union worklist missing in
   (callers, results, worklist)
+
+let build_globals env =
+  (* Make constants lifttime, everything else runtime *)
+  let globals = Bindings.empty in
+  let globals = Bindings.fold (fun k v -> Bindings.add k LiftTime) (Eval.Env.readGlobalConsts env) globals in
+  let globals = Bindings.fold (fun k v -> Bindings.add k RunTime) (Eval.Env.readGlobals env) globals in
+  let globals = List.fold_right (Bindings.fold (fun k v -> Bindings.add k RunTime)) (Eval.Env.readLocals env) globals in
+  globals
 
 (* Interprocedural fixed point *)
 let analysis fns (env: Eval.Env.t) =
@@ -418,7 +426,7 @@ let analysis fns (env: Eval.Env.t) =
     | None -> st
   in
 
-  let rec fp globals callers results worklist = 
+  let rec fp globals callers results worklist =
     let (callers, results, worklist) = SigSet.fold (fun s acc ->
       let (_, results, _) = acc in
       (* Process this function *)
@@ -428,29 +436,25 @@ let analysis fns (env: Eval.Env.t) =
       let acc = add_sig acc s st in
       (* Push new signatures and re-run callers if necessary *)
       let acc = process_missing acc st in
-      acc) worklist (callers,results,SigSet.empty) 
+      acc) worklist (callers,results,SigSet.empty)
     in
     if SigSet.cardinal worklist = 0 then (results, callers)
     else fp globals callers results worklist
   in
 
-  (* Make constants lifttime, everything else runtime *)
-  let globals = Bindings.empty in
-  let globals = Bindings.fold (fun k v -> Bindings.add k LiftTime) (Eval.Env.readGlobalConsts env) globals in
-  let globals = Bindings.fold (fun k v -> Bindings.add k RunTime) (Eval.Env.readGlobals env) globals in
-  let globals = List.fold_right (Bindings.fold (fun k v -> Bindings.add k RunTime)) (Eval.Env.readLocals env) globals in
+  let globals = build_globals env in
 
   (* All functions have initially zero callers *)
   let callers = SigMap.empty in
   (* Map all default signatures to bot/LiftTime *)
-  let results = Bindings.fold (fun k (_,_,targs,args,_,_) acc -> 
+  let results = Bindings.fold (fun k (_,_,targs,args,_,_) acc ->
     let targs_t = List.map (fun _ -> LiftTime) targs in
     let args_t = List.map (fun _ -> LiftTime) args in
     let s = (k,targs_t,args_t) in
     SigMap.add s (Bindings.empty,LiftTime) acc) fns SigMap.empty in
   (* Push everything onto the worklist *)
   let worklist = SigMap.fold (fun s _ acc -> SigSet.add s acc) results SigSet.empty in
-  fp globals callers results worklist 
+  fp globals callers results worklist
 
 (*** Fixed Point Analysis Wrappers ***)
 
@@ -510,14 +514,14 @@ let rec is_runtime_stmt s: bool stm =
       let@ c = is_runtime_expr c in
       let@ cas = traverse (fun (Alt_Alt(p,oc,s)) ->
         let@ p_= is_runtime_patterns p in
-        let@ oc = match oc with 
-          | Some c -> is_runtime_expr c 
+        let@ oc = match oc with
+          | Some c -> is_runtime_expr c
           | None -> pure false
         in
         let+ s = is_runtime_stmts s in
         c || oc || s) cas in
-      let+ d = match odefault with 
-        | Some v -> is_runtime_stmts v 
+      let+ d = match odefault with
+        | Some v -> is_runtime_stmts v
         | _ -> pure false
       in
       c || or_all cas || d
@@ -536,11 +540,11 @@ let rec is_runtime_stmt s: bool stm =
 
   | Stmt_Unpred(_)
   | Stmt_ConstrainedUnpred(_)
-  | Stmt_ImpDef(_, _) 
+  | Stmt_ImpDef(_, _)
   | Stmt_ExceptionTaken(_)
   | Stmt_Dep_Unpred(_)
   | Stmt_Dep_ImpDef(_, _)
-  | Stmt_Dep_Undefined(_) 
+  | Stmt_Dep_Undefined(_)
   | Stmt_See(_, _)
   | Stmt_Throw(_, _)
   | Stmt_Undefined(_) -> pure false
@@ -557,7 +561,7 @@ and is_runtime_lexpr l =
   | LExpr_Var(v) -> is_runtime_var v
   | LExpr_Field(l, f) -> is_runtime_lexpr l
   | LExpr_Fields(l, fs) -> is_runtime_lexpr l
-  | LExpr_Slices(l, ss) -> 
+  | LExpr_Slices(l, ss) ->
       let@ c = is_runtime_lexpr l in
       let+ ss_t = traverse is_runtime_slice ss in
       c || or_all ss_t
@@ -587,7 +591,7 @@ type gen_state = {
   log : bool;
 }
 
-let init_gen_state prev globals results env ret types log = 
+let init_gen_state prev globals results env ret types log =
   let res = init_state prev globals results env false in
   let res = {res with ret} in
   let res = {res with vars = prev} in
@@ -626,7 +630,7 @@ let set_context ctx = fun s ->
 let rec split f l =
   match l with
   | [] -> pure ([], [])
-  | x::xs -> 
+  | x::xs ->
       let@ b = f x in
       let+ (l,r) = split f xs in
       if b then (x::l,r) else (l,x::r)
@@ -640,7 +644,7 @@ let rec traverse (f: 'a -> 'b wrm) (l: 'a list): ('b list) wrm =
 let rec traverse2_ (f: 'a -> 'b -> unit wrm) (l: 'a list) (l2: 'b list): unit wrm =
   match l, l2 with
   | [], [] -> pure ()
-  | x::xs, y::ys -> 
+  | x::xs, y::ys ->
       let@ _ = f x y in
       traverse2_ f xs ys
   | _, _ -> invalid_arg "traverse2_"
@@ -687,18 +691,18 @@ let get_fresh_name = fun s ->
   Either.Left (s,[],i)
 
 (* Declare a variable in the runtime program and return some means to refer to it *)
-let gen_var_decl loc ty v = 
+let gen_var_decl loc ty v =
   let@ e = (match ty with
-  | Type_Bits(w) -> 
+  | Type_Bits(w) ->
       let@ c = is_rt_expr w in
       if c then fail @@ "gen_var_decl: Runtime variable width " ^ (pp_expr w)
       else pure (Expr_TApply (rt_decl_bv, [], [arg_of_ident v; w]))
-  | Type_Constructor(Ident("boolean")) -> 
+  | Type_Constructor(Ident("boolean")) ->
       pure (Expr_TApply (rt_decl_bool, [], [arg_of_ident v]))
   | Type_Constructor(id) ->
       let@ env = get_env in
       (match Eval.Env.getEnum env id with
-      | Some l -> 
+      | Some l ->
           let len = Expr_LitInt (string_of_int (Z.log2up (Z.of_int (List.length l)))) in
           pure (Expr_TApply (rt_decl_bv, [], [arg_of_ident v; len]))
       | None -> fail @@ "gen_var_decl: Unknown ty " ^ (pp_type ty))
@@ -724,7 +728,7 @@ let gen_branch loc c =
     Stmt_Assign(lexpr, Expr_TApply(rt_gen_branch, [], [c]), loc)
   ] in
   (tl,tf,tm)
-  
+
 (* Switch the implicit context to one produced by gen_branch *)
 let switch_context loc t =
   write [Stmt_TCall(rt_switch_context, [], [Expr_Var t], loc)]
@@ -914,8 +918,6 @@ and rt_eff loc f tes es =
   | _ -> failwith @@ "Unknown eff: " ^ name_of_FIdent f
 
 (* Generate a trivial ITE *)
-(* TODO: Avoid creation of temp if possible? *)
-(* TODO: Injected assertions should be infliuenced by runtime reachability *)
 and emit_ite loc ty (c: expr) (tcase: expr wrm) (fcase: expr wrm) =
   let@ b = is_rt_expr c in
   let@ temp = gen_fresh_var loc ty in
@@ -930,7 +932,7 @@ and emit_ite loc ty (c: expr) (tcase: expr wrm) (fcase: expr wrm) =
     let@ _ = rt_lexpr loc (LExpr_Var temp) fcase in
     let+ _ = switch_context loc lm in
     Expr_Var temp
-  else 
+  else
     let@ (tstmts,tcase) = wrap (let@ e = tcase in gen_var_store loc temp e) in
     let@ (fstmts,fcase) = wrap (let@ e = fcase in gen_var_store loc temp e) in
     let+ _ = write [Stmt_If(c, tstmts, [], fstmts, loc)] in
@@ -950,7 +952,7 @@ and emit_if loc (c: expr) (tcase: unit wrm) (fcase: unit wrm) =
     let@ fcase = fcase in
     let@ _ = set_context ctx in
     switch_context loc lm
-  else 
+  else
     let@ (tstmts,tcase) = wrap tcase in
     let@ (fstmts,fcase) = wrap fcase in
     write [Stmt_If(c, tstmts, [], fstmts, loc)]
@@ -969,7 +971,7 @@ and gen_slice loc (e: expr) (s: slice) =
 and gen_expr loc e : (taint * expr) wrm =
   let@ c = is_rt_expr e in
   if not c then pure (LiftTime, e)
-  else 
+  else
     let+ r = match e with
       | Expr_If(ty, c, t, els, f) ->
           let rec iter = (function
@@ -1028,7 +1030,7 @@ and gen_stmt s : unit wrm =
         let@ e = rt_expr loc e in
         gen_var_store loc v e
 
-    (* Do the same for const TODO: Extend gen API to be explicit about const/var *)
+    (* Do the same for const *)
     | Stmt_ConstDecl(ty, v, e, loc) ->
         let@ _ = gen_var_decl loc ty v in
         let@ e = rt_expr loc e in
@@ -1052,7 +1054,7 @@ and gen_stmt s : unit wrm =
         emit_if loc c (* then *) (gen_stmts t) (* else *) (gen_stmts f)
 
     (* Generate a runtime expr *)
-    | Stmt_Assert(e,loc) -> 
+    | Stmt_Assert(e,loc) ->
         let@ e = rt_expr loc e in
         emit_assert loc e
     | Stmt_Throw(e,loc) ->
@@ -1074,7 +1076,7 @@ and gen_stmts s: unit wrm =
 and rt_lexpr loc l e =
   match l with
   | LExpr_Wildcard -> pure ()
-  | LExpr_Var(v) -> 
+  | LExpr_Var(v) ->
       gen_var_store loc v e
   | LExpr_Array(LExpr_Var(v),i) ->
       let@ i = lt_expr loc i in
@@ -1099,18 +1101,10 @@ and rt_lexpr loc l e =
       let@ e = gen_slice_update loc va lo wd e in
       gen_array_store loc v i e
 
-  | LExpr_Tuple(es) -> (* TODO: This isn't quite right *)
-      write [Stmt_Assign(l,e,loc)]
-
   | _ -> fail @@ "rt_lexpr: Unsupported lexpr " ^ (pp_lexpr l)
 
 let gen_prog fns results env =
-  (* Make constants lifttime, everything else runtime *)
-  (* TODO: Get this from analysis results rather than rebuilding *)
-  let globals = Bindings.empty in
-  let globals = Bindings.fold (fun k v -> Bindings.add k LiftTime) (Eval.Env.readGlobalConsts env) globals in
-  let globals = Bindings.fold (fun k v -> Bindings.add k RunTime) (Eval.Env.readGlobals env) globals in
-  let globals = List.fold_right (Bindings.fold (fun k v -> Bindings.add k RunTime)) (Eval.Env.readLocals env) globals in
+  let globals = build_globals env in
 
   let sfns = SigMap.filter_map (fun s res ->
     let (fn,_,_) = s in
@@ -1128,5 +1122,5 @@ let gen_prog fns results env =
 
 let run fns env =
   let (taint_res, callers) = analysis fns env in
-  gen_prog fns taint_res env 
+  gen_prog fns taint_res env
 

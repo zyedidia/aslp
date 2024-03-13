@@ -111,7 +111,7 @@ let rec prints_expr e st =
       Printf.sprintf "Z.sub (%s) (%s)" (prints_expr a st) (prints_expr b st)
   | Expr_TApply(FIdent("mul_int", 0), [], [a;b]) ->
       Printf.sprintf "Z.mul (%s) (%s)" (prints_expr a st) (prints_expr b st)
-  | Expr_TApply(FIdent("frem_int", 0), [], [a;b]) -> (* TODO: Should be eliminated by Int2Bit? *)
+  | Expr_TApply(FIdent("frem_int", 0), [], [a;b]) ->
       Printf.sprintf "frem_int (%s) (%s)" (prints_expr a st) (prints_expr b st)
 
   (* Other operations *)
@@ -227,7 +227,6 @@ let rec write_assign v e st =
       let s = Printf.sprintf "%s = %s" v e in
       write_line s st
 
-  (* TODO: This is quite messy due to ASL limitations *)
   | LExpr_Tuple (ls) ->
       let vars = List.init (List.length ls) (fun i -> "tmp" ^ (string_of_int i)) in
       let v = "(" ^ String.concat "," vars ^ ")" in
@@ -337,8 +336,6 @@ let run fid fns env (filename: string) =
   close_out oc
 
 (*
-TODO: Generate dune file, etc, to make this easier
-
 let write_file fn fnsig env dir =
   let path = dir ^ "/" ^ name_of_FIdent fn ^ ".ml" in
   let oc = open_out path in
