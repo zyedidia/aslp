@@ -20,6 +20,10 @@ let unsupported_set = IdentSet.of_list [
 
 (* Problematic instruction encoding names, due to various disassembly issues *)
 let problematic_enc = [
+  (* >10k lines due to unrolling/splitting *)
+  "aarch64_memory_vector_multiple_no_wb";
+  "aarch64_memory_vector_multiple_post_inc";
+
   (* mkBits called with negative width during disassembly *)
   "FADDV_V_P_Z__";
   "FADD_Z_P_ZS__";
