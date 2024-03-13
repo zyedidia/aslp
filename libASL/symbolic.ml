@@ -678,6 +678,11 @@ let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option 
 
   | ("mul_int",     _,                [Val x1; x2])       when is_one x1 -> Some x2
   | ("mul_int",     _,                [x1; Val x2])       when is_one x2 -> Some x1
+  | ("mul_int",     _,                [Exp (Expr_TApply (FIdent ("add_int", 0), [], [x1; Expr_LitInt v])); Val (VInt v2)]) ->
+      let v = Z.of_string v in
+      let c = Val (VInt (Z.mul v v2)) in
+      let e = Exp (Expr_TApply (FIdent ("mul_int", 0), [], [x1; Expr_LitInt (Z.to_string v2)])) in
+      Some (sym_add_int loc e c)
 
   | ("append_bits", [Val t1; _],      [_; x2])            when is_zero t1 -> Some x2
   | ("append_bits", [_; Val t2],      [x1; _])            when is_zero t2 -> Some x1
