@@ -180,7 +180,10 @@ let extra_prims = [
   "SignExtend";
   "sdiv_bits";
   "Mem.set";
+  "Mem.read";
   "AArch64.MemTag.set";
+  "AtomicStart";
+  "AtomicEnd";
 ]
 
 let is_prim f = 
@@ -370,6 +373,7 @@ and stmt_tf (s: stmt): unit stm =
       register_return ctx
 
   | Stmt_Assert _ -> pure ()
+  | Stmt_Throw _ -> pure ()
 
   | _ -> failwith @@ "stmt_tf: Unsupported stmt: " ^ (pp_stmt s)
 
@@ -818,6 +822,13 @@ let rec rt_prim loc f tes es =
       let@ x = rt_expr loc x in
       let@ y = lt_expr loc y in
       emit_prim f [m;n] [x;y]
+  | (FIdent ("Mem.read", 0), [w], [x;w';y]) ->
+      let@ w = lt_expr loc w in
+      let@ x = rt_expr loc x in
+      let@ w' = lt_expr loc w' in
+      let@ y = lt_expr loc y in
+      emit_prim f [w] [x;w';y]
+
   | _ ->
       let@ tes = traverse (lt_expr loc) tes in
       let@ es = traverse (rt_expr loc) es in

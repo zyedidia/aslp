@@ -4,6 +4,7 @@ open Asl_visitor
 open Visitor
 
 (* TODO: 
+  - Break into many files, better comp + debugging
   - Better simp using equiv conditions in dis
 *)
 
@@ -31,8 +32,6 @@ let problematic_enc = [
   "PNEXT_P_P_P__";
 
   (* Timeout in transforms *)
-  "aarch64_memory_vector_multiple_no_wb";
-  "aarch64_memory_vector_multiple_post_inc";
   "aarch64_vector_arithmetic_binary_element_mul_acc_complex";
 
   (* Outside of model *)
@@ -110,8 +109,6 @@ let problematic_enc = [
   "ST4W_Z_P_BI_Contiguous";
   "ST4W_Z_P_BR_Contiguous";
   "WRFFR_F_P__";
-  "aarch64_memory_vector_single_no_wb";
-  "aarch64_memory_vector_single_post_inc";
   "aarch64_system_hints";
   "aarch64_system_register_cpsr";
   "aarch64_system_register_system";
@@ -267,6 +264,7 @@ and stmts_count s =
 
 module Cleanup = struct
 
+  (*
   let rec zip_pre a b =
     match a, b with
     | x::xs, y::ys when x = y ->
@@ -301,13 +299,57 @@ module Cleanup = struct
         [Stmt_If(c, t, els, f, loc)]
 
     | _ -> [s]
+  *)
 
-  and walk_stmts verb s =
-    List.fold_left (fun acc s -> 
-      let s = walk_stmt verb s in
-      acc@s) [] s
+  let rec is_throw_unsupported s =
+    match s with
+    | (Stmt_Throw (Ident "UNSUPPORTED", loc))::xs -> true
+    | x::xs -> is_throw_unsupported xs
+    | _ -> false
 
-  let run verb = walk_stmts verb
+  (* Remove unsupported instr bodies *)
+  class call_visitor = object
+    inherit nopAslVisitor
+    method! vstmt e =
+      let reduce e = (match e with
+      | Stmt_Unpred(loc) 
+      | Stmt_ConstrainedUnpred(loc)
+      | Stmt_ImpDef(_, loc)
+      | Stmt_Undefined(loc)
+      | Stmt_ExceptionTaken(loc)
+      | Stmt_Dep_Unpred(loc)
+      | Stmt_Dep_ImpDef(_, loc)
+      | Stmt_Dep_Undefined(loc)
+      | Stmt_See(_, loc) 
+      | Stmt_Assert(Expr_Var (Ident "FALSE"), loc) ->
+          (RemoveUnsupported.assert_false loc)
+
+      | Stmt_If(c, t, els, f, loc) ->
+          if is_throw_unsupported t && 
+              List.for_all (fun (S_Elsif_Cond(_,b)) -> is_throw_unsupported b) els && 
+                is_throw_unsupported f then
+            (RemoveUnsupported.assert_false loc)
+          else e
+      | _ -> e) in
+      ChangeDoChildrenPost(e, reduce)
+  end
+
+  let rec trim_post_term stmts =
+    List.fold_right (fun stmt acc ->
+      match stmt with
+      | Stmt_Throw _ -> [stmt]
+      | Stmt_If (c, t, [], f, loc) ->
+          let t = trim_post_term t in
+          let f = trim_post_term f in
+          (match t, f with
+          | [Stmt_Throw _], [Stmt_Throw _] -> t
+          | _ -> Stmt_If (c, t, [], f, loc)::acc)
+      | _ -> stmt::acc) stmts []
+
+  let run verb stmts = 
+    let v = new call_visitor in
+    let stmts = (visit_stmts v) stmts in
+    trim_post_term stmts
 
 end
 

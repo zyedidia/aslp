@@ -15,6 +15,7 @@ let f_not_bool = not
 
 let f_mul_int = Z.mul
 let f_add_int = Z.add
+let f_frem_int = Primops.prim_frem_int
 let f_cvt_bits_uint w bv = Primops.prim_cvt_bits_uint bv
 
 let f_eq_bits          _ x y = Primops.prim_eq_bits x y
@@ -55,6 +56,7 @@ let v_PSTATE_V = Expr_Field(Expr_Var(Ident "PSTATE"), Ident "V")
 let v_PSTATE_N = Expr_Field(Expr_Var(Ident "PSTATE"), Ident "N")
 let v__PC      = Expr_Var(Ident "_PC")
 let v__R       = Expr_Var(Ident "_R")
+let v__Z       = Expr_Var(Ident "_Z")
 let v_SP_EL0   = Expr_Var(Ident "SP_EL0")
 
 (* TODO: How best to prune these? *)
@@ -226,7 +228,12 @@ let f_gen_AArch64_MemTag_set x y z: unit =
   failwith "unsupported"
 let f_gen_Mem_set w x _ y z =
   push_stmt (Stmt_TCall (FIdent ("Mem.set", 0), [expr_of_z w], [x; expr_of_z w; expr_of_z y; z], Unknown))
-
+let f_gen_Mem_read w x _ y =
+  (Expr_TApply (FIdent ("Mem.read", 0), [expr_of_z w], [x; expr_of_z w; expr_of_z y]))
+let f_AtomicStart () =
+  push_stmt (Stmt_TCall (FIdent ("AtomicStart", 0), [], [], Unknown))
+let f_AtomicEnd () =
+  push_stmt (Stmt_TCall (FIdent ("AtomicEnd", 0), [], [], Unknown))
 
 
 (*

@@ -70,6 +70,8 @@ let wrap f = fun s ->
   | Either.Right e -> Either.Right e
 let write l = fun s ->
   Either.Left (s,[l],())
+let writel l = fun s ->
+  Either.Left (s,l,())
 let pure v = fun s ->
   Either.Left (s,[],v)
 let fail m = fun s ->
@@ -402,6 +404,15 @@ let fix_stmt fid s =
           let e = Expr_In (Expr_Var v, Pat_Set p) in
           let e = match oc with Some c -> Expr_TApply (FIdent ("and_bool", 0), [], [e;c]) | _ -> e in
           Stmt_If(e, b, [], [acc], loc)) (Stmt_Throw (Ident ("UNREACHABLE"), loc))  alts))
+  | Stmt_Case(Expr_Var v, alts, Some d, loc) ->
+      let@ b = contains_req_assign (List.flatten (List.map (function Alt_Alt(p,oc,b) -> b) alts)) in
+      if not b then write s
+      else
+        (Printf.printf "  %s: Splitting %s into %d values\n" (name_of_FIdent fid) (pp_stmt s) (List.length alts + 1);
+        writel (List.fold_left (fun acc (Alt_Alt(p,oc,b)) ->
+          let e = Expr_In (Expr_Var v, Pat_Set p) in
+          let e = match oc with Some c -> Expr_TApply (FIdent ("and_bool", 0), [], [e;c]) | _ -> e in
+          [Stmt_If(e, b, [], acc, loc)]) (d)  alts))
   | _ -> write s
 
 let fix_stmts fid s =
