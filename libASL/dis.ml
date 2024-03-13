@@ -311,7 +311,7 @@ type tree =
 
 let empty = Node []
 let single x = Node x
-let append x y = 
+let append x y =
   match x, y with
   | Node [], _ -> y
   | _, Node [] -> x
@@ -929,8 +929,8 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws
     (match fn with
     | Some (rty, _, targs, _, _, _) when List.mem f no_inline_ids ->
         (* impure functions are not visited. *)
-        (match sym_prim_simplify (name_of_FIdent f) tes es with 
-        | Some x -> DisEnv.pure (Some x) 
+        (match sym_prim_simplify (name_of_FIdent f) tes es with
+        | Some x -> DisEnv.pure (Some x)
         | None ->
             (match rty with
             | Some rty ->
@@ -941,11 +941,11 @@ and dis_call' (loc: l) (f: ident) (tes: sym list) (es: sym list): sym option rws
 
                 let@ rty = dis_type loc rty in
                 let func = Expr_TApply (f, List.map sym_expr tes, List.map sym_expr es) in
-                let@ var = capture_expr loc rty func in 
+                let@ var = capture_expr loc rty func in
                 let@ () = DisEnv.modify LocalEnv.popLevel in
                 DisEnv.pure @@ Some (var_sym_expr var)
-            | None -> 
-                let+ () = DisEnv.write [Stmt_TCall (f, List.map sym_expr tes, List.map sym_expr es, loc)] in 
+            | None ->
+                let+ () = DisEnv.write [Stmt_TCall (f, List.map sym_expr tes, List.map sym_expr es, loc)] in
                 None
             )
         )
@@ -1074,16 +1074,16 @@ and dis_lexpr_chain (loc: l) (x: lexpr) (ref: access_chain list) (r: sym): unit 
                 (* this loses propagation of pure expressions when they are assigned
                    into structures, but this is unavoidable since the structure value types
                    cannot store expressions. *)
-                
+
                 (* mark all pstate.nrw, pstate.el or pstate.sp writes as unsupported and die when we see them.
                    this basically "fixes" us to EL0 and eliminates a bunch of branches.
                    fun fact - the only instructions i'm aware of that can actually do this don't
                    work anyway *)
-                let () = (match var, ref with
+                let@ () = (match var, ref with
                 | Var(0, ("PSTATE")), ([Field(Ident("EL" | "SP" | "nRW"))]) ->
-                  unsupported loc @@ "Update to PSTATE EL/SP/nRW while disassembling" ^ pp_lexpr x;
-                | _, _ ->
-                  ()
+                    DisEnv.write [Stmt_Assert(expr_false, loc)]
+                  (*unsupported loc @@ "Update to PSTATE EL/SP/nRW while disassembling" ^ pp_lexpr x;*)
+                | _, _ -> DisEnv.pure ()
                 ) in
 
                 DisEnv.modify (LocalEnv.setVar loc var (Val vv'))
@@ -1326,7 +1326,7 @@ and dis_stmt' (x: AST.stmt): unit rws =
         | _, _ ->
             raise (DisUnsupported (loc, "for loop bounds not statically known: " ^ pp_stmt x)))
     | Stmt_Dep_Undefined loc
-    | Stmt_Undefined loc 
+    | Stmt_Undefined loc
     | Stmt_Unpred loc
     | Stmt_ConstrainedUnpred loc
     | Stmt_ImpDef (_, loc)
@@ -1521,7 +1521,7 @@ let build_env (env: Eval.Env.t): env =
       let pstate_v = set_access_chain loc pstate_v [Field(Ident("SP"))] (VBits({n=1; v=Z.zero;})) in
       let pstate_v = set_access_chain loc pstate_v [Field(Ident("nRW"))] (VBits({n=1; v=Z.zero;})) in
       pstate_v
-    | _ -> 
+    | _ ->
       unsupported loc @@ "Initial env value of PSTATE is not a Value";
     ) in
     let lenv = LocalEnv.setVar loc (Var(0, ("PSTATE"))) (Val(pstate)) lenv in
@@ -1532,7 +1532,7 @@ let build_env (env: Eval.Env.t): env =
     let globals = IdentSet.of_list @@ List.map fst @@ Bindings.bindings (Eval.Env.readGlobals env) in
     lenv, globals
 
-(** Instruction behaviour may be dependent on its PC. When lifting this information may be statically known. 
+(** Instruction behaviour may be dependent on its PC. When lifting this information may be statically known.
     If this is the case, we benefit from setting a PC initially and propagating its value through partial evaluation.
     Assumes variable is named _PC and its represented as a bitvector. *)
 let setPC (env: Eval.Env.t) (lenv,g: env) (address: Z.t): env =
