@@ -386,6 +386,36 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
 let write_epilogue fid env st =
   Printf.fprintf st.oc "let run enc =\n  clear_res ();\n  %s enc;\n  get_res ()\n" (name_of_ident fid)
 
+(*
+let write_file fn fnsig env dir =
+  let path = dir ^ "/" ^ name_of_FIdent fn ^ ".ml" in
+  let oc = open_out path in
+  let st = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty } in
+  write_preamble env st;
+  write_fn fn fnsig st;
+  close_out oc
+
+let run fid fns env dir =
+  let dsig = Bindings.find fid fns in
+  let fns = Bindings.remove fid fns in
+  Bindings.iter (fun k b -> write_file k b env dir) fns;
+
+  let oc = open_out (dir ^ "/offline.ml") in
+  let st = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty } in
+  write_preamble env st;
+
+  (* include everything *)
+  Bindings.iter (fun k b -> 
+    let path = String.capitalize_ascii (name_of_FIdent k) in
+    Printf.fprintf st.oc "open %s\n" (path)
+  ) fns;
+  Printf.fprintf st.oc "\n";
+
+  write_fn fid dsig st;
+  write_epilogue fid env st;
+  close_out oc
+*)
+
 let run fid fns env (filename: string) =
   let oc = open_out filename in
   let st = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty } in

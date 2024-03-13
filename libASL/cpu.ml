@@ -70,6 +70,7 @@ let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
         (* Dump the resulting program as OCaml *)
         if not (Sys.file_exists "output") then Sys.mkdir "output" 755;
         Ocaml_backend.run (fst decoder) offline_fns env "output/offline.ml"
+        (*Ocaml_backend.run (fst decoder) offline_fns env "output"*)
 
     in
     {
