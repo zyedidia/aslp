@@ -162,6 +162,7 @@ let join_state (a: state) (b: state): state =
     calls = SigSet.union (a.calls) (b.calls);
     ctx = join_taint (a.ctx) (b.ctx);
     changed = a.changed || b.changed;
+
     (* These should not change *)
     env = a.env;
     results = a.results;
@@ -170,29 +171,25 @@ let join_state (a: state) (b: state): state =
     log = a.log;
   }
 
-let extra_prims = [
-  "ZeroExtend";
-  "lsr_bits";
-  "sle_bits";
-  "lsl_bits";
-  "asr_bits";
-  "slt_bits";
-  "SignExtend";
-  "sdiv_bits";
-  "Mem.set";
-  "Mem.read";
-  "AArch64.MemTag.set";
-  "AtomicStart";
-  "AtomicEnd";
-]
+(* Produce a runtime value if any arg is runtime *)
+let pure_prims = 
+  Value.prims_pure @ 
+  (List.map fst Dis.no_inline_pure) @ [
+    "lsr_bits";
+    "sle_bits";
+    "lsl_bits";
+    "asr_bits";
+    "slt_bits";
+    "sdiv_bits";
+  ]
 
-let is_prim f = 
-  match f with
-  | FIdent(f,0) -> List.mem f Value.prims_pure || List.mem f extra_prims
-  | _ -> false
+(* Prims that will always produce runtime *)
+let impure_prims = 
+  List.map fst Dis.no_inline
 
 let prim_ops (f: ident) (targs: taint list) (args: taint list): taint option =
-  if is_prim f then Some (join_taint_l (targs @ args))
+  if List.mem (name_of_FIdent f) pure_prims then Some (join_taint_l (targs @ args))
+  else if List.mem (name_of_FIdent f) impure_prims then Some RunTime
   else None
 
 (* Transfer function for a call, pulling a primop def or looking up registered fn signature.
@@ -200,13 +197,7 @@ let prim_ops (f: ident) (targs: taint list) (args: taint list): taint option =
 let call_tf (f: ident) (targs: taint list) (args: taint list) (st: state): (state * taint) =
   match prim_ops f targs args with
   | Some t -> (st,t)
-  | None ->
-      Printf.printf "Missing %s\n" (name_of_FIdent f);
-      (st, LiftTime)
-      (*let st = upd_calls (SigSet.add s) st in
-      match SigMap.find_opt s st.results with
-      | Some (_,v) -> (st, v)
-      | None -> (st, LiftTime) *)
+  | None -> failwith @@ "Missing operation: " ^ (name_of_FIdent f)
 
 (* Determine the taint of an expr *)
 let rec expr_tf (e: expr): taint stm =
@@ -481,6 +472,9 @@ let is_runtime_slice s =
   s_t = RunTime
 
 let rec is_runtime_stmt s: bool stm =
+  let@ ctx = get_context in
+  if ctx = RunTime then pure true
+  else
   match s with
   | Stmt_VarDeclsNoInit(ty, vs, loc) ->
       let@ ty = is_runtime_type ty in
@@ -626,6 +620,9 @@ let test c m =
 let wstate f = fun s ->
   let (s',r) = f s.res in
   Either.Left (s,[],r)
+let set_context ctx = fun s ->
+  let res = {s.res with ctx} in
+  Either.Left ({s with res},[],())
 let rec split f l =
   match l with
   | [] -> pure ([], [])
@@ -802,6 +799,10 @@ let emit_prim f tes es =
   let f = FIdent( "gen_" ^name_of_FIdent f, 0) in
   pure (Expr_TApply(f,tes,es))
 
+let emit_prim_v f tes es =
+  let f = FIdent( "gen_" ^name_of_FIdent f^"_rt", 0) in
+  pure (Expr_TApply(f,tes,es))
+
 let rec rt_prim loc f tes es =
   match (f, tes, es) with
   | (FIdent ("replicate_bits", 0), [m; n], [x; y]) ->
@@ -828,6 +829,65 @@ let rec rt_prim loc f tes es =
       let@ w' = lt_expr loc w' in
       let@ y = lt_expr loc y in
       emit_prim f [w] [x;w';y]
+
+  | (FIdent ("FPToFixed", 0), [w;w'], [x;b;u;t;r]) ->
+      let@ w = lt_expr loc w in
+      let@ w' = lt_expr loc w' in
+      let@ x = rt_expr loc x in
+      let@ b = lt_expr loc b in
+      let@ u = rt_expr loc u in
+      let@ t = rt_expr loc t in
+      let@ r = gen_expr loc r in
+      (match r with
+      | (LiftTime,e) -> emit_prim f [w;w'] [x;b;u;t;e]
+      | (RunTime,Expr_TApply (FIdent ("gen_cvt_bits_uint", 0), _, [e])) -> emit_prim_v f [w;w'] [x;b;u;t;e]
+      | _ -> failwith "unexpected rounding mode")
+
+  | (FIdent ("FixedToFP", 0), [w;w'], [x;b;u;t;r]) ->
+      let@ w = lt_expr loc w in
+      let@ w' = lt_expr loc w' in
+      let@ x = rt_expr loc x in
+      let@ b = lt_expr loc b in
+      let@ u = rt_expr loc u in
+      let@ t = rt_expr loc t in
+      let@ r = gen_expr loc r in
+      (match r with
+      | (LiftTime,e) -> emit_prim f [w;w'] [x;b;u;t;e]
+      | (RunTime,Expr_TApply (FIdent ("gen_cvt_bits_uint", 0), _, [e])) -> emit_prim_v f [w;w'] [x;b;u;t;e]
+      | _ -> failwith "unexpected rounding mode")
+
+  | (FIdent ("FPConvert", 0), [w;w'], [x;t;r]) ->
+      let@ w = lt_expr loc w in
+      let@ w' = lt_expr loc w' in
+      let@ x = rt_expr loc x in
+      let@ t = rt_expr loc t in
+      let@ r = gen_expr loc r in
+      (match r with
+      | (LiftTime,e) -> emit_prim f [w;w'] [x;t;e]
+      | (RunTime,Expr_TApply (FIdent ("gen_cvt_bits_uint", 0), _, [e])) -> emit_prim_v f [w;w'] [x;t;e]
+      | _ -> failwith "unexpected rounding mode")
+
+  | (FIdent ("FPRoundIntN", 0), [w], [x;t;r;s]) ->
+      let@ w = lt_expr loc w in
+      let@ x = rt_expr loc x in
+      let@ t = rt_expr loc t in
+      let@ s = lt_expr loc s in
+      let@ r = gen_expr loc r in
+      (match r with
+      | (LiftTime,e) -> emit_prim f [w] [x;t;e;s]
+      | (RunTime,Expr_TApply (FIdent ("gen_cvt_bits_uint", 0), _, [e])) -> emit_prim_v f [w] [x;t;e;s]
+      | _ -> failwith "unexpected rounding mode")
+
+  | (FIdent ("FPRoundInt", 0), [w], [x;t;r;s]) ->
+      let@ w = lt_expr loc w in
+      let@ x = rt_expr loc x in
+      let@ t = rt_expr loc t in
+      let@ s = rt_expr loc s in
+      let@ r = gen_expr loc r in
+      (match r with
+      | (LiftTime,e) -> emit_prim f [w] [x;t;e;s]
+      | (RunTime,Expr_TApply (FIdent ("gen_cvt_bits_uint", 0), _, [e])) -> emit_prim_v f [w] [x;t;e;s]
+      | _ -> failwith "unexpected rounding mode")
 
   | _ ->
       let@ tes = traverse (lt_expr loc) tes in
@@ -881,11 +941,14 @@ and emit_if loc (c: expr) (tcase: unit wrm) (fcase: unit wrm) =
   let@ b = is_rt_expr c in
   if b then
     let@ c = rt_expr loc c in
+    let@ ctx = wstate get_context in
+    let@ _ = set_context RunTime in
     let@ (lt,lf,lm) = gen_branch loc c in
     let@ _ = switch_context loc lt in
     let@ tcase = tcase in
     let@ _ = switch_context loc lf in
     let@ fcase = fcase in
+    let@ _ = set_context ctx in
     switch_context loc lm
   else 
     let@ (tstmts,tcase) = wrap tcase in
@@ -991,6 +1054,9 @@ and gen_stmt s : unit wrm =
     (* Generate a runtime expr *)
     | Stmt_Assert(e,loc) -> 
         let@ e = rt_expr loc e in
+        emit_assert loc e
+    | Stmt_Throw(e,loc) ->
+        let@ e = gen_lit Symbolic.expr_false in
         emit_assert loc e
 
     (* Explicitly prevent runtime loops *)
