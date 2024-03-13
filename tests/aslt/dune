@@ -1,2 +1,13 @@
+(rule (copy ../../libASL/Semantics.g4 ./Semantics.g4))
+
+(rule (target ./antlr.jar)
+ (action
+  (bash "antlr=\"${ANTLR4_JAR_LOCATION:-}\"
+        if [[ -n \"$antlr\" ]]; then
+         ln -s \"$antlr\" antlr.jar
+        else
+         curl -s -o antlr.jar https://www.antlr.org/download/antlr-4.13.1-complete.jar
+        fi")))
+
 (cram
- (deps (package asli) ./ops.txt))
+ (deps (package asli) ./antlr.jar ./Semantics.g4 ./ops.txt ./cntlm-ops.txt))

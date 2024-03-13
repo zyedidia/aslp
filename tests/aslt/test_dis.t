@@ -15,10 +15,10 @@ run asli with these commands
   __array _R [ 1 ] = Cse0__5 ;
   ""
   Stmt_ConstDecl(Type_Bits(64),"Cse0__5",Expr_TApply("add_bits.0",[64],[Expr_Array(Expr_Var("_R"),2);Expr_Array(Expr_Var("_R"),3)]))
-  Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),V),Expr_TApply("not_bits.0",[1],[Expr_TApply("cvt_bool_bv.0",[],[Expr_TApply("eq_bits.0",[65],[Expr_TApply("SignExtend.0",[64;65],[Expr_Var("Cse0__5");65]);Expr_TApply("add_bits.0",[65],[Expr_TApply("SignExtend.0",[64;65],[Expr_Array(Expr_Var("_R"),2);65]);Expr_TApply("SignExtend.0",[64;65],[Expr_Array(Expr_Var("_R"),3);65])])])])]))
-  Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),C),Expr_TApply("not_bits.0",[1],[Expr_TApply("cvt_bool_bv.0",[],[Expr_TApply("eq_bits.0",[65],[Expr_TApply("ZeroExtend.0",[64;65],[Expr_Var("Cse0__5");65]);Expr_TApply("add_bits.0",[65],[Expr_TApply("ZeroExtend.0",[64;65],[Expr_Array(Expr_Var("_R"),2);65]);Expr_TApply("ZeroExtend.0",[64;65],[Expr_Array(Expr_Var("_R"),3);65])])])])]))
-  Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),Z),Expr_TApply("cvt_bool_bv.0",[],[Expr_TApply("eq_bits.0",[64],[Expr_Var("Cse0__5");'0000000000000000000000000000000000000000000000000000000000000000'])]))
-  Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),N),Expr_Slices(Expr_Var("Cse0__5"),[Slice_LoWd(63,1)]))
+  Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),"V"),Expr_TApply("not_bits.0",[1],[Expr_TApply("cvt_bool_bv.0",[],[Expr_TApply("eq_bits.0",[65],[Expr_TApply("SignExtend.0",[64;65],[Expr_Var("Cse0__5");65]);Expr_TApply("add_bits.0",[65],[Expr_TApply("SignExtend.0",[64;65],[Expr_Array(Expr_Var("_R"),2);65]);Expr_TApply("SignExtend.0",[64;65],[Expr_Array(Expr_Var("_R"),3);65])])])])]))
+  Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),"C"),Expr_TApply("not_bits.0",[1],[Expr_TApply("cvt_bool_bv.0",[],[Expr_TApply("eq_bits.0",[65],[Expr_TApply("ZeroExtend.0",[64;65],[Expr_Var("Cse0__5");65]);Expr_TApply("add_bits.0",[65],[Expr_TApply("ZeroExtend.0",[64;65],[Expr_Array(Expr_Var("_R"),2);65]);Expr_TApply("ZeroExtend.0",[64;65],[Expr_Array(Expr_Var("_R"),3);65])])])])]))
+  Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),"Z"),Expr_TApply("cvt_bool_bv.0",[],[Expr_TApply("eq_bits.0",[64],[Expr_Var("Cse0__5");'0000000000000000000000000000000000000000000000000000000000000000'])]))
+  Stmt_Assign(LExpr_Field(LExpr_Var("PSTATE"),"N"),Expr_Slices(Expr_Var("Cse0__5"),[Slice_LoWd(63,1)]))
   Stmt_Assign(LExpr_Array(LExpr_Var("_R"),1),Expr_Var("Cse0__5"))
   "
   0xd10083ff
@@ -68,7 +68,7 @@ run asli with these commands
   Decoding instruction A64 d53b4200
   __array _R [ 0 ] = append_bits.0 {{ 36,28 }} ( append_bits.0 {{ 32,4 }} ( '00000000000000000000000000000000',append_bits.0 {{ 3,1 }} ( append_bits.0 {{ 2,1 }} ( append_bits.0 {{ 1,1 }} ( PSTATE . N,PSTATE . Z ),PSTATE . C ),PSTATE . V ) ),'0000000000000000000000000000' ) ;
   ""
-  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),0),Expr_TApply("append_bits.0",[36;28],[Expr_TApply("append_bits.0",[32;4],['00000000000000000000000000000000';Expr_TApply("append_bits.0",[3;1],[Expr_TApply("append_bits.0",[2;1],[Expr_TApply("append_bits.0",[1;1],[Expr_Field(Expr_Var("PSTATE"),N);Expr_Field(Expr_Var("PSTATE"),Z)]);Expr_Field(Expr_Var("PSTATE"),C)]);Expr_Field(Expr_Var("PSTATE"),V)])]);'0000000000000000000000000000']))
+  Stmt_Assign(LExpr_Array(LExpr_Var("_R"),0),Expr_TApply("append_bits.0",[36;28],[Expr_TApply("append_bits.0",[32;4],['00000000000000000000000000000000';Expr_TApply("append_bits.0",[3;1],[Expr_TApply("append_bits.0",[2;1],[Expr_TApply("append_bits.0",[1;1],[Expr_Field(Expr_Var("PSTATE"),"N");Expr_Field(Expr_Var("PSTATE"),"Z")]);Expr_Field(Expr_Var("PSTATE"),"C")]);Expr_Field(Expr_Var("PSTATE"),"V")])]);'0000000000000000000000000000']))
   "
   0x0e000000
   "
