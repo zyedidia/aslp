@@ -1661,3 +1661,19 @@ module RemoveTempBVs = struct
     visit_stmts visitor xs
 
 end
+
+module RemoveRegisters = struct
+
+  class type_walker = object
+    inherit Asl_visitor.nopAslVisitor
+    method !vtype t =
+      match t with
+      | Type_Register(w,_) -> ChangeTo (Type_Bits (Expr_LitInt w))
+      | _ -> DoChildren
+  end
+
+  let run = 
+    let v = new type_walker in
+    visit_stmts v
+
+end

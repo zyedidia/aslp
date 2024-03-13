@@ -1507,6 +1507,7 @@ let dis_decode_entry (env: Eval.Env.t) ((lenv,globals): env) (decode: decode_cas
     let stmts' = Transforms.RedundantSlice.do_transform bindings stmts' in
     let stmts' = Transforms.RemoveUnused.remove_unused globals @@ stmts' in
     let stmts' = Transforms.CaseSimp.do_transform stmts' in
+    let stmts' = Transforms.RemoveRegisters.run stmts' in
 
     if !debug_level >= 2 then begin
         let stmts' = Asl_visitor.visit_stmts (new Asl_utils.resugarClass (!TC.binop_table)) stmts' in
