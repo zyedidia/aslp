@@ -4,7 +4,6 @@ open Asl_visitor
 open Visitor
 
 (* TODO: 
-  - Decoder is way too big, reduce its where possible
   - Better simp using equiv conditions in dis
 *)
 
@@ -112,10 +111,6 @@ let problematic_enc = [
   "ST4W_Z_P_BI_Contiguous";
   "ST4W_Z_P_BR_Contiguous";
   "WRFFR_F_P__";
-  "aarch64_integer_crc";
-  "aarch64_integer_pac_pacga_dp_2src";
-  "aarch64_integer_pac_strip_dp_1src";
-  "aarch64_integer_pac_strip_hint";
   "aarch64_memory_vector_single_no_wb";
   "aarch64_memory_vector_single_post_inc";
   "aarch64_system_hints";
@@ -286,7 +281,7 @@ module Cleanup = struct
     let (common,a,b) = zip_pre (List.rev a) (List.rev b) in
     (List.rev common, List.rev a, List.rev b)
 
-  let rec walk_stmt s =
+  let rec walk_stmt verb s =
     match s with
     | Stmt_If(c, t, els, f, loc) when t = f && List.for_all (function S_Elsif_Cond(_,b) -> b = t) els ->
         t
@@ -294,27 +289,28 @@ module Cleanup = struct
     | Stmt_If(c, t, [], f, loc) ->
       let (common_pre,t,f) = zip_pre t f in
       let (common_post,t,f) = zip_post t f in
-      let common_pre = walk_stmts common_pre in
-      let common_post = walk_stmts common_post in
-      let t = walk_stmts t in
-      let f = walk_stmts f in
+      let common_pre = walk_stmts verb common_pre in
+      let common_post = walk_stmts verb common_post in
+      let t = walk_stmts verb t in
+      let f = walk_stmts verb f in
       (* TODO: c & common_pre *)
       common_pre @ Stmt_If(c, t, [], f, loc) :: common_post
 
     | Stmt_If(c, t, els, f, loc) ->
-        let t = walk_stmts t in
-        let els = List.map (function S_Elsif_Cond(c,b) -> S_Elsif_Cond(c,walk_stmts b)) els in
-        let f = walk_stmts f in 
+        if verb then Printf.printf "Could not match %s\n" (pp_stmt s);
+        let t = walk_stmts verb t in
+        let els = List.map (function S_Elsif_Cond(c,b) -> S_Elsif_Cond(c,walk_stmts verb b)) els in
+        let f = walk_stmts verb f in 
         [Stmt_If(c, t, els, f, loc)]
 
     | _ -> [s]
 
-  and walk_stmts s =
+  and walk_stmts verb s =
     List.fold_left (fun acc s -> 
-      let s = walk_stmt s in
+      let s = walk_stmt verb s in
       acc@s) [] s
 
-  let run = walk_stmts
+  let run verb = walk_stmts verb
 
 end
 
@@ -332,15 +328,40 @@ module DecoderCleanup = struct
       | _ -> DoChildren)
   end 
 
+  let rec is_throw_unsupported s =
+    match s with
+    | (Stmt_Throw (Ident "UNSUPPORTED", loc))::xs -> true
+    | x::xs -> is_throw_unsupported xs
+    | _ -> false
+
   (* Remove unsupported instr bodies *)
   class call_visitor unsupported  = object
     inherit nopAslVisitor
     method! vstmt e =
-      (match e with
+      let reduce e = (match e with
       | Stmt_TCall (f, _, _, loc) ->
-          if unsupported f then ChangeTo (RemoveUnsupported.assert_false loc)
-          else DoChildren
-      | _ -> DoChildren)
+          if unsupported f then (RemoveUnsupported.assert_false loc)
+          else e
+      | Stmt_Unpred(loc) 
+      | Stmt_ConstrainedUnpred(loc)
+      | Stmt_ImpDef(_, loc)
+      | Stmt_Undefined(loc)
+      | Stmt_ExceptionTaken(loc)
+      | Stmt_Dep_Unpred(loc)
+      | Stmt_Dep_ImpDef(_, loc)
+      | Stmt_Dep_Undefined(loc)
+      | Stmt_See(_, loc) 
+      | Stmt_Assert(Expr_Var (Ident "FALSE"), loc) ->
+          (RemoveUnsupported.assert_false loc)
+
+      | Stmt_If(c, t, els, f, loc) ->
+          if is_throw_unsupported t && 
+              List.for_all (fun (S_Elsif_Cond(_,b)) -> is_throw_unsupported b) els && 
+                is_throw_unsupported f then
+            (RemoveUnsupported.assert_false loc)
+          else e
+      | _ -> e) in
+      ChangeDoChildrenPost(e, reduce)
   end
 
   let run unsupported dsig =
@@ -352,7 +373,7 @@ module DecoderCleanup = struct
 end
 
 let unsupported_inst tests instrs f = 
-  let r = not (List.exists (fun (f',_) -> f' = f) (tests@instrs))  in
+  let r = not (List.exists (fun (f',_) -> f' = f) (tests) || Bindings.mem f instrs)  in
   r
 
 (* Produce a lifter for the desired parts of the instruction set *)
@@ -373,12 +394,6 @@ let run iset pat env =
   let fns = Bindings.map (fnsig_upd_body (Transforms.RemoveTempBVs.do_transform false)) fns in
   (* Remove calls to problematic functions *)
   let fns = Bindings.map (fnsig_upd_body (RemoveUnsupported.run unsupported)) fns in
-  (* Prune unsupported instructions from decoder *)
-  let dsig = fnsig_upd_body (DecoderCleanup.run (unsupported_inst tests instrs)) dsig in
-  (* Dead code elim on decoder & tests *)
-  let dsig = fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) dsig in
-  let dsig = fnsig_upd_body (Cleanup.run) dsig in
-  let tests = List.map (fun (f,s) -> (f,fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) s)) tests in
 
   Printf.printf "Stage 4: Specialisation\n";
   (* Run requirement collection over the full set *)
@@ -397,9 +412,14 @@ let run iset pat env =
     | None -> acc) entry_set Bindings.empty in
   Printf.printf "  Succeeded for %d instructions\n\n" (Bindings.cardinal fns);
 
-  let fns = Bindings.map (fnsig_upd_body (Cleanup.run)) fns in
+  let fns = Bindings.map (fnsig_upd_body (Cleanup.run false)) fns in
 
   Printf.printf "Stmt Counts\n"; 
   Bindings.iter (fun fn fnsig -> Printf.printf "  %d : %s\n" (stmts_count (fnsig_get_body fnsig)) (name_of_FIdent fn)) fns;
+
+  (* Dead code elim on decoder & tests *)
+  let dsig = fnsig_upd_body (DecoderCleanup.run (unsupported_inst tests fns)) dsig in
+  let dsig = fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) dsig in
+  let tests = List.map (fun (f,s) -> (f,fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) s)) tests in
 
   ((did,dsig),tests,fns)

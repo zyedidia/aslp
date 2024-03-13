@@ -62,6 +62,7 @@ type state = {
   log        : bool;
 }
 
+
 let upd_vars f st = {st with vars = f (st.vars)}
 let upd_ret f st = {st with ret = f (st.ret)}
 let upd_calls f st = {st with calls = f (st.calls)}
@@ -177,6 +178,9 @@ let extra_prims = [
   "asr_bits";
   "slt_bits";
   "SignExtend";
+  "sdiv_bits";
+  "Mem.set";
+  "AArch64.MemTag.set";
 ]
 
 let is_prim f = 
@@ -582,13 +586,14 @@ type gen_state = {
   res : state;
   env : Eval.Env.t;
   var_type : ty Bindings.t;
+  log : bool;
 }
 
-let init_gen_state prev globals results env ret types = 
+let init_gen_state prev globals results env ret types log = 
   let res = init_state prev globals results env false in
   let res = {res with ret} in
   let res = {res with vars = prev} in
-  {var_count = 0; res; env; var_type = types }
+  {var_count = 0; res; env; var_type = types; log }
 
 type 'a wrm = (gen_state -> (gen_state * stmt list * 'a,string) Either.t)
 let (let@) x f = fun s ->
@@ -642,6 +647,8 @@ let get_env = fun s ->
   Either.Left (s,[],s.env)
 let get_types = fun s ->
   Either.Left (s,[],s.var_type)
+let get_debug = fun s ->
+  Either.Left (s,[],s.log)
 
 let is_rt_var v = wstate (is_runtime_var v)
 let is_rt_expr v = wstate (is_runtime_expr v)
@@ -652,7 +659,9 @@ let rt_var_ty = Type_Constructor (Ident "rt_sym")
 let rt_label_ty = Type_Constructor (Ident "rt_label")
 
 let rt_decl_bv        = FIdent("decl_bv", 0) (* int -> sym *)
+let rt_decl_bool        = FIdent("decl_bool", 0) (* int -> sym *)
 let rt_gen_bit_lit    = FIdent("gen_bit_lit", 0) (* 'a lt -> 'a rt *)
+let rt_gen_bool_lit    = FIdent("gen_bool_lit", 0) (* 'a lt -> 'a rt *)
 let rt_gen_branch     = FIdent("gen_branch", 0) (* bool rt -> (true label, false label, merge label) *)
 let rt_switch_context = FIdent("switch_context", 0) (* label -> () *)
 let rt_gen_load       = FIdent("gen_load", 0) (* sym -> 'a rt -> () *)
@@ -684,7 +693,7 @@ let gen_var_decl loc ty v =
       if c then fail @@ "gen_var_decl: Runtime variable width " ^ (pp_expr w)
       else pure (Expr_TApply (rt_decl_bv, [], [arg_of_ident v; w]))
   | Type_Constructor(Ident("boolean")) -> 
-      pure (Expr_TApply (rt_decl_bv, [], [arg_of_ident v; Expr_LitInt "1"]))
+      pure (Expr_TApply (rt_decl_bool, [], [arg_of_ident v]))
   | Type_Constructor(id) ->
       let@ env = get_env in
       (match Eval.Env.getEnum env id with
@@ -725,11 +734,26 @@ let gen_var_store loc v e =
 let gen_var_load v =
   pure (Expr_TApply(rt_gen_load, [], [Expr_Var v]))
 
+(* Generate a simple field access by collapsing fields *)
+let gen_field_store loc l f v =
+  match l,f  with
+  | LExpr_Var (Ident var), Ident f ->
+      let name = Ident (var ^ "." ^ f) in
+      gen_var_store loc name v
+  | _ -> fail "gen_field_store"
+let gen_field_load e f =
+  match e, f with
+  | Expr_Var (Ident var), Ident f ->
+      let name = Ident (var ^ "." ^ f) in
+      gen_var_load name
+  | _ -> fail "gen_field_load"
+
 (* Generate an array store/load *)
-let gen_array_assign loc a i e =
+let gen_array_store loc a i e =
   write [Stmt_TCall(rt_gen_array_store, [], [Expr_Var a;i;e], loc)]
 let gen_array_load a i =
   pure (Expr_TApply(rt_gen_array_load, [], [Expr_Var a;i]))
+
 
 
 
@@ -751,7 +775,7 @@ let gen_lit e =
   let t = Dis_tc.infer_type e vars env in
   match t with
   | Some (Type_Bits(w)) -> pure (Expr_TApply (rt_gen_bit_lit, [w], [e]))
-  | Some (Type_Constructor(Ident("boolean"))) -> pure (Expr_TApply (rt_gen_bit_lit, [Expr_LitInt "1"], [e]))
+  | Some (Type_Constructor(Ident("boolean"))) -> pure (Expr_TApply (rt_gen_bool_lit, [], [e]))
   | Some t -> fail @@ "gen_lit: " ^ (pp_expr e) ^ " " ^ (pp_type t)
   | _ -> fail @@ "gen_lit: " ^ (pp_expr e)
 
@@ -763,25 +787,16 @@ let gen_concat es =
 let gen_eq a b =
   pure (Expr_TApply (rt_gen_eq, [], [a;b]))
 
-let emit_field_load e f =
-  match e,f  with
-  | Expr_Var (Ident var), Ident f ->
-      let name = Ident (var ^ "." ^ f) in
-      gen_var_load name
-  | _ -> fail "emit_field_load"
-let emit_field_store loc e f v =
-  match e,f  with
-  | Expr_Var (Ident var), Ident f ->
-      let name = Ident (var ^ "." ^ f) in
-      write [Stmt_TCall(rt_gen_store, [], [arg_of_ident name;v], loc)]
-  | _ -> fail "emit_field_store"
+(*
+*)
+
+
 let emit_assert loc e =
   write [Stmt_TCall(rt_gen_assert, [], [e], loc)]
 
 let emit_prim f tes es =
   let f = FIdent( "gen_" ^name_of_FIdent f, 0) in
   pure (Expr_TApply(f,tes,es))
-
 
 let rec rt_prim loc f tes es =
   match (f, tes, es) with
@@ -797,10 +812,35 @@ let rec rt_prim loc f tes es =
       let@ x = rt_expr loc x in
       let@ y = lt_expr loc y in
       emit_prim f [m;n] [x;y]
+  | (FIdent ("SignExtend", 0), [m; n], [x; y]) ->
+      let@ m = lt_expr loc m in
+      let@ n = lt_expr loc n in
+      let@ x = rt_expr loc x in
+      let@ y = lt_expr loc y in
+      emit_prim f [m;n] [x;y]
   | _ ->
       let@ tes = traverse (lt_expr loc) tes in
       let@ es = traverse (rt_expr loc) es in
       emit_prim f tes es
+
+and rt_eff loc f tes es =
+  let f' = FIdent ("gen_" ^ name_of_FIdent f, 0) in
+  match (f, tes, es) with
+  | (FIdent ("AArch64.MemTag.set", 0), [], [x;y;z]) ->
+      let@ x = rt_expr loc x in
+      let@ y = lt_expr loc y in
+      let@ z = rt_expr loc z in
+      write [Stmt_TCall(f', [], [x;y;z], loc)]
+
+  | (FIdent ("Mem.set", 0), [w], [x;w';y;z]) ->
+      let@ w = lt_expr loc w in
+      let@ x = rt_expr loc x in
+      let@ w' = lt_expr loc w' in
+      let@ y = lt_expr loc y in
+      let@ z = rt_expr loc z in
+      write [Stmt_TCall(f', [w], [x;w';y;z], loc)]
+
+  | _ -> failwith @@ "Unknown eff: " ^ name_of_FIdent f
 
 (* Generate a trivial ITE *)
 (* TODO: Avoid creation of temp if possible? *)
@@ -866,17 +906,15 @@ and gen_expr loc e : (taint * expr) wrm =
       | Expr_Slices(e, [s]) ->
           let@ e = rt_expr loc e in
           gen_slice loc e s
-      | Expr_Var(v) -> gen_var_load (v)
       | Expr_TApply(f,tes,es) -> rt_prim loc f tes es
 
-
-      | Expr_Field(e, f) ->
-          emit_field_load e f
       | Expr_Tuple(es) ->
           let+ r = traverse (rt_expr loc) es in
           Expr_Tuple r
 
-      (* Support trivial array loads *)
+      (* State loads *)
+      | Expr_Var(v) -> gen_var_load v
+      | Expr_Field(e, f) -> gen_field_load e f
       | Expr_Array(Expr_Var a, i) ->
           let@ (t,e) = gen_expr loc i in
           let@ _ = test (t <> LiftTime) @@ "gen_expr: runtime array access: " ^ (pp_expr e) in
@@ -886,20 +924,23 @@ and gen_expr loc e : (taint * expr) wrm =
     in (RunTime, r)
 
 and lt_expr loc e =
-  Printf.printf "lt_expr: %s\n" (pp_expr e);
+  let@ debug = get_debug in
+  if debug then Printf.printf "lt_expr: %s\n" (pp_expr e);
   let@ (t,e) = gen_expr loc e in
   if t = LiftTime then pure e
   else fail @@ "Unexpected runtime expression: " ^ (pp_expr e)
 
 (* Generate an expression, forcing it to be runtime via a cast *)
 and rt_expr loc e =
-  Printf.printf "rt_expr: %s\n" (pp_expr e);
+  let@ debug = get_debug in
+  if debug then Printf.printf "rt_expr: %s\n" (pp_expr e);
   let@ (t,e) = gen_expr loc e in
   if t = LiftTime then gen_lit e
   else pure e
 
 and gen_stmt s : unit wrm =
-  Printf.printf "gen_stmt: %s\n" (pp_stmt s);
+  let@ debug = get_debug in
+  if debug then Printf.printf "gen_stmt: %s\n" (pp_stmt s);
   let@ c = is_rt_stmt s in
   if not c then write [s]
   else match s with
@@ -925,11 +966,7 @@ and gen_stmt s : unit wrm =
 
     (* Update the signature based on the argument classification *)
     | Stmt_TCall(f, tes, es, loc) ->
-        let@ tes = traverse (gen_expr loc) tes in
-        let@ es = traverse (gen_expr loc) es in
-        let s = (f, List.map fst tes, List.map fst es) in
-        let i = ident_of_sig s in
-        write [Stmt_TCall(i, List.map snd tes, List.map snd es, loc)]
+        rt_eff loc f tes es
 
     (* Ensure result is runtime *)
     | Stmt_FunReturn(e, loc) ->
@@ -964,10 +1001,9 @@ and rt_lexpr loc l e =
       gen_var_store loc v e
   | LExpr_Array(LExpr_Var(v),i) ->
       let@ i = lt_expr loc i in
-      gen_array_assign loc v i e
-
-  | LExpr_Field(LExpr_Var(l), f) ->
-      emit_field_store loc (Expr_Var l) f e
+      gen_array_store loc v i e
+  | LExpr_Field(l, f) ->
+     gen_field_store loc l f e
 
   | LExpr_Slices(LExpr_Var v, [Slice_LoWd (lo, wd)]) ->
       let@ b = is_rt_expr lo in
@@ -984,7 +1020,7 @@ and rt_lexpr loc l e =
       let@ i = lt_expr loc i in
       let@ va = gen_array_load v i in
       let@ e = gen_slice_update loc va lo wd e in
-      gen_array_assign loc v i e
+      gen_array_store loc v i e
 
   | LExpr_Tuple(es) -> (* TODO: This isn't quite right *)
       write [Stmt_Assign(l,e,loc)]
@@ -1006,7 +1042,7 @@ let gen_prog fns results env =
     | None -> (None)
     | Some (a,b,c,d,e,body) ->
         let types = Dis_tc.LocalVarTypes.run b c body in
-        let st = init_gen_state prev globals results env ret types in
+        let st = init_gen_state prev globals results env ret types false in
         match gen_stmts body st with
         | Either.Left (_,w,_) -> Some (a,b,c,d,e,w)
         | Either.Right m -> (Printf.printf "Failed to gen '%s': %s\n" (pp_sig s) m; None)
