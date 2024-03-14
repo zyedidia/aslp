@@ -422,3 +422,50 @@ bits(64) AuthIB(bits(64) X, bits(64) Y, boolean is_combined)
         return UnsignedSatQ(i, N);
     else
         return SignedSatQ(i, N);
+
+// Avoid tuple return
+bits(N) FPToFixedJS_impl(bits(M) op, FPCRType fpcr, boolean Is64)
+
+    assert M == 64 && N == 33;
+
+    // Unpack using fpcr to determine if subnormals are flushed-to-zero
+    (fptype,sign,value) = FPUnpack(op, fpcr);
+
+    Z = '1';
+    // If NaN, set cumulative flag or take exception
+    if fptype == FPType_SNaN || fptype == FPType_QNaN then
+        FPProcessException(FPExc_InvalidOp, fpcr);
+        Z = '0';
+
+    int_result = RoundDown(value);
+    error = value - Real(int_result);
+
+    // Determine whether supplied rounding mode requires an increment
+
+    round_it_up = (error != 0.0 && int_result < 0);
+    if round_it_up then int_result = int_result + 1;
+
+    if int_result < 0 then
+        result = int_result - 2^32*RoundUp(Real(int_result)/Real(2^32));
+    else
+        result = int_result - 2^32*RoundDown(Real(int_result)/Real(2^32));
+
+    // Generate exceptions
+    if int_result < -(2^31) || int_result > (2^31)-1 then
+        FPProcessException(FPExc_InvalidOp, fpcr);
+        Z = '0';
+    elsif error != 0.0 then
+        FPProcessException(FPExc_Inexact, fpcr);
+        Z = '0';
+    elsif sign == '1' && value == 0.0 then
+        Z = '0';
+    elsif sign == '0' && value == 0.0 && !IsZero(op[51:0]) then
+        Z = '0';
+
+    if fptype == FPType_Infinity then result = 0;
+
+    return result[N-2:0]:Z;
+
+(bits(N), bit) FPToFixedJS(bits(M) op, FPCRType fpcr, boolean Is64)
+    bits(N + 1) res = FPToFixedJS_impl(op, fpcr, Is64);
+    return (res[N:1], res[0]);

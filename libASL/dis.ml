@@ -78,7 +78,7 @@ let no_inline = [
   "FPCompareEQ",0;
   "FPCompareGE",0;
   "FPCompareGT",0;
-  "FPToFixedJS",0;
+  "FPToFixedJS_impl",0;
   "FPSqrt",0;
   "FPAdd",0;
   "FPMul",0;
