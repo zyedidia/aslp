@@ -38,7 +38,7 @@ for inst in $INSTRUCTION_GROUPS; do
     time dune exec asloff-coverage "$inst" > "$new"
     old="$COVERAGE_DIR/$fname"
 
-    gsed -i "s#$asl_dir#.#g" "$new"
+    sed -i "s#$asl_dir#.#g" "$new"
 
     if [[ $MODE == update ]]; then
         echo "overwriting coverage results with updated results."
