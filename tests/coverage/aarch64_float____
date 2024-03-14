@@ -7170,15 +7170,15 @@ ENCODING: aarch64_float_convert_int
 0x1e7d03e0: [sf=0 ; ftype=1 ; rmode=3 ; opcode=5 ; Rn=31 ; Rd=0] --> (invalid)
 0x1e7d03e1: [sf=0 ; ftype=1 ; rmode=3 ; opcode=5 ; Rn=31 ; Rd=1] --> (invalid)
 0x1e7d03ff: [sf=0 ; ftype=1 ; rmode=3 ; opcode=5 ; Rn=31 ; Rd=31] --> (invalid)
-0x1e7e0000: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=0 ; Rd=0] --> [2] Disassembly failure: EvalError at file "./mra_tools/arch/arch_instrs.asl" line 89403 char 17 - line 89404 char 0: tuple expected. Got Exp(Exp8__5)
-0x1e7e0001: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=0 ; Rd=1] --> [2] Disassembly failure: EvalError at file "./mra_tools/arch/arch_instrs.asl" line 89403 char 17 - line 89404 char 0: tuple expected. Got Exp(Exp8__5)
-0x1e7e001f: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=0 ; Rd=31] --> [2] Disassembly failure: EvalError at file "./mra_tools/arch/arch_instrs.asl" line 89403 char 17 - line 89404 char 0: tuple expected. Got Exp(Exp8__5)
-0x1e7e0020: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=1 ; Rd=0] --> [2] Disassembly failure: EvalError at file "./mra_tools/arch/arch_instrs.asl" line 89403 char 17 - line 89404 char 0: tuple expected. Got Exp(Exp8__5)
-0x1e7e0021: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=1 ; Rd=1] --> [2] Disassembly failure: EvalError at file "./mra_tools/arch/arch_instrs.asl" line 89403 char 17 - line 89404 char 0: tuple expected. Got Exp(Exp8__5)
-0x1e7e003f: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=1 ; Rd=31] --> [2] Disassembly failure: EvalError at file "./mra_tools/arch/arch_instrs.asl" line 89403 char 17 - line 89404 char 0: tuple expected. Got Exp(Exp8__5)
-0x1e7e03e0: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=31 ; Rd=0] --> [2] Disassembly failure: EvalError at file "./mra_tools/arch/arch_instrs.asl" line 89403 char 17 - line 89404 char 0: tuple expected. Got Exp(Exp8__5)
-0x1e7e03e1: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=31 ; Rd=1] --> [2] Disassembly failure: EvalError at file "./mra_tools/arch/arch_instrs.asl" line 89403 char 17 - line 89404 char 0: tuple expected. Got Exp(Exp8__5)
-0x1e7e03ff: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=31 ; Rd=31] --> [2] Disassembly failure: EvalError at file "./mra_tools/arch/arch_instrs.asl" line 89403 char 17 - line 89404 char 0: tuple expected. Got Exp(Exp8__5)
+0x1e7e0000: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=0 ; Rd=0] --> OK
+0x1e7e0001: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=0 ; Rd=1] --> OK
+0x1e7e001f: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=0 ; Rd=31] --> OK
+0x1e7e0020: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=1 ; Rd=0] --> OK
+0x1e7e0021: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=1 ; Rd=1] --> OK
+0x1e7e003f: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=1 ; Rd=31] --> OK
+0x1e7e03e0: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=31 ; Rd=0] --> OK
+0x1e7e03e1: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=31 ; Rd=1] --> OK
+0x1e7e03ff: [sf=0 ; ftype=1 ; rmode=3 ; opcode=6 ; Rn=31 ; Rd=31] --> OK
 0x1e7f0000: [sf=0 ; ftype=1 ; rmode=3 ; opcode=7 ; Rn=0 ; Rd=0] --> (invalid)
 0x1e7f0001: [sf=0 ; ftype=1 ; rmode=3 ; opcode=7 ; Rn=0 ; Rd=1] --> (invalid)
 0x1e7f001f: [sf=0 ; ftype=1 ; rmode=3 ; opcode=7 ; Rn=0 ; Rd=31] --> (invalid)
