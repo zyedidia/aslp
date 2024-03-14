@@ -56,6 +56,7 @@ let v_PSTATE_BTYPE = Expr_Field(Expr_Var(Ident "PSTATE"), Ident "BTYPE")
 let v_BTypeCompatible = Expr_Var (Ident "BTypeCompatible")
 let v___BranchTaken = Expr_Var (Ident "__BranchTaken")
 let v_BTypeNext = Expr_Var (Ident "BTypeNext")
+let v___ExclusiveLocal = Expr_Var (Ident "__ExclusiveLocal")
 
 (****************************************************************
  * IR Construction
@@ -120,7 +121,7 @@ let f_gen_branch cond =
             Expr_LitInt (string_of_int merge)], loc));
   (true_branch, false_branch, merge)
 
-(* *)
+(* Runtime assert *)
 let f_gen_assert b =
   push_stmt (Stmt_Assert (b, loc))
 
@@ -129,6 +130,8 @@ let f_gen_bit_lit w (bv: bitvector) =
   Expr_LitBits (Z.format ("%0" ^ string_of_int bv.n ^ "b") bv.v)
 let f_gen_bool_lit b =
   if b then Expr_Var (Ident "TRUE") else Expr_Var (Ident "FALSE")
+let f_gen_int_lit i =
+  Expr_LitInt (Z.to_string i)
 
 (* Dynamic variable creation *)
 let f_decl_bv name width =
@@ -140,8 +143,7 @@ let f_decl_bool name =
 
 (* Variable accesses *)
 let f_gen_load v = v
-let f_gen_store v e =
-  push_stmt (Stmt_Assign(to_lexpr v, e, loc))
+let f_gen_store v e = push_stmt (Stmt_Assign(to_lexpr v, e, loc))
 
 (* Array accesses, where the index variable is a liftime bitvector *)
 let f_gen_array_load a i =
@@ -149,15 +151,17 @@ let f_gen_array_load a i =
 let f_gen_array_store a i e =
   push_stmt (Stmt_Assign(LExpr_Array(to_lexpr a, expr_of_z i), e, loc))
 
-(* Memory *)
+(* Memory ops *)
 let f_gen_Mem_set w x _ y z =
-  push_stmt (Stmt_TCall (FIdent ("Mem.set", 0), [expr_of_z w], [x; expr_of_z w; expr_of_z y; z], Unknown))
+  push_stmt (Stmt_TCall (FIdent ("Mem.set", 0), [expr_of_z w], [x; expr_of_z w; y; z], Unknown))
 let f_gen_Mem_read w x _ y =
-  (Expr_TApply (FIdent ("Mem.read", 0), [expr_of_z w], [x; expr_of_z w; expr_of_z y]))
+  (Expr_TApply (FIdent ("Mem.read", 0), [expr_of_z w], [x; expr_of_z w; y]))
 let f_AtomicStart () =
   push_stmt (Stmt_TCall (FIdent ("AtomicStart", 0), [], [], Unknown))
 let f_AtomicEnd () =
   push_stmt (Stmt_TCall (FIdent ("AtomicEnd", 0), [], [], Unknown))
+let f_gen_AArch64_MemTag_set x y z: unit =
+  failwith "MemTag_set unsupported"
 
 (* Prim bool ops *)
 let f_gen_and_bool e1 e2 =
@@ -168,6 +172,10 @@ let f_gen_not_bool e1 =
   Expr_TApply (FIdent ("not_bool", 0), [], [e1])
 let f_gen_eq_enum e1 e2 =
   Expr_TApply (FIdent ("eq_enum", 0), [], [e1;e2])
+
+(* Prim int ops *)
+let f_gen_cvt_bits_uint w x =
+  Expr_TApply (FIdent ("cvt_bits_uint", 0), [expr_of_z w], [x])
 
 (* Prim bit ops *)
 let f_gen_eq_bits w e1 e2 =
@@ -205,15 +213,17 @@ let f_gen_lsl_bits xw yw x y =
 let f_gen_asr_bits xw yw x y =
   Expr_TApply (FIdent ("asr_bits", 0), [expr_of_z xw; expr_of_z yw], [x;y])
 let f_gen_replicate_bits xw yw x y =
-  Expr_TApply (FIdent ("replicate_bits", 0), [expr_of_z xw; expr_of_z yw], [x; expr_of_z y])
+  Expr_TApply (FIdent ("replicate_bits", 0), [expr_of_z xw; expr_of_z yw], [x; expr_of_z yw])
 let f_gen_ZeroExtend xw yw x y =
-  Expr_TApply (FIdent ("ZeroExtend", 0), [expr_of_z xw; expr_of_z yw], [x; expr_of_z y])
+  Expr_TApply (FIdent ("ZeroExtend", 0), [expr_of_z xw; expr_of_z yw], [x; expr_of_z yw])
 let f_gen_SignExtend xw yw x y =
-  Expr_TApply (FIdent ("SignExtend", 0), [expr_of_z xw; expr_of_z yw], [x; expr_of_z y])
+  Expr_TApply (FIdent ("SignExtend", 0), [expr_of_z xw; expr_of_z yw], [x; expr_of_z yw])
 let f_gen_slice e lo wd =
   Expr_Slices (e, [Slice_LoWd(expr_of_z lo, expr_of_z wd)])
 
 (* Floating Point *)
+let f_gen_FPCompare w x y s t =
+  Expr_TApply (FIdent ("FPCompare", 0), [expr_of_z w], [x; y; s; t])
 let f_gen_FPCompareEQ w x y r =
   Expr_TApply (FIdent ("FPCompareEQ", 0), [expr_of_z w], [x; y; r])
 let f_gen_FPCompareGE w x y r =
@@ -243,45 +253,32 @@ let f_gen_FPMax w x y r =
   Expr_TApply (FIdent ("FPMax", 0), [expr_of_z w], [x; y; r])
 let f_gen_FPMaxNum w x y r =
   Expr_TApply (FIdent ("FPMaxNum", 0), [expr_of_z w], [x; y; r])
+let f_gen_FPRecpX w x t =
+  Expr_TApply (FIdent ("FPRecpX", 0), [expr_of_z w], [x; t])
+let f_gen_FPSqrt w x t =
+  Expr_TApply (FIdent ("FPSqrt", 0), [expr_of_z w], [x; t])
+let f_gen_FPRecipEstimate w x r =
+  Expr_TApply (FIdent ("FPRecipEstimate", 0), [expr_of_z w], [x; r])
 
 let f_gen_BFAdd x y =
   Expr_TApply (FIdent ("BFAdd", 0), [], [x; y])
 let f_gen_BFMul x y =
   Expr_TApply (FIdent ("BFMul", 0), [], [x; y])
+let f_gen_FPConvertBF x t r =
+  Expr_TApply (FIdent ("FPConvertBF", 0), [], [x; t; r])
 
 let f_gen_FPRecipStepFused w x y =
-  Expr_TApply (FIdent ("FPMaxNum", 0), [expr_of_z w], [x; y])
+  Expr_TApply (FIdent ("FPRecipStepFused", 0), [expr_of_z w], [x; y])
 let f_gen_FPRSqrtStepFused w x y =
   Expr_TApply (FIdent ("FPRSqrtStepFused", 0), [expr_of_z w], [x; y])
 
 let f_gen_FPToFixed w w' x b u t r =
-  Expr_TApply (FIdent ("FPToFixed", 0), [expr_of_z w; expr_of_z w'], [x; expr_of_z b; u; t; expr_of_z r])
+  Expr_TApply (FIdent ("FPToFixed", 0), [expr_of_z w; expr_of_z w'], [x; b; u; t; r])
 let f_gen_FixedToFP w w' x b u t r =
-  Expr_TApply (FIdent ("FixedToFP", 0), [expr_of_z w; expr_of_z w'], [x; expr_of_z b; u; t; expr_of_z r])
+  Expr_TApply (FIdent ("FixedToFP", 0), [expr_of_z w; expr_of_z w'], [x; b; u; t; r])
 let f_gen_FPConvert w w' x t r =
-  Expr_TApply (FIdent ("FPConvert", 0), [expr_of_z w; expr_of_z w'], [x; t; expr_of_z r])
+  Expr_TApply (FIdent ("FPConvert", 0), [expr_of_z w; expr_of_z w'], [x; t; r])
 let f_gen_FPRoundInt w x t r e =
-  Expr_TApply (FIdent ("FPRoundInt", 0), [expr_of_z w], [x; t; expr_of_z r; e])
+  Expr_TApply (FIdent ("FPRoundInt", 0), [expr_of_z w], [x; t; r; e])
 let f_gen_FPRoundIntN w x t r e =
-  Expr_TApply (FIdent ("FPRoundIntN", 0), [expr_of_z w], [x; t; expr_of_z r; e])
-
-let unwrap_rounding r = Expr_TApply( FIdent ("cvt_bits_uint", 0), [Expr_LitInt "3"], [r])
-
-let f_gen_FixedToFP_rt w w' x b u t r =
-  Expr_TApply (FIdent ("FixedToFP", 0), [expr_of_z w; expr_of_z w'], [x; expr_of_z b; u; t; unwrap_rounding r])
-let f_gen_FPConvert_rt w w' x t r =
-  Expr_TApply (FIdent ("FPConvert", 0), [expr_of_z w; expr_of_z w'], [x; t; unwrap_rounding r])
-let f_gen_FPRoundInt_rt w x t r e =
-  Expr_TApply (FIdent ("FPRoundInt", 0), [expr_of_z w], [x; t; unwrap_rounding r; e])
-let f_gen_FPRoundIntN_rt w x t r e =
-  Expr_TApply (FIdent ("FPRoundIntN", 0), [expr_of_z w], [x; t; unwrap_rounding r; expr_of_z e])
-
-(* TODO *)
-let f_gen_FPRecpX w x r = failwith "unsupported"
-let f_gen_FPRecipEstimate w x r = failwith "unsupported"
-let f_gen_FPSqrt w x r = failwith "unsupported"
-let f_gen_FPConvertBF x t r = failwith "unsupported"
-let f_gen_cvt_bits_uint w x = failwith "unsupported"
-let f_gen_AArch64_MemTag_set x y z: unit = failwith "unsupported"
-let f_gen_FPCompare w x y s t = failwith "unsupported"
-let f_gen_FPToFixed_rt w w' x b u t r = failwith "unsupported"
+  Expr_TApply (FIdent ("FPRoundIntN", 0), [expr_of_z w], [x; t; r; e])

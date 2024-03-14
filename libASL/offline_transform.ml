@@ -660,27 +660,26 @@ let is_rt_expr v = wstate (is_runtime_expr v)
 let is_rt_stmt v = wstate (is_runtime_stmt v)
 let is_rt_slice v = wstate (is_runtime_slice v)
 
-let rt_var_ty = Type_Constructor (Ident "rt_sym")
+
+
+let rt_var_ty   = Type_Constructor (Ident "rt_sym")
 let rt_label_ty = Type_Constructor (Ident "rt_label")
 
-let rt_decl_bv        = FIdent("decl_bv", 0) (* int -> sym *)
-let rt_decl_bool        = FIdent("decl_bool", 0) (* int -> sym *)
-let rt_gen_bit_lit    = FIdent("gen_bit_lit", 0) (* 'a lt -> 'a rt *)
-let rt_gen_bool_lit    = FIdent("gen_bool_lit", 0) (* 'a lt -> 'a rt *)
-let rt_gen_branch     = FIdent("gen_branch", 0) (* bool rt -> (true label, false label, merge label) *)
-let rt_switch_context = FIdent("switch_context", 0) (* label -> () *)
-let rt_gen_load       = FIdent("gen_load", 0) (* sym -> 'a rt -> () *)
-let rt_gen_store      = FIdent("gen_store", 0) (* sym -> 'a rt -> () *)
-let rt_gen_assert     = FIdent("gen_assert", 0) (* bool rt -> () *)
+let rt_decl_bv          = FIdent("decl_bv", 0)         (* string -> int -> sym *)
+let rt_decl_bool        = FIdent("decl_bool", 0)       (* string -> sym *)
+let rt_gen_bit_lit      = FIdent("gen_bit_lit", 0)     (* bv -> bv rt *)
+let rt_gen_bool_lit     = FIdent("gen_bool_lit", 0)    (* bool -> bool rt *)
+let rt_gen_int_lit      = FIdent("gen_int_lit", 0)     (* int -> int rt *)
+let rt_gen_slice        = FIdent("gen_slice", 0)       (* bv rt -> int -> int -> bv rt *)
 
-let rt_gen_slice        = FIdent("gen_slice", 0) (* bv rt -> lo: int lt -> wd: int lt -> bv rt *)
-let rt_gen_slice_update = FIdent("gen_slice_update", 0) (* bv rt -> lo lt -> wd lt -> bv rt -> bv rt *)
-let rt_gen_concat       = FIdent("gen_concat", 0) (* bv rt list -> bv rt *)
-let rt_gen_eq           = FIdent("gen_eq", 0) (* 'a rt -> 'b rt -> bool *)
+let rt_gen_branch       = FIdent("gen_branch", 0)      (* bool rt -> (rt_label, rt_label, rt_label) *)
+let rt_switch_context   = FIdent("switch_context", 0)  (* rt_label -> unit *)
+let rt_gen_load         = FIdent("gen_load", 0)        (* sym -> 'a rt *)
+let rt_gen_store        = FIdent("gen_store", 0)       (* sym -> 'a rt -> unit *)
+let rt_gen_assert       = FIdent("gen_assert", 0)      (* bool rt -> unit *)
 
-
-let rt_gen_array_store  = FIdent("gen_array_store", 0)
-let rt_gen_array_load   = FIdent("gen_array_load", 0)
+let rt_gen_array_store  = FIdent("gen_array_store", 0) (* sym -> int -> 'a rt -> unit *)
+let rt_gen_array_load   = FIdent("gen_array_load", 0)  (* sym -> int -> 'a rt *)
 
 let arg_of_ident v = Expr_LitString(pprint_ident v)
 
@@ -759,19 +758,9 @@ let gen_array_store loc a i e =
 let gen_array_load a i =
   pure (Expr_TApply(rt_gen_array_load, [], [Expr_Var a;i]))
 
-
-
-
 (* Generate a slice e[lo:wd] *)
 let gen_slice_expr e lo wd =
   pure (Expr_TApply(rt_gen_slice, [], [e;lo;wd]))
-
-(* Generate a slice update, overwriting v[lo:wd] with  e *)
-let gen_slice_update loc v lo wd e =
-  pure (Expr_TApply (rt_gen_slice_update, [], [v; lo; wd; e]))
-
-let get_var_type v = fun st ->
-  Either.Left (st,[], Bindings.find_opt v st.var_type)
 
 (* Generate a literal *)
 let gen_lit e =
@@ -781,165 +770,27 @@ let gen_lit e =
   match t with
   | Some (Type_Bits(w)) -> pure (Expr_TApply (rt_gen_bit_lit, [w], [e]))
   | Some (Type_Constructor(Ident("boolean"))) -> pure (Expr_TApply (rt_gen_bool_lit, [], [e]))
+  | Some (Type_Constructor(Ident("integer"))) -> pure (Expr_TApply (rt_gen_int_lit, [], [e]))
   | Some t -> fail @@ "gen_lit: " ^ (pp_expr e) ^ " " ^ (pp_type t)
   | _ -> fail @@ "gen_lit: " ^ (pp_expr e)
 
-(* Concat a series of bitvectors *)
-let gen_concat es =
-  pure (Expr_TApply (rt_gen_concat, [], es))
-
-(* Compare two values, of any type *)
-let gen_eq a b =
-  pure (Expr_TApply (rt_gen_eq, [], [a;b]))
-
-(*
-*)
-
-
-let emit_assert loc e =
+let gen_assert loc e =
   write [Stmt_TCall(rt_gen_assert, [], [e], loc)]
 
-let emit_prim f tes es =
-  let f = FIdent( "gen_" ^name_of_FIdent f, 0) in
+(* Generate a prim, where all type arguments are lifttime and standard arguments are runtime*)
+let rec gen_prim loc f tes es =
+  let@ tes = traverse (lt_expr loc) tes in
+  let@ es = traverse (rt_expr loc) es in
+  let f = FIdent("gen_" ^ name_of_FIdent f, 0) in
   pure (Expr_TApply(f,tes,es))
+and gen_eff loc f tes es =
+  let@ tes = traverse (lt_expr loc) tes in
+  let@ es = traverse (rt_expr loc) es in
+  let f = FIdent("gen_" ^ name_of_FIdent f, 0) in
+  write [Stmt_TCall(f, tes, es, loc)]
 
-let emit_prim_v f tes es =
-  let f = FIdent( "gen_" ^name_of_FIdent f^"_rt", 0) in
-  pure (Expr_TApply(f,tes,es))
-
-let rec rt_prim loc f tes es =
-  match (f, tes, es) with
-  | (FIdent ("replicate_bits", 0), [m; n], [x; y]) ->
-      let@ m = lt_expr loc m in
-      let@ n = lt_expr loc n in
-      let@ x = rt_expr loc x in
-      let@ y = lt_expr loc y in
-      emit_prim f [m;n] [x;y]
-  | (FIdent ("ZeroExtend", 0), [m; n], [x; y]) ->
-      let@ m = lt_expr loc m in
-      let@ n = lt_expr loc n in
-      let@ x = rt_expr loc x in
-      let@ y = lt_expr loc y in
-      emit_prim f [m;n] [x;y]
-  | (FIdent ("SignExtend", 0), [m; n], [x; y]) ->
-      let@ m = lt_expr loc m in
-      let@ n = lt_expr loc n in
-      let@ x = rt_expr loc x in
-      let@ y = lt_expr loc y in
-      emit_prim f [m;n] [x;y]
-  | (FIdent ("Mem.read", 0), [w], [x;w';y]) ->
-      let@ w = lt_expr loc w in
-      let@ x = rt_expr loc x in
-      let@ w' = lt_expr loc w' in
-      let@ y = lt_expr loc y in
-      emit_prim f [w] [x;w';y]
-
-  | (FIdent ("FPToFixed", 0), [w;w'], [x;b;u;t;r]) ->
-      let@ w = lt_expr loc w in
-      let@ w' = lt_expr loc w' in
-      let@ x = rt_expr loc x in
-      let@ b = lt_expr loc b in
-      let@ u = rt_expr loc u in
-      let@ t = rt_expr loc t in
-      let@ r = gen_expr loc r in
-      (match r with
-      | (LiftTime,e) -> emit_prim f [w;w'] [x;b;u;t;e]
-      | (RunTime,Expr_TApply (FIdent ("gen_cvt_bits_uint", 0), _, [e])) -> emit_prim_v f [w;w'] [x;b;u;t;e]
-      | _ -> failwith "unexpected rounding mode")
-
-  | (FIdent ("FixedToFP", 0), [w;w'], [x;b;u;t;r]) ->
-      let@ w = lt_expr loc w in
-      let@ w' = lt_expr loc w' in
-      let@ x = rt_expr loc x in
-      let@ b = lt_expr loc b in
-      let@ u = rt_expr loc u in
-      let@ t = rt_expr loc t in
-      let@ r = gen_expr loc r in
-      (match r with
-      | (LiftTime,e) -> emit_prim f [w;w'] [x;b;u;t;e]
-      | (RunTime,Expr_TApply (FIdent ("gen_cvt_bits_uint", 0), _, [e])) -> emit_prim_v f [w;w'] [x;b;u;t;e]
-      | _ -> failwith "unexpected rounding mode")
-
-  | (FIdent ("FPConvert", 0), [w;w'], [x;t;r]) ->
-      let@ w = lt_expr loc w in
-      let@ w' = lt_expr loc w' in
-      let@ x = rt_expr loc x in
-      let@ t = rt_expr loc t in
-      let@ r = gen_expr loc r in
-      (match r with
-      | (LiftTime,e) -> emit_prim f [w;w'] [x;t;e]
-      | (RunTime,Expr_TApply (FIdent ("gen_cvt_bits_uint", 0), _, [e])) -> emit_prim_v f [w;w'] [x;t;e]
-      | _ -> failwith "unexpected rounding mode")
-
-  | (FIdent ("FPRoundIntN", 0), [w], [x;t;r;s]) ->
-      let@ w = lt_expr loc w in
-      let@ x = rt_expr loc x in
-      let@ t = rt_expr loc t in
-      let@ s = lt_expr loc s in
-      let@ r = gen_expr loc r in
-      (match r with
-      | (LiftTime,e) -> emit_prim f [w] [x;t;e;s]
-      | (RunTime,Expr_TApply (FIdent ("gen_cvt_bits_uint", 0), _, [e])) -> emit_prim_v f [w] [x;t;e;s]
-      | _ -> failwith "unexpected rounding mode")
-
-  | (FIdent ("FPRoundInt", 0), [w], [x;t;r;s]) ->
-      let@ w = lt_expr loc w in
-      let@ x = rt_expr loc x in
-      let@ t = rt_expr loc t in
-      let@ s = rt_expr loc s in
-      let@ r = gen_expr loc r in
-      (match r with
-      | (LiftTime,e) -> emit_prim f [w] [x;t;e;s]
-      | (RunTime,Expr_TApply (FIdent ("gen_cvt_bits_uint", 0), _, [e])) -> emit_prim_v f [w] [x;t;e;s]
-      | _ -> failwith "unexpected rounding mode")
-
-  | _ ->
-      let@ tes = traverse (lt_expr loc) tes in
-      let@ es = traverse (rt_expr loc) es in
-      emit_prim f tes es
-
-and rt_eff loc f tes es =
-  let f' = FIdent ("gen_" ^ name_of_FIdent f, 0) in
-  match (f, tes, es) with
-  | (FIdent ("AArch64.MemTag.set", 0), [], [x;y;z]) ->
-      let@ x = rt_expr loc x in
-      let@ y = lt_expr loc y in
-      let@ z = rt_expr loc z in
-      write [Stmt_TCall(f', [], [x;y;z], loc)]
-
-  | (FIdent ("Mem.set", 0), [w], [x;w';y;z]) ->
-      let@ w = lt_expr loc w in
-      let@ x = rt_expr loc x in
-      let@ w' = lt_expr loc w' in
-      let@ y = lt_expr loc y in
-      let@ z = rt_expr loc z in
-      write [Stmt_TCall(f', [w], [x;w';y;z], loc)]
-
-  | _ -> failwith @@ "Unknown eff: " ^ name_of_FIdent f
-
-(* Generate a trivial ITE *)
-and emit_ite loc ty (c: expr) (tcase: expr wrm) (fcase: expr wrm) =
-  let@ b = is_rt_expr c in
-  let@ temp = gen_fresh_var loc ty in
-  if b then
-    let@ c = rt_expr loc c in
-    let@ (lt,lf,lm) = gen_branch loc c in
-    let@ _ = switch_context loc lt in
-    let@ tcase = tcase in
-    let@ _ = rt_lexpr loc (LExpr_Var temp) tcase in
-    let@ _ = switch_context loc lf in
-    let@ fcase = fcase in
-    let@ _ = rt_lexpr loc (LExpr_Var temp) fcase in
-    let+ _ = switch_context loc lm in
-    Expr_Var temp
-  else
-    let@ (tstmts,tcase) = wrap (let@ e = tcase in gen_var_store loc temp e) in
-    let@ (fstmts,fcase) = wrap (let@ e = fcase in gen_var_store loc temp e) in
-    let+ _ = write [Stmt_If(c, tstmts, [], fstmts, loc)] in
-    Expr_Var temp
-
-(* Generate a trivial If *)
-and emit_if loc (c: expr) (tcase: unit wrm) (fcase: unit wrm) =
+(* Generate an If, potentially producing a runtime branch if outcome isn't liftime known *)
+and gen_if loc (c: expr) (tcase: unit wrm) (fcase: unit wrm) =
   let@ b = is_rt_expr c in
   if b then
     let@ c = rt_expr loc c in
@@ -957,48 +808,32 @@ and emit_if loc (c: expr) (tcase: unit wrm) (fcase: unit wrm) =
     let@ (fstmts,fcase) = wrap fcase in
     write [Stmt_If(c, tstmts, [], fstmts, loc)]
 
-(* Generate a slice, expects everything to be rewritten to LoWd *)
-and gen_slice loc (e: expr) (s: slice) =
-  match s with
-  | Slice_LoWd(lo, wd) ->
-      let@ l = is_rt_expr lo in
-      let@ w = is_rt_expr wd in
-      let@ _ = test (l || w) @@ "gen_slice: Runtime slice " ^ (pp_expr e) ^ " " ^ (pp_expr lo) ^ " " ^ (pp_expr wd) in
-      gen_slice_expr e lo wd
-  | _ -> fail "gen_slice: All slices should be LoWd"
-
 (* Generate an expression, possibly returning the provided argument if it is lifttime *)
 and gen_expr loc e : (taint * expr) wrm =
   let@ c = is_rt_expr e in
   if not c then pure (LiftTime, e)
   else
     let+ r = match e with
-      | Expr_If(ty, c, t, els, f) ->
-          let rec iter = (function
-            | [] -> rt_expr loc f
-            | E_Elsif_Cond (c,b)::xs -> emit_ite loc ty c (* then *) (rt_expr loc b) (* else *) (iter xs))
-          in
-          iter (E_Elsif_Cond(c, t) :: els)
-      | Expr_Slices(e, [s]) ->
+      (* Prim application *)
+      | Expr_Slices(e, [Slice_LoWd(lo,wd)]) ->
           let@ e = rt_expr loc e in
-          gen_slice loc e s
-      | Expr_TApply(f,tes,es) -> rt_prim loc f tes es
-
-      | Expr_Tuple(es) ->
-          let+ r = traverse (rt_expr loc) es in
-          Expr_Tuple r
+          let@ lo = lt_expr loc lo in
+          let@ wd = lt_expr loc wd in
+          gen_slice_expr e lo wd
+      | Expr_TApply(f,tes,es) -> 
+          gen_prim loc f tes es
 
       (* State loads *)
       | Expr_Var(v) -> gen_var_load v
       | Expr_Field(e, f) -> gen_field_load e f
       | Expr_Array(Expr_Var a, i) ->
-          let@ (t,e) = gen_expr loc i in
-          let@ _ = test (t <> LiftTime) @@ "gen_expr: runtime array access: " ^ (pp_expr e) in
-          gen_array_load a e
+          let@ i = lt_expr loc i in
+          gen_array_load a i
 
       | _ -> fail @@ "gen_expr: unsupported expr " ^ (pp_expr e)
     in (RunTime, r)
 
+(* Generate an expression, fail if it is runtime *)
 and lt_expr loc e =
   let@ debug = get_debug in
   if debug then Printf.printf "lt_expr: %s\n" (pp_expr e);
@@ -1020,53 +855,40 @@ and gen_stmt s : unit wrm =
   let@ c = is_rt_stmt s in
   if not c then write [s]
   else match s with
-    (* Runtime decls create symbols for later assignmet *)
+    (* Runtime decls create symbols for later assignment *)
     | Stmt_VarDeclsNoInit(ty, [v], loc) ->
         gen_var_decl loc ty v
 
-    (* Var decls create symbols and introduce an initial assingment *)
+    (* Var/const decls create symbols and introduce an initial assignment *)
     | Stmt_VarDecl(ty, v, e, loc) ->
         let@ _ = gen_var_decl loc ty v in
         let@ e = rt_expr loc e in
         gen_var_store loc v e
-
-    (* Do the same for const *)
     | Stmt_ConstDecl(ty, v, e, loc) ->
         let@ _ = gen_var_decl loc ty v in
         let@ e = rt_expr loc e in
         gen_var_store loc v e
 
+    (* Write the mutable / global var *)
     | Stmt_Assign(l, r, loc) ->
         let@ r = rt_expr loc r in
         rt_lexpr loc l r
 
-    (* Update the signature based on the argument classification *)
+    (* Call effectful prim *)
     | Stmt_TCall(f, tes, es, loc) ->
-        rt_eff loc f tes es
-
-    (* Ensure result is runtime *)
-    | Stmt_FunReturn(e, loc) ->
-        let@ e = rt_expr loc e in
-        write [Stmt_FunReturn(e, loc)]
+        gen_eff loc f tes es
 
     (* Build branching structure *)
     | Stmt_If(c, t, [], f, loc) ->
-        emit_if loc c (* then *) (gen_stmts t) (* else *) (gen_stmts f)
+        gen_if loc c (* then *) (gen_stmts t) (* else *) (gen_stmts f)
 
-    (* Generate a runtime expr *)
+    (* Generate a runtime exception *)
     | Stmt_Assert(e,loc) ->
         let@ e = rt_expr loc e in
-        emit_assert loc e
+        gen_assert loc e
     | Stmt_Throw(e,loc) ->
         let@ e = gen_lit Symbolic.expr_false in
-        emit_assert loc e
-
-    (* Explicitly prevent runtime loops *)
-    | Stmt_While(c, b, loc) ->
-        let@ c_t = is_rt_expr c in
-        let@ _ = test c_t @@ "gen_stmt: Runtime loop: " ^ (pp_stmt s) in
-        let@ (b,()) = wrap (gen_stmts b) in
-        write [Stmt_While(c, b, loc)]
+        gen_assert loc e
 
     | _ -> fail @@ "gen_stmt: Unsupported stmt " ^ (pp_stmt s)
 
@@ -1083,24 +905,6 @@ and rt_lexpr loc l e =
       gen_array_store loc v i e
   | LExpr_Field(l, f) ->
      gen_field_store loc l f e
-
-  | LExpr_Slices(LExpr_Var v, [Slice_LoWd (lo, wd)]) ->
-      let@ b = is_rt_expr lo in
-      let@ c = is_rt_expr wd in
-      let@ _ = test (b || c) @@ "rt_lexpr: Runtime slice write: " ^ (pp_lexpr l) in
-      let@ e = gen_slice_update loc (Expr_Var v) lo wd e in
-      gen_var_store loc v e
-
-  | LExpr_Slices(LExpr_Array (LExpr_Var v,i), [Slice_LoWd (lo, wd)]) ->
-      let@ b = is_rt_expr lo in
-      let@ c = is_rt_expr wd in
-      let@ _ = test (b || c) @@ "rt_lexpr: Runtime slice write: " ^ (pp_lexpr l) in
-
-      let@ i = lt_expr loc i in
-      let@ va = gen_array_load v i in
-      let@ e = gen_slice_update loc va lo wd e in
-      gen_array_store loc v i e
-
   | _ -> fail @@ "rt_lexpr: Unsupported lexpr " ^ (pp_lexpr l)
 
 let gen_prog fns results env =
