@@ -4,8 +4,8 @@
 INSTRUCTION_GROUPS=''
 INSTRUCTION_GROUPS+='aarch64_integer.+'
 INSTRUCTION_GROUPS+=' aarch64_branch.+'
-#INSTRUCTION_GROUPS+=' aarch64_float_.+'
-#INSTRUCTION_GROUPS+=' aarch64_vector_.+'
+INSTRUCTION_GROUPS+=' aarch64_float_.+'
+INSTRUCTION_GROUPS+=' aarch64_vector_.+'
 INSTRUCTION_GROUPS+=' aarch64_memory_.+'
 
 COVERAGE_DIR="./tests/coverage"
@@ -35,7 +35,7 @@ for inst in $INSTRUCTION_GROUPS; do
     diff="$COVERAGE_TEMP/$fname.diff"
     echo "::group::$inst"
     echo "$new"
-    time dune exec offline-coverage "$inst" > "$new"
+    time dune exec asloff-coverage "$inst" > "$new"
     old="$COVERAGE_DIR/$fname"
 
     gsed -i "s#$asl_dir#.#g" "$new"

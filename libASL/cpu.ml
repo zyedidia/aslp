@@ -68,8 +68,8 @@ let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
         let offline_fns = Bindings.add (fst decoder) (snd decoder) offline_fns in
 
         (* Dump the resulting program as OCaml *)
-        if not (Sys.file_exists "output") then Sys.mkdir "output" 755;
-        Ocaml_backend.run (fst decoder) offline_fns env "output/offline.ml"
+        if not (Sys.file_exists "offlineASL") then failwith "Can't find target dir offlineASL\n";
+        Ocaml_backend.run (fst decoder) offline_fns env "offlineASL/offline.ml"
         (*Ocaml_backend.run (fst decoder) offline_fns env "output"*)
 
     in

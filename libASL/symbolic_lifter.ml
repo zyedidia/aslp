@@ -313,8 +313,10 @@ let dis_wrapper fn fnsig env =
     Some stmts'
   with
   | e ->
-    Printf.printf "Error: %s %s\n" (name_of_FIdent fn) (Printexc.to_string e);
-    None
+      let m = Printexc.to_string e in
+      let m = if String.length m > 100 then String.sub m 0 100 ^ "..." else m in
+      Printf.printf "Error: %s %s\n" (name_of_FIdent fn) m;
+      None
 
 (* Produce a lifter for the desired parts of the instruction set *)
 let run iset pat env =

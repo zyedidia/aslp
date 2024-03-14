@@ -146,6 +146,12 @@ and default_value t st =
       Printf.sprintf "List.init ((Z.to_int (%s)) - (Z.to_int (%s)) + 1) (fun _ -> %s)" hi lo d
   | _ -> failwith @@ "Unknown type for default value: " ^ (pp_type t)
 
+let prints_ret_type t =
+  match t with
+  | Some (Type_Constructor (Ident "boolean")) -> "bool"
+  | None -> "unit"
+  | Some t -> failwith @@ "Unknown return type: " ^ (pp_type t)
+
 (****************************************************************
  * Prim Printing
  ****************************************************************)
@@ -313,7 +319,8 @@ let build_args targs args =
 let write_fn name (ret_tyo,_,targs,args,_,body) st =
   clear_ref_vars st;
   let args = build_args targs args in
-  Printf.fprintf st.oc "let %s %s = \n" (name_of_ident name) args;
+  let ret = prints_ret_type ret_tyo in
+  Printf.fprintf st.oc "let %s %s : %s = \n" (name_of_ident name) args ret;
   write_stmts body st;
   Printf.fprintf st.oc "\n\n"
 
