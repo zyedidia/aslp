@@ -46,12 +46,14 @@ let problematic_enc = [
 ]
 
 (* Model doesn't need these globals *)
+(* Need to model these for coverage, but really should be excluded
 let dead_globals =  IdentSet.of_list [
   Ident "BTypeCompatible";
   Ident "__BranchTaken";
   Ident "BTypeNext";
   Ident "__ExclusiveLocal";
-]
+] *)
+let dead_globals = IdentSet.empty
 
 (** Trival walk to replace unsupported calls with a corresponding throw *)
 module RemoveUnsupported = struct

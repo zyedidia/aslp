@@ -7,3 +7,5 @@
 
 :set impdef "OS Double Lock is implemented" = TRUE
 :set impdef "Has MPAM extension" = FALSE
+
+:set impdef "Have CRC extension" = TRUE

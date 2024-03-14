@@ -1,4 +1,4 @@
-open LibASL 
+open LibASL
 open Asl_ast
 open Primops
 
@@ -26,7 +26,7 @@ let f_ones_bits              = Primops.prim_ones_bits
 let f_replicate_bits _ _ = Primops.prim_replicate_bits
 let f_append_bits    _ _ = Primops.prim_append_bits
 let f_ZeroExtend     n m (x : bitvector) _ = { v = x.v ; n = Z.to_int m }
-let f_SignExtend     n m (x : bitvector) _ = 
+let f_SignExtend     n m (x : bitvector) _ =
   if Z.testbit x.v (Z.to_int (Z.pred n)) then
     Primops.prim_append_bits (Primops.prim_ones_bits (Z.sub m n)) x
   else
@@ -53,6 +53,9 @@ let v_FPSR     = Expr_Var(Ident "FPSR")
 let v_FPCR     = Expr_Var(Ident "FPCR")
 
 let v_PSTATE_BTYPE = Expr_Field(Expr_Var(Ident "PSTATE"), Ident "BTYPE")
+let v_BTypeCompatible = Expr_Var (Ident "BTypeCompatible")
+let v___BranchTaken = Expr_Var (Ident "__BranchTaken")
+let v_BTypeNext = Expr_Var (Ident "BTypeNext")
 
 (****************************************************************
  * IR Construction
@@ -88,11 +91,11 @@ let f_switch_context ctx =
   current_pos := ctx
 
 (* Flatten the reachable IR from the provided block ID *)
-let rec get_body i = 
+let rec get_body i =
   let stmts = List.nth !stmts i in
   if List.length stmts = 0 then []
   else
-    let (pre,last) = Utils.getlast stmts in 
+    let (pre,last) = Utils.getlast stmts in
     match last with
     | Stmt_TCall (id, [], [cond; Expr_LitInt t; Expr_LitInt f; Expr_LitInt m], loc) when id = branch_tmp ->
         let tstmts = get_body (int_of_string t) in
@@ -102,29 +105,29 @@ let rec get_body i =
     | _ -> stmts
 
 (* Flatten the IR from the entry block *)
-let get_ir () = 
+let get_ir () =
   get_body 0
 
 (* Generate 3 blocks to form a CFG diamond, returning IDs for each new block *)
-let f_gen_branch cond = 
+let f_gen_branch cond =
   let true_branch = List.length !stmts in
   let false_branch = true_branch + 1 in
   let merge = true_branch + 2 in
   stmts := !stmts @ [[]; []; []];
-  push_stmt ( Stmt_TCall (branch_tmp, [], 
+  push_stmt ( Stmt_TCall (branch_tmp, [],
             [cond; Expr_LitInt (string_of_int true_branch);
             Expr_LitInt (string_of_int false_branch);
             Expr_LitInt (string_of_int merge)], loc));
   (true_branch, false_branch, merge)
 
 (* *)
-let f_gen_assert b = 
+let f_gen_assert b =
   push_stmt (Stmt_Assert (b, loc))
 
 (* Convert a lift time bitvector into a runtime bitvector *)
-let f_gen_bit_lit w (bv: bitvector) = 
-  Expr_LitBits (Z.format ("%0" ^ string_of_int bv.n ^ "b") bv.v) 
-let f_gen_bool_lit b = 
+let f_gen_bit_lit w (bv: bitvector) =
+  Expr_LitBits (Z.format ("%0" ^ string_of_int bv.n ^ "b") bv.v)
+let f_gen_bool_lit b =
   if b then Expr_Var (Ident "TRUE") else Expr_Var (Ident "FALSE")
 
 (* Dynamic variable creation *)
@@ -171,7 +174,7 @@ let f_gen_eq_bits w e1 e2 =
   Expr_TApply (FIdent ("eq_bits", 0), [expr_of_z w], [e1;e2])
 let f_gen_ne_bits w e1 e2 =
   Expr_TApply (FIdent ("ne_bits", 0), [expr_of_z w], [e1;e2])
-let f_gen_not_bits w e1 = 
+let f_gen_not_bits w e1 =
   Expr_TApply (FIdent ("not_bits", 0), [expr_of_z w], [e1])
 let f_gen_cvt_bool_bv e =
   Expr_If (Type_Bits (Expr_LitInt "1"), e, Expr_LitBits "1", [], Expr_LitBits "0")
@@ -193,21 +196,21 @@ let f_gen_slt_bits w e1 e2 =
   Expr_TApply (FIdent ("slt_bits", 0), [expr_of_z w], [e1;e2])
 let f_gen_mul_bits w e1 e2 =
   Expr_TApply (FIdent ("mul_bits", 0), [expr_of_z w], [e1;e2])
-let f_gen_append_bits xw yw x y = 
+let f_gen_append_bits xw yw x y =
   Expr_TApply (FIdent ("append_bits", 0), [expr_of_z xw; expr_of_z yw], [x;y])
-let f_gen_lsr_bits xw yw x y = 
+let f_gen_lsr_bits xw yw x y =
   Expr_TApply (FIdent ("lsr_bits", 0), [expr_of_z xw; expr_of_z yw], [x;y])
-let f_gen_lsl_bits xw yw x y = 
+let f_gen_lsl_bits xw yw x y =
   Expr_TApply (FIdent ("lsl_bits", 0), [expr_of_z xw; expr_of_z yw], [x;y])
-let f_gen_asr_bits xw yw x y = 
+let f_gen_asr_bits xw yw x y =
   Expr_TApply (FIdent ("asr_bits", 0), [expr_of_z xw; expr_of_z yw], [x;y])
-let f_gen_replicate_bits xw yw x y = 
+let f_gen_replicate_bits xw yw x y =
   Expr_TApply (FIdent ("replicate_bits", 0), [expr_of_z xw; expr_of_z yw], [x; expr_of_z y])
 let f_gen_ZeroExtend xw yw x y =
   Expr_TApply (FIdent ("ZeroExtend", 0), [expr_of_z xw; expr_of_z yw], [x; expr_of_z y])
 let f_gen_SignExtend xw yw x y =
   Expr_TApply (FIdent ("SignExtend", 0), [expr_of_z xw; expr_of_z yw], [x; expr_of_z y])
-let f_gen_slice e lo wd = 
+let f_gen_slice e lo wd =
   Expr_Slices (e, [Slice_LoWd(expr_of_z lo, expr_of_z wd)])
 
 (* Floating Point *)
@@ -262,7 +265,7 @@ let f_gen_FPRoundInt w x t r e =
 let f_gen_FPRoundIntN w x t r e =
   Expr_TApply (FIdent ("FPRoundIntN", 0), [expr_of_z w], [x; t; expr_of_z r; e])
 
-let unwrap_rounding r = Expr_TApply( FIdent ("f_cvt_bits_uint", 0), [Expr_LitInt "3"], [r])
+let unwrap_rounding r = Expr_TApply( FIdent ("cvt_bits_uint", 0), [Expr_LitInt "3"], [r])
 
 let f_gen_FixedToFP_rt w w' x b u t r =
   Expr_TApply (FIdent ("FixedToFP", 0), [expr_of_z w; expr_of_z w'], [x; expr_of_z b; u; t; unwrap_rounding r])
