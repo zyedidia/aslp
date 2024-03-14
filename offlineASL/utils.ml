@@ -282,3 +282,6 @@ let f_gen_FPRoundInt w x t r e =
   Expr_TApply (FIdent ("FPRoundInt", 0), [expr_of_z w], [x; t; r; e])
 let f_gen_FPRoundIntN w x t r e =
   Expr_TApply (FIdent ("FPRoundIntN", 0), [expr_of_z w], [x; t; r; e])
+
+let f_gen_FPToFixedJS_impl w w' x t s =
+  Expr_TApply (FIdent ("FPToFixedJS_impl", 0), [expr_of_z w; expr_of_z w'], [x; t; s])
