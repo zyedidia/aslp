@@ -1456,10 +1456,13 @@ module CommonSubExprElim = struct
       let () = match e with
       (* For now, only gather TApply's that we've seen more than once
          See eval_prim in value.ml for the list of what that covers. *)
-      | Expr_TApply(_) ->
-        if (List.mem e cand_exprs) && not (List.mem e exprs) then 
-          exprs <- e :: exprs
-        else cand_exprs <- e :: cand_exprs;
+      | Expr_TApply(FIdent(f,_),_,_) when List.mem f Value.prims_pure ->
+          (match infer_type e with
+          | Some (Type_Bits _) ->
+              if (List.mem e cand_exprs) && not (List.mem e exprs) then
+                exprs <- e :: exprs
+              else cand_exprs <- e :: cand_exprs;
+          | _ -> ())
       | _ ->
         ()
       in
