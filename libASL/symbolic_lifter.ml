@@ -293,8 +293,7 @@ module DecoderCleanup = struct
 end
 
 let unsupported_inst tests instrs f =
-  let r = not (List.exists (fun (f',_) -> f' = f) (tests) || Bindings.mem f instrs)  in
-  r
+  not (Bindings.mem f tests || Bindings.mem f instrs)
 
 let dis_wrapper fn fnsig env =
   let (lenv,globals) = Dis.build_env env in
@@ -327,20 +326,20 @@ let dis_wrapper fn fnsig env =
 let run iset pat env =
   Printf.printf "Stage 1: Mock decoder & instruction encoding definitions\n";
   let ((did,dsig),tests,instrs) = Decoder_program.run iset pat env problematic_enc in
-  let entry_set = List.fold_right (fun (k,s) -> IdentSet.add k) instrs IdentSet.empty in
-  Printf.printf "  Collected %d instructions\n\n" (IdentSet.cardinal entry_set);
+  Printf.printf "  Collected %d instructions\n\n" (Bindings.cardinal instrs);
 
   Printf.printf "Stage 2: Call graph construction\n";
   let frontier = get_inlining_frontier in
-  let (callers, reachable) = Call_graph.run entry_set frontier env in
+  let (callers, reachable) = Call_graph.run (bindings_domain instrs) frontier env in
   let fns = IdentSet.fold (fun id acc -> Bindings.add id (Eval.Env.getFun Unknown env id) acc) reachable Bindings.empty in
   Printf.printf "  Collected %d functions\n\n" (Bindings.cardinal fns);
 
-  Printf.printf "Stage 3: Simplification\n\n";
+  Printf.printf "Stage 3: Simplification\n";
   (* Remove temporary dynamic bitvectors where possible *)
   let fns = Bindings.map (fnsig_upd_body (Transforms.RemoveTempBVs.do_transform false)) fns in
   (* Remove calls to problematic functions & impdefs *)
   let fns = Bindings.map (fnsig_upd_body (RemoveUnsupported.run unsupported env)) fns in
+  Printf.printf "\n";
 
   Printf.printf "Stage 4: Specialisation\n";
   (* Run requirement collection over the full set *)
@@ -352,21 +351,27 @@ let run iset pat env =
   let env' = Eval.Env.copy env in
   Bindings.iter (fun  fn fnsig  -> Eval.Env.addFun Unknown env' fn fnsig) fns;
   (* Run dis over the entry set identifiers with this new environment *)
-  let fns = IdentSet.fold (fun fn acc ->
-    let fnsig = Bindings.find fn fns in
-    match dis_wrapper fn fnsig env' with
-    | Some body -> Bindings.add fn (fnsig_set_body fnsig body) acc
-    | None -> acc) entry_set Bindings.empty in
+  let fns = Bindings.filter_map (fun fn fnsig ->
+    if not (Bindings.mem fn instrs) then None
+    else Option.map (fnsig_set_body fnsig) (dis_wrapper fn fnsig env')) fns in
   Printf.printf "  Succeeded for %d instructions\n\n" (Bindings.cardinal fns);
 
   Printf.printf "Stmt Counts\n";
   let l = Bindings.fold (fun fn fnsig acc -> (fn, stmts_count (fnsig_get_body fnsig))::acc) fns [] in
   let l = List.sort (fun (_,i) (_,j) -> compare i j) l in
   List.iter (fun (fn,c) -> Printf.printf "  %d\t:\t%s\n" c (name_of_FIdent fn)) l;
+  Printf.printf "\n";
 
-  (* Dead code elim on decoder & tests *)
-  let dsig = fnsig_upd_body (DecoderCleanup.run (unsupported_inst tests fns)) dsig in
+  Printf.printf "Stage 6: Cleanup\n";
+  (* TODO: Defer *)
+  let tests = Bindings.map (fun s -> fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) s) tests in
+  Printf.printf "\n";
+
+  (* Perform offline PE *)
+  Printf.printf "Stages 7-8: Offline Transform\n";
+  let offline_fns = Offline_transform.run fns env in
+  let dsig = fnsig_upd_body (DecoderCleanup.run (unsupported_inst tests offline_fns)) dsig in
   let dsig = fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) dsig in
-  let tests = List.map (fun (f,s) -> (f,fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) s)) tests in
+  Printf.printf "\n";
 
-  ((did,dsig),tests,fns)
+  (did,dsig,tests,offline_fns)

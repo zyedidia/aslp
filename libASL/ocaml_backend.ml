@@ -58,10 +58,14 @@ let rec name_of_lexpr l =
  * File IO
  ****************************************************************)
 
-let write_preamble env st =
-  Printf.fprintf st.oc "open Utils\n\n"
+let write_preamble opens st =
+  Printf.fprintf st.oc "(* AUTO-GENERATED LIFTER FILE *)\n\n";
+  List.iter (fun n ->
+    let s = String.capitalize_ascii n in
+    Printf.fprintf st.oc "open %s\n" s) opens;
+  Printf.fprintf st.oc "\n"
 
-let write_epilogue fid env st =
+let write_epilogue fid st =
   Printf.fprintf st.oc "let run enc =\n  reset_ir ();\n  %s enc;\n  get_ir ()\n" (name_of_ident fid)
 
 let write_line s st =
@@ -291,8 +295,7 @@ let rec write_stmt s st =
       write_if_start (prints_expr c st) st;
       write_stmts t st;
       iter els;
-      write_if_else st;
-      write_stmts f st;
+      if f <> [] then (write_if_else st; write_stmts f st);
       write_if_end st
 
   | _ -> failwith @@ "write_stmt: " ^ (pp_stmt s);
@@ -324,50 +327,65 @@ let write_fn name (ret_tyo,_,targs,args,_,body) st =
   write_stmts body st;
   Printf.fprintf st.oc "\n\n"
 
-let run fid fns env (filename: string) =
-  (* State setup and initial file write *)
-  let oc = open_out filename in
-  let st = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty } in
-  write_preamble env st;
+(****************************************************************
+ * Directory Setup
+ ****************************************************************)
 
-  (* Write all functions except for decoder due to dep order *)
-  let dsig = Bindings.find fid fns in
-  let fns = Bindings.remove fid fns in
-  Bindings.iter (fun k b -> write_fn k b st) fns;
+let init_st oc = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty } 
+let global_deps = ["Utils"]
 
-  (* Write decoder *)
-  write_fn fid dsig st;
-
-  (* Epilogue and close *)
-  write_epilogue fid env st;
-  close_out oc
-
-(*
-let write_file fn fnsig env dir =
-  let path = dir ^ "/" ^ name_of_FIdent fn ^ ".ml" in
+(* Write an instruction file, containing just the behaviour of one instructions *)
+let write_instr_file fn fnsig dir =
+  let m = name_of_FIdent fn in
+  let path = dir ^ "/" ^ m ^ ".ml" in
   let oc = open_out path in
-  let st = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty } in
-  write_preamble env st;
+  let st = init_st oc in
+  write_preamble global_deps st;
   write_fn fn fnsig st;
+  close_out oc;
+  name_of_FIdent fn
+
+(* Write the test file, containing all decode tests *)
+let write_test_file tests dir =
+  let m = "decode_tests" in
+  let path = dir ^ "/" ^ m ^".ml" in
+  let oc = open_out path in
+  let st = init_st oc in
+  write_preamble global_deps st;
+  Bindings.iter (fun i s -> write_fn i s st) tests;
+  close_out oc;
+  m
+
+(* Write the decoder file - should depend on all of the above *)
+let write_decoder_file fn fnsig deps dir =
+  let m = "offline" in
+  let path = dir ^ "/" ^ m ^ ".ml" in
+  let oc = open_out path in
+  let st = init_st oc in
+  write_preamble (global_deps @ deps) st;
+  write_fn fn fnsig st;
+  write_epilogue fn st;
+  close_out oc;
+  m 
+
+(* Write the dune build file *)
+let write_dune_file files dir =
+  let oc = open_out (dir ^ "/dune") in
+  Printf.fprintf oc "(library
+  (name offlineASL)
+  (flags
+    (:standard -w -27 -w -33 -cclib -lstdc++))
+  (modules \n";
+  List.iter (fun k ->
+    Printf.fprintf oc "    %s\n" (String.lowercase_ascii k)
+  ) files;
+  Printf.fprintf oc "  )
+  (libraries zarith libASL))";
   close_out oc
 
-let run fid fns env dir =
-  let dsig = Bindings.find fid fns in
-  let fns = Bindings.remove fid fns in
-  Bindings.iter (fun k b -> write_file k b env dir) fns;
-
-  let oc = open_out (dir ^ "/offline.ml") in
-  let st = { depth = 0; skip_seq = false; oc ; ref_vars = IdentSet.empty } in
-  write_preamble env st;
-
-  (* include everything *)
-  Bindings.iter (fun k b ->
-    let path = String.capitalize_ascii (name_of_FIdent k) in
-    Printf.fprintf st.oc "open %s\n" (path)
-  ) fns;
-  Printf.fprintf st.oc "\n";
-
-  write_fn fid dsig st;
-  write_epilogue fid env st;
-  close_out oc
-*)
+(* Write all of the above, expecting Utils.ml to already be present in dir *)
+let run dfn dfnsig tests fns dir =
+  let files = Bindings.fold (fun fn fnsig acc -> (write_instr_file fn fnsig dir)::acc) fns [] in
+  let files = (write_test_file tests dir)::files in
+  let decoder = write_decoder_file dfn dfnsig files dir in
+  write_dune_file (decoder::files@global_deps) dir

@@ -1,5 +1,6 @@
 open Asl_ast
 open Symbolic
+open Asl_utils
 
 (*
   Convert an ASL decoder/instruction construct into an executable ASL program.
@@ -134,4 +135,4 @@ let run iset pat env problematic =
   List.iter (fun (f,s) -> Eval.Env.addFun loc env f s) [dec];
 
   (* Return the decoder, test functions and instruction behaviours *)
-  (dec,tests,instr)
+  (dec,bindings_of_list tests,bindings_of_list instr)

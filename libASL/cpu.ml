@@ -58,19 +58,12 @@ let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
 
     and gen (iset: string) (pat: string): unit =
         (* Build the symbolic lifter *)
-        let (decoder,tests,fns) = Symbolic_lifter.run iset pat env in
+        let (decoder_id,decoder_fnsig,tests,instrs) = Symbolic_lifter.run iset pat env in
 
-        (* Perform offline PE *)
-        let offline_fns = Offline_transform.run fns env in
-
-        (* Add trivial offline functions *)
-        let offline_fns = List.fold_right (fun (f,s) -> Bindings.add f s) tests offline_fns in
-        let offline_fns = Bindings.add (fst decoder) (snd decoder) offline_fns in
-
-        (* Dump the resulting program as OCaml *)
+        (* Build backend program *)
+        (* TODO: other backends *)
         if not (Sys.file_exists "offlineASL") then failwith "Can't find target dir offlineASL\n";
-        Ocaml_backend.run (fst decoder) offline_fns env "offlineASL/offline.ml"
-        (*Ocaml_backend.run (fst decoder) offline_fns env "output"*)
+        Ocaml_backend.run decoder_id decoder_fnsig tests instrs "offlineASL"
 
     in
     {

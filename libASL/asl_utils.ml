@@ -32,6 +32,8 @@ let mk_bindings (xs: (ident * 'a) list): 'a Bindings.t =
 let pp_bindings (pp: 'a -> string) (bs: 'a Bindings.t): string =
     String.concat ", " (List.map (fun (k, v) -> pprint_ident k ^"->"^ pp v) (Bindings.bindings bs))
 
+let bindings_of_list (l: (ident * 'a) list): 'a Bindings.t =
+    List.fold_right (fun (k,v) -> Bindings.add k v) l Bindings.empty
 
 (** {2 Sets of identifiers} *)
 module IdentSet = Set.Make(Id)
@@ -57,6 +59,8 @@ let addToBindingSet (k: ident) (v: ident) (bs: IdentSet.t Bindings.t): IdentSet.
 let to_sorted_list (s: IdentSet.t): ident list =
     IdentSet.elements s
 
+let bindings_domain (b: 'a Bindings.t): IdentSet.t =
+  Bindings.fold (fun k _ -> IdentSet.add k) b IdentSet.empty
 
 (****************************************************************)
 (** {2 Equivalence classes}                                     *)
