@@ -38,6 +38,9 @@ let bindings_of_list (l: (ident * 'a) list): 'a Bindings.t =
 (** {2 Sets of identifiers} *)
 module IdentSet = Set.Make(Id)
 
+let pp_identset is =
+    String.concat ", " (List.map (fun k -> pprint_ident k) (IdentSet.elements is))
+
 (** merge a list of sets *)
 let unionSets (idss: IdentSet.t list): IdentSet.t =
     List.fold_left IdentSet.union IdentSet.empty idss

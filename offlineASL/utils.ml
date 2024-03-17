@@ -121,6 +121,8 @@ let f_gen_branch cond =
             Expr_LitInt (string_of_int merge)], loc));
   (true_branch, false_branch, merge)
 
+let undefined () = Expr_Tuple []
+
 (* Runtime assert *)
 let f_gen_assert b =
   push_stmt (Stmt_Assert (b, loc))

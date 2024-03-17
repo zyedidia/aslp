@@ -664,6 +664,7 @@ let is_rt_slice v = wstate (is_runtime_slice v)
 
 let rt_var_ty   = Type_Constructor (Ident "rt_sym")
 let rt_label_ty = Type_Constructor (Ident "rt_label")
+let rt_expr_ty = Type_Constructor (Ident "rt_expr")
 
 let rt_decl_bv          = FIdent("decl_bv", 0)         (* string -> int -> sym *)
 let rt_decl_bool        = FIdent("decl_bool", 0)       (* string -> sym *)

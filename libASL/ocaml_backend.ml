@@ -143,6 +143,7 @@ and default_value t st =
   | Type_Constructor (Ident "boolean") -> "true"
   | Type_Constructor (Ident "integer") -> "Z.zero"
   | Type_Constructor (Ident "rt_label") -> "0"
+  | Type_Constructor (Ident "rt_expr") -> "undefined ()"
   | Type_Array(Index_Range(lo, hi),ty) ->
       let lo = prints_expr lo st in
       let hi = prints_expr hi st in
