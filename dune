@@ -21,3 +21,7 @@
   )
   (section (site (asli aslfiles)))
  )
+
+(alias
+ (name default)
+ (deps (package asli)))

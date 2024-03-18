@@ -167,23 +167,22 @@ statements and expressions.
 
 ### Using the ASL partial evaluator
 
-Arm's specification files are shipped with the ASLp fork in the mra_tools/ subfolder.
+Arm's specification files are shipped with the ASLp fork in the mra\_tools/ subfolder.
 We also define a small number of overrides in tests/override.asl and tests/override.prj.
 These provide alternative but equivalent definitions of some pre-defined functions
 which are more suitable for partial evaluation.
 (See [alastairreid/asl-interpreter](https://github.com/alastairreid/asl-interpreter#using-asl-interpreter-with-arms-public-specifications) for more details.)
 
-There is a script `./asli` which will load the required files.
+These specification files will be automatically loaded when running ASLp
+through dune.
 For example, to print the partially-evaluated semantics of the `add x1, x2, x3, LSL 4` instruction:
 ```bash
-$ ./asli
+$ dune exec asli
 ASLi> :sem A64 0x8b031041
 Decoding instruction A64 8b031041
-__array _R [ 1 ] = add_bits.0 {{ 64 }} (
-    __array _R [ 2 ] [ 0 +: 64 ],
-    append_bits.0 {{ 60,4 }} ( __array _R [ 3 ] [ 0 +: 60 ],'0000' ) 
-) [ 0 +: 64 ] ;
-ASLi> 
+__array _R [ 1 ] = add_bits.0 {{ 64 }} ( __array _R [ 2 ],append_bits.0 {{ 60,4 }} ( __array _R [ 3 ] [ 0 +: 60 ],'0000' ) ) ;
+ASLi>
+
 ```
 LLVM can be used to obtain the bytecode for a particular instruction mnemonic:
 ```bash
@@ -193,6 +192,21 @@ $ echo 'add x1, x2, x3, LSL 4' |
     tail -n1
 0: 8b031041      add     x1, x2, x3, lsl #4
 ```
+
+To obtain the semantics in a more machine-readable format, called "aslt", you can use the `:ast` command
+(the output below has been manually wrapped for clarity).
+```bash
+ASLi> :ast A64 0x8b031041
+Stmt_Assign(
+  LExpr_Array(LExpr_Var("_R"),1),
+  Expr_TApply("add_bits.0",[64],[
+    Expr_Array(Expr_Var("_R"),2);
+    Expr_TApply("append_bits.0",[60;4],[
+      Expr_Slices(Expr_Array(Expr_Var("_R"),3),[Slice_LoWd(0,60)]);'0000'])]))
+```
+The aslt format is also produced by the aslp-server program which serves a HTTP endpoint to request
+disassembly of opcodes.
+We provide an ANTLR grammar for this format, available at [libASL/Semantics.g4](libASL/Semantics.g4).
 
 The interpreter's evaluation (inherited from the original ASLi) can be tested with these commands:
 ```
@@ -212,7 +226,38 @@ Program exited by writing ^D to TUBE
 Exception taken
 ```
 
-Finally, the `:coverage` command is used to test equivalence of the partial evaluator and the interpreter.
+Enjoy!
+
+### Testing
+
+The project's tests are defined within the tests/ directory and you can invoke them through dune.
+This command will run the regular test suite, taking about 30 seconds.
+Included in this suite, we have basic tests of the disassembling opcodes and parsing the aslt output with ANTLR
+(the ANTLR tests require Java on your PATH and will fail without them).
+```bash
+dune runtest
+```
+To run a more thorough test, taking at least 5 minutes, use this command (see next section for more details).
+```bash
+dune build @coverage
+```
+
+Most of the tests are [cram tests](https://dune.readthedocs.io/en/latest/reference/cram.html) which describe shell
+commands to run alongside their expected output.
+This means they can be useful to see examples of ASLp's output formats.
+[tests/aslt/test_dis.t](tests/aslt/test_dis.t) processes a short list of common instructions to obtain their their pretty-printed and aslt semantics.
+[tests/aslt/test_cntlm.t](tests/aslt/test_cntlm.t) runs a list of instructions extracted from a binary program, but the output is from the ANTLR test harness
+so it is less readable.
+
+For the coverage tests, the tests are simple diff tests against an expected output file.
+
+In both cases, dune will report test failures as a difference against the expected output.
+[`dune promote`](https://dune.readthedocs.io/en/latest/concepts/promotion.html)
+can be used to update the expected files with the output from the latest run.
+ 
+#### Differential testing
+
+The `:coverage` command is used to test equivalence of the partial evaluator and the interpreter.
 It takes a regular expression of an instruction group, then generates and evaluates the partially evaluated
 ASL as well as the original ASL and compares the final states. 
 Instruction groups can be found in the [mra_tools/arch/arch_instrs.asl](mra_tools/arch/arch_instrs.asl) file.
@@ -234,8 +279,6 @@ ASLi> :coverage A64 aarch64_integer.+
 as we would expect if the partial evaluation is correct.
 UNDEFINED means that particular bytecode is an undefined case in the architecture.
 If an exception occurs somewhere else in the process, that will be reported as well.
-
-Enjoy!
 
 ## Publication
 

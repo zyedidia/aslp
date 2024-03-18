@@ -175,23 +175,31 @@ ident :: '' ::=        {{ phantom }}
                        {{ ocaml ident }}
                        {{ com Identifier }}
                        {{ pp     l = PPrint.string (pprint_ident l) }}
-                       {{ pp-raw l = PPrint.string (pprint_ident l) }}
+                       {{ pp-raw l = PPrint.string ("\"" ^ pprint_ident l ^ "\"") }}
   | id                 :: :: Ident {{ ocaml Ident [[id]] }}
 
 typeident :: '' ::=    {{ phantom }}
                        {{ ocaml ident }}
                        {{ com Type Identifier }}
                        {{ pp     l = PPrint.string (pprint_ident l) }}
-                       {{ pp-raw l = PPrint.string (pprint_ident l) }}
+                       {{ pp-raw l = PPrint.string ("\"" ^ pprint_ident l ^ "\"") }}
   | typeid             :: :: TypeIdent {{ ocaml Ident [[typeid]] }}
 
 anyident :: '' ::=     {{ phantom }}
                        {{ ocaml ident }}
                        {{ com Identifier (in a separate namespace from type identifiers) }}
                        {{ pp     l = PPrint.string (pprint_ident l) }}
-                       {{ pp-raw l = PPrint.string (pprint_ident l) }}
+                       {{ pp-raw l = PPrint.string ("\"" ^ pprint_ident l ^ "\"") }}
   | id                 :: :: AnyIdent {{ ocaml Ident [[id]] }}
   | typeid             :: :: AnyTypeIdent {{ ocaml Ident [[typeid]] }}
+
+ident_list :: 'IdentList_' ::=
+    {{ phantom }} {{ ocaml ident list }}
+    {{ pp-raw es = string "[" ^^ separate (string ";") (List.map pp_raw_ident es) ^^ string "]" }}
+    {{ pp     es = separate (string ",") (List.map pp_ident es) }}
+    | ident1 , .. , identn :: :: List
+    {{ ocaml [[ident1..identn]] }}
+
 
 grammar
 
@@ -516,11 +524,13 @@ stmts :: 'Stmts_' ::=
 
 indented_block :: 'Block_' ::=
     {{ phantom }} {{ ocaml stmt list }}
-    {{ pp-raw x = (nest 4 (lbracket
-                          ^^ hardline
-                          ^^ (separate hardline (List.map pp_raw_stmt x))))
-                  ^^ hardline
-                  ^^ rbracket
+    {{ pp-raw x = match x with
+                  | [] -> string "[]"
+                  | _ -> (nest 4 (lbracket
+                                  ^^ hardline
+                                  ^^ (separate (string ";" ^^ hardline) (List.map pp_raw_stmt x))))
+                         ^^ hardline
+                         ^^ rbracket
     }}
     {{ pp     x = (nest 4 (lbrace
                               ^^ hardline
@@ -554,7 +564,7 @@ nonempty_block :: 'Block_' ::= {{ quotient-with indented_block }}
 
 assignment_stmt :: 'Stmt_' ::= {{ quotient-with stmt }}
     {{ aux _ l }}
-    | ty ident1 , ... , identn ;   :: :: VarDeclsNoInit
+    | ty ident_list ;              :: :: VarDeclsNoInit
     | ty ident = expr ;            :: :: VarDecl
     | constant ty ident = expr ;   :: :: ConstDecl
     | lexpr = expr ;               :: :: Assign
@@ -564,7 +574,7 @@ lexpr :: 'LExpr_' ::=
     | qualident                                 ::   :: Var
     | lexpr . anyident                          ::   :: Field
     | lexpr . [ anyident1 , ... , anyidentn ]   ::   :: Fields
-    | lexpr [ slice1 , .. , slicen ]            ::   :: Slices
+    | lexpr [ slice_list ]                      ::   :: Slices
     | [ lexpr1 , .... , lexprn ]                ::   :: BitTuple
     | ( lexpr1 , .... , lexprn )                ::   :: Tuple
     | ( lexpr )                                 :: S :: Parens {{ ocaml [[lexpr]] }}
@@ -597,7 +607,7 @@ simple_stmt :: 'Stmt_' ::= {{ quotient-with stmt }}
     | __decode ident expr ;               ::   :: DecodeExecute {{ com decode and execute instruction }}
 
 stmt_spice :: 'Stmt_' ::= {{ quotient-with stmt }}
-    | qualident {{ expr1' , .. , exprm' }} ( expr1 , .. , exprn ) ;  ::   :: TCall  {{ com spice for procedure call with explicit type parameters }}
+    | qualident {{ expr_list' }} ( expr_list ) ;  ::   :: TCall  {{ com spice for procedure call with explicit type parameters }}
 
 conditional_stmt :: 'Stmt_' ::= {{ quotient-with stmt }}
     {{ aux _ l }}
@@ -630,8 +640,7 @@ s_elsif :: 'S_Elsif_' ::=
 
 optional_else :: 'S_Else' ::=
     {{ phantom }} {{ ocaml stmt list }}
-    {{ pp-raw x = match x with [] -> string ""
-                             | ys -> string "(else " ^^ separate (string "\n") (List.map pp_raw_stmt ys) ^^ string ")" }}
+    {{ pp-raw x = pp_raw_indented_block x }}
     {{ pp     x = match x with [] -> string ""
                              | ys -> string "else {" ^^ hardline
                                          ^^ (nest 4 (separate (string "\n") (List.map pp_stmt ys @ [string "}"])))
@@ -646,7 +655,7 @@ alt :: 'Alt_' ::=
 
 opt_otherwise :: 'OptOtherwise_' ::=
     {{ phantom }} {{ ocaml (stmt list) option }}
-    {{ pp-raw x = match x with Some(ys) -> string "Some(" ^^ separate (string "\n") (List.map pp_raw_stmt ys) ^^ string ")" | None -> string "None" }}
+    {{ pp-raw x = match x with Some(ys) -> string "Some(" ^^ pp_raw_indented_block ys ^^ string ")" | None -> string "None" }}
     {{ pp     x = match x with Some(ys) -> string "otherwise" ^^ hardline
                                            ^^ (nest 4 (separate (string "\n") (List.map pp_stmt ys)))
                              | None -> string "" }}
@@ -701,6 +710,13 @@ catcher :: 'Catcher_' ::=
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Expressions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+expr_list :: 'ExprList_' ::=
+    {{ phantom }} {{ ocaml expr list }}
+    {{ pp-raw es = string "[" ^^ separate (string ";") (List.map pp_raw_expr es) ^^ string "]" }}
+    {{ pp     es = separate (string ",") (List.map pp_expr es) }}
+    | expr1 , .. , exprn :: :: List
+    {{ ocaml [[expr1..exprn]] }}
 
 expr :: 'Expr_' ::=
     | conditional_expression :: :: Conditional {{ quotient-remove }} {{ ocaml [[conditional_expression]] }}
@@ -764,7 +780,7 @@ bexpr :: 'Expr_' ::= {{ quotient-with expr }}
 fexpr :: 'Expr_' ::= {{ quotient-with expr }}
     | fexpr . anyident                           :: :: Field   {{ com field selection }}
     | fexpr . [ anyident1 , ... , anyidentn ]    :: :: Fields  {{ com multiple field selection }}
-    | fexpr   [ slice1 , .. , slicen ]           :: :: Slices  {{ com bitslice }}
+    | fexpr   [ slice_list ]           :: :: Slices  {{ com bitslice }}
     | fexpr 'IN' pattern                         :: :: In      {{ com pattern match }}
     | aexpr                                      :: :: AExpr   {{ quotient-remove }} {{ ocaml [[aexpr]] }}
 
@@ -778,7 +794,7 @@ aexpr :: 'Expr_' ::= {{ quotient-with expr }}
     | ty IMPLEMENTATION_DEFINED opt_stringLit    ::   :: ImpDef
 
 expr_spice :: 'Expr_' ::= {{ quotient-with expr }}
-    | qualident {{ expr1' , .. , exprm' }} ( expr1 , .. , exprn ) ::   :: TApply  {{ com spice for desugaring function call with explicit type parameters }}
+    | qualident {{ expr_list' }} ( expr_list ) ::   :: TApply  {{ com spice for desugaring function call with explicit type parameters }}
     | if {{ ty }} cexpr1 then expr1 e_elsif1 .. e_elsifn else expr2 :: :: If {{ com spice for desugaring expression ifs }}
     | __array expr1 [ expr2 ]                    ::   :: Array     {{ com spice for desugaring array accesses }}
 
@@ -799,6 +815,14 @@ slice :: 'Slice_' ::=
     | sexpr1 :  sexpr2 :: :: HiLo
     | sexpr1 +: sexpr2 :: :: LoWd
 
+slice_list :: 'SliceList_' ::=
+    {{ phantom }} {{ ocaml slice list }}
+    {{ pp-raw es = string "[" ^^ separate (string ";") (List.map pp_raw_slice es) ^^ string "]" }}
+    {{ pp     es = separate (string ",") (List.map pp_slice es) }}
+    | slice1 , .. , slicen :: :: List
+    {{ ocaml [[slice1..slicen]] }}
+
+
 % almost identical to conditional_expression except that it omits : binop
 sexpr :: 'Expr_' ::= {{ quotient-with expr }}
     | scexpr                                                 :: :: CExpr2  {{ quotient-remove }} {{ ocaml [[scexpr]] }}
@@ -811,10 +835,10 @@ sfactor :: 'Factor_' ::= {{ quotient-with factor }}
     | binop bexpr :: :: BinOp2 {{ quotient-remove }} {{ ocaml Factor_BinOp([[binop]], [[bexpr]]) }}
 
 literal_expression :: 'Expr_' ::= {{ quotient-with expr }}
-    | intLit                                     :: :: LitInt    {{ com literal decimal integer }}
+    | intLit                                     :: :: LitInt    {{ com literal decimal integer }} {{ pp-raw x -> string Z.(to_string @@ of_string x) }}
     | hexLit                                     :: :: LitHex    {{ com literal hexadecimal integer }}
     | realLit                                    :: :: LitReal   {{ com literal real }}
-    | bitsLit                                    :: :: LitBits   {{ com literal bitvector }}
+    | bitsLit                                    :: :: LitBits   {{ com literal bitvector }} {{ pp-raw x -> string ("'" ^ x ^ "'") }}
     | maskLit                                    :: :: LitMask   {{ com literal bitmask }}
     | stringLit                                  :: :: LitString {{ com literal string }}
 

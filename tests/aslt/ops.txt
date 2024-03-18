@@ -1,0 +1,24 @@
+// opcodes for testing aslt.
+// lines not starting with 0x are ignored!
+
+// adds x1, x2, x3
+0xab030041
+
+// sub sp, sp, #32
+0xd10083ff
+
+// ldp x1, x2, [x3], #128
+0xa8c80861
+
+// stp x1, x2, [x3], #128
+0xa8880861
+
+// ucvtf d0, w2
+0x1e630040
+
+// mrs x0, nzcv
+0xd53b4200
+
+// tbl v0.8b, {v0.16b}, v0.8b
+0x0e000000
+
