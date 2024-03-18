@@ -17,7 +17,7 @@ homepage: "https://github.com/alastairreid/asl-interpreter"
 bug-reports: "https://github.com/alastairreid/asl-interpreter/issues"
 depends: [
   "dune" {>= "2.8"}
-  "ocaml" {>= "4.09"}
+  "ocaml" {>= "4.14"}
   "menhir" {build}
   "ott" {build & >= "0.31"}
   "linenoise"

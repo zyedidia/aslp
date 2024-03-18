@@ -1,4 +1,4 @@
-FROM ocaml/opam:ubuntu-20.04-ocaml-4.09
+FROM ocaml/opam:ubuntu-20.04-ocaml-4.14
 
 # Install system dependencies
 USER root
