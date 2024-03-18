@@ -205,6 +205,10 @@ let rec process_command (tcenv: TC.Env.t) (cpu: Cpu.cpu) (fname: string) (input0
             (fun s -> Printf.fprintf chan "%s\n" (Utils.to_string (PP.pp_raw_stmt s)))
             (Dis.dis_decode_entry cpu.env cpu.denv decoder op);
         Option.iter close_out chan_opt
+    | [":gen"; iset; id] ->
+        let cpu' = Cpu.mkCPU cpu.env cpu.denv in
+        Printf.printf "Generating lifter for %s %s\n" iset id;
+        cpu'.gen iset id
     | ":dump" :: iset :: opcode :: rest ->
         let fname = 
             (match rest with 

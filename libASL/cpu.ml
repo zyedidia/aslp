@@ -19,6 +19,7 @@ type cpu = {
     elfwrite : Int64.t -> char -> unit;
     opcode   : string -> Primops.bigint -> unit;
     sem      : string -> Primops.bigint -> unit;
+    gen      : string -> string -> unit
 }
 
 let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
@@ -55,6 +56,15 @@ let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
             (fun s -> Printf.printf "%s\n" (pp_stmt s))
             (Dis.dis_decode_entry env denv decoder op)
 
+    and gen (iset: string) (pat: string): unit =
+        (* Build the symbolic lifter *)
+        let (decoder_id,decoder_fnsig,tests,instrs) = Symbolic_lifter.run iset pat env in
+
+        (* Build backend program *)
+        (* TODO: other backends *)
+        if not (Sys.file_exists "offlineASL") then failwith "Can't find target dir offlineASL\n";
+        Ocaml_backend.run decoder_id decoder_fnsig tests instrs "offlineASL"
+
     in
     {
         env      = env;
@@ -65,7 +75,8 @@ let mkCPU (env : Eval.Env.t) (denv: Dis.env): cpu =
         setPC    = setPC;
         elfwrite = elfwrite;
         opcode   = opcode;
-        sem      = sem
+        sem      = sem;
+        gen      = gen
     }
 
 (****************************************************************

@@ -87,6 +87,8 @@ let infer_type (e: expr): ty option =
     | "cvt_bits_sint"      -> Some(type_integer)
     | "eq_bits"            -> Some(type_bool)
     | "ne_bits"            -> Some(type_bool)
+    | "sle_bits"           -> Some(type_bool)
+    | "slt_bits"           -> Some(type_bool)
     | _ -> None
     end
   | Expr_TApply((FIdent(name, _) | Ident(name)), [Expr_LitInt(v1) as num1; Expr_LitInt(v2) as num2], _) -> begin
@@ -607,9 +609,13 @@ module StatefulIntToBits = struct
 
       (* Other translation from int to bit *)
       | Expr_TApply (FIdent ("cvt_int_bits", 0), [t], [e;_]) -> 
-          let e' = bv_of_int_expr vars e in
-          let abs = (int_of_expr t,true,(Z.zero,Z.zero)) in
-          sym_expr @@ extend abs e'
+          let (e,a) = force_signed (bv_of_int_expr vars e) in
+          let w = int_of_expr t in
+          if w < width a then
+            sym_expr @@ sym_slice Unknown e 0 w
+          else
+            let abs = (int_of_expr t,true,(Z.zero,Z.zero)) in
+            sym_expr @@ extend abs (e,a)
 
       | Expr_TApply (FIdent ("eq_int", 0), [], [x;y]) ->
           let x = bv_of_int_expr vars x in
@@ -743,65 +749,66 @@ module StatefulIntToBits = struct
   *)
   let rec walk enum_types changed (vars: abs Bindings.t) (s: stmt list): (state * stmt list) =
     List.fold_left (fun (st,acc) stmt ->
-      let stmt = Asl_visitor.visit_stmt (new transform_int_expr st) stmt in
-      let (st,stmt) = (match stmt with
-
-      (* Match integer writes *)
-      | Stmt_VarDeclsNoInit(t, [v], loc) ->
-          (match capture_type enum_types t with
-          | Some w ->
-              let lhs = get_default v w st in
-              let e = Stmt_VarDeclsNoInit (type_bits (string_of_int (width lhs)), [v], loc) in
-              let st = assign v lhs st in
-              (st,e)
-          | None -> (st,stmt))
-      | Stmt_ConstDecl(t, v, e, loc) ->
-          (match capture_type enum_types t with
-          | Some w ->
-              let lhs = get_default v w st in
-              let rhs = bv_of_int_expr st e in
-              let w = merge_abs lhs (snd rhs) in
-              let s = sym_expr (extend w rhs) in
-              let s = Stmt_ConstDecl (type_bits (string_of_int (width w)), v, s, loc) in
-              let st = assign v w st in
-              (st,s)
-          | None -> (st,stmt))
-      | Stmt_VarDecl(t, v, e, loc) ->
-          (match capture_type enum_types t with
-          | Some w ->
-              let lhs = get_default v w st in
-              let rhs = bv_of_int_expr st e in
-              let w = merge_abs lhs (snd rhs) in
-              let s = sym_expr (extend w rhs) in
-              let s = Stmt_VarDecl (type_bits (string_of_int (width w)), v, s, loc) in
-              let st = assign v w st in
-              (st,s)
-          | None -> (st,stmt))
-      | Stmt_Assign(LExpr_Var(v), e, loc) when tracked v st ->
-          let lhs = get_default v None st in
-          let rhs = bv_of_int_expr st e in
-          let w = merge_abs lhs (snd rhs) in
-          let s = sym_expr (extend w rhs) in
-          let s = Stmt_Assign (LExpr_Var(v), s, loc) in
-          let st = assign v w st in
-          (st,s)
-
-      (* Expect only normalised Ifs *)
-      | Stmt_If (e, tstmts, [], fstmts, loc) ->
+      let v = new transform_int_expr st in
+      match stmt with
+      | Stmt_If (e, tstmts, [], fstmts, loc) -> (* Walk the If structure *)
+          let e = visit_expr v e in
           let (changed,vars) = st in
           let (t,tstmts) = walk enum_types changed vars tstmts in
           let (f,fstmts) = walk enum_types changed vars fstmts in
-          (merge t f,Stmt_If(e, tstmts, [], fstmts, loc))
-      | Stmt_If _ -> failwith "walk: invalid if"
+          (merge t f,acc@[Stmt_If(e, tstmts, [], fstmts, loc)])
 
-      (* Ignore all other stmts *)
-      | Stmt_VarDeclsNoInit _ 
-      | Stmt_Assign _
-      | Stmt_Assert _
-      | Stmt_TCall _ -> (st,stmt)
+      | _ -> (* Otherwise, we have no statement nesting *)
+        let stmt = Asl_visitor.visit_stmt v stmt in
+        let (st,stmt) = (match stmt with
 
-      | _ -> failwith "walk: invalid IR") in
-      (st,acc@[stmt])
+        (* Match integer writes *)
+        | Stmt_VarDeclsNoInit(t, [v], loc) ->
+            (match capture_type enum_types t with
+            | Some w ->
+                let lhs = get_default v w st in
+                let e = Stmt_VarDeclsNoInit (type_bits (string_of_int (width lhs)), [v], loc) in
+                let st = assign v lhs st in
+                (st,e)
+            | None -> (st,stmt))
+        | Stmt_ConstDecl(t, v, e, loc) ->
+            (match capture_type enum_types t with
+            | Some w ->
+                let lhs = get_default v w st in
+                let rhs = bv_of_int_expr st e in
+                let w = merge_abs lhs (snd rhs) in
+                let s = sym_expr (extend w rhs) in
+                let s = Stmt_ConstDecl (type_bits (string_of_int (width w)), v, s, loc) in
+                let st = assign v w st in
+                (st,s)
+            | None -> (st,stmt))
+        | Stmt_VarDecl(t, v, e, loc) ->
+            (match capture_type enum_types t with
+            | Some w ->
+                let lhs = get_default v w st in
+                let rhs = bv_of_int_expr st e in
+                let w = merge_abs lhs (snd rhs) in
+                let s = sym_expr (extend w rhs) in
+                let s = Stmt_VarDecl (type_bits (string_of_int (width w)), v, s, loc) in
+                let st = assign v w st in
+                (st,s)
+            | None -> (st,stmt))
+        | Stmt_Assign(LExpr_Var(v), e, loc) when tracked v st ->
+            let lhs = get_default v None st in
+            let rhs = bv_of_int_expr st e in
+            let w = merge_abs lhs (snd rhs) in
+            let s = sym_expr (extend w rhs) in
+            let s = Stmt_Assign (LExpr_Var(v), s, loc) in
+            let st = assign v w st in
+            (st,s)
+
+        (* Ignore all other stmts *)
+        | Stmt_VarDeclsNoInit _
+        | Stmt_Assign _
+        | Stmt_Assert _
+        | Stmt_TCall _ -> (st,stmt)
+        | _ -> failwith "walk: invalid IR") in
+        (st,acc@[stmt])
     ) ((changed,vars),[]) s
 
   let rec fixedPoint (enum_types: ident -> int option) (vars: abs Bindings.t) (s: stmt list): stmt list =
@@ -900,6 +907,7 @@ module IntToBits = struct
     | Expr_Var nm ->
       (match Bindings.find_opt nm vars with
       | Some (Type_Bits (Expr_LitInt n)) -> int_of_string n
+      | Some (Type_Register (wd, _)) -> int_of_string wd
       | Some t ->
         failwith @@ "bits_size_of_expr: expected bits type but got " ^
         pp_type t ^ " for " ^ pp_expr e
@@ -1630,5 +1638,46 @@ module CaseSimp = struct
     let stmt_visitor = new visit_if in
     let xs = visit_stmts stmt_visitor xs in
     xs
+end
+
+(* Rewrite expressions with temporary dynamic width bitvectors into equivalent versions with only static bitvectors *)
+module RemoveTempBVs = struct
+
+  class expr_walker debug = object
+    inherit Asl_visitor.nopAslVisitor
+    method !vslice s =
+      match s with
+      | Slice_HiLo(Expr_TApply(FIdent("add_int", 0), [], [a;Expr_LitInt b]),lo) when a = lo ->
+          ChangeTo( Slice_LoWd(lo, Expr_LitInt (string_of_int (int_of_string b + 1))) )
+      | _ -> DoChildren
+    method !vexpr e =
+      match e with
+      | Expr_TApply (FIdent("ZeroExtend", 0), [m;Expr_LitInt n], (Expr_TApply(FIdent("Ones", 0), [zw], ones)::xs)) ->
+          let ne = Expr_TApply (FIdent("LSR", 0), [Expr_LitInt n], [Expr_TApply(FIdent("Ones", 0), [Expr_LitInt n], [Expr_LitInt n]); 
+            Expr_TApply (FIdent ("sub_int", 0), [], [Expr_LitInt n; m])]) in
+          if debug then Printf.printf "RemoveTempBVs: Changing '%s' to '%s'\n" (pp_expr e) (pp_expr ne);
+          ChangeDoChildrenPost(ne, fun e -> e)
+      | _ -> DoChildren
+  end
+
+  let do_transform debug (xs: stmt list): stmt list =
+    let visitor = new expr_walker debug in
+    visit_stmts visitor xs
+
+end
+
+module RemoveRegisters = struct
+
+  class type_walker = object
+    inherit Asl_visitor.nopAslVisitor
+    method !vtype t =
+      match t with
+      | Type_Register(w,_) -> ChangeTo (Type_Bits (Expr_LitInt w))
+      | _ -> DoChildren
+  end
+
+  let run = 
+    let v = new type_walker in
+    visit_stmts v
 
 end

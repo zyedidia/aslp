@@ -67,6 +67,10 @@ let rec val_expr (v: Value.value): AST.expr =
   | VBits {n; v} -> Expr_LitBits(Z.format ("%0" ^ string_of_int n ^ "b") v)
   | VString s -> Expr_LitString(s)
   | VTuple vs -> Expr_Tuple(List.map val_expr vs)
+  | VMask {n; v; m} ->
+      let v = Z.format ("%0" ^ string_of_int n ^ "b") v in
+      let m = Z.format ("%0" ^ string_of_int n ^ "b") m in
+      Expr_LitMask (String.mapi (fun i c -> if String.get m i = '1' then c else 'x') v)
   | _ -> failwith @@ "Casting unhandled value type to expression: " ^ pp_value v
 
 let rec val_initialised (v: value): bool =
@@ -245,9 +249,18 @@ let sym_eq_int   = prim_binop "eq_int"
 let sym_le_int   = prim_binop "le_int"
 
 let sym_eq_bits  = prim_binop "eq_bits"
-let sym_inmask   = prim_binop "in_mask"
 
 let sym_eq_real  = prim_binop "eq_real"
+
+let sym_inmask loc v mask =
+  match v with
+  | Val x -> Val (VBool (prim_in_mask (to_bits loc x) mask))
+  | Exp e ->
+      let n = mask.n in
+      let ne = Expr_LitInt (string_of_int n) in
+      let m = val_expr (VBits {v = mask.m; n}) in
+      let v = val_expr (VBits {v = mask.v; n}) in
+      Exp (Expr_TApply (FIdent ("eq_bits", 0), [ne], [(Expr_TApply (FIdent ("and_bits", 0), [ne], [e; m]));v]))
 
 let sym_eq (loc: AST.l) (x: sym) (y: sym): sym =
   (match (x,y) with
@@ -321,7 +334,7 @@ let rec find_elim_term loc (e: expr) (f: expr -> sym option) =
                   | _ -> None))
       | _ -> None)
 
-let sym_sub_int loc (x: sym) (y: sym) =
+let rec sym_sub_int loc (x: sym) (y: sym) =
   let x = eval_lit x in
   let y = eval_lit y in
   let t = Exp (Expr_TApply (FIdent ("sub_int", 0), [], [sym_expr x; sym_expr y])) in
@@ -329,6 +342,11 @@ let sym_sub_int loc (x: sym) (y: sym) =
   | (Val (VInt x), Val (VInt y)) -> Val (VInt (Z.sub x y))
   (* Zero Identity *)
   | (Exp x, Val z) when is_zero z -> Exp x
+  (* Breakdown RHS *)
+  | (Exp x, Exp (Expr_TApply (FIdent ("add_int", 0), _, [y; z]))) ->
+      let x' = sym_sub_int loc (Exp x) (Exp y) in
+      let y' = sym_sub_int loc x' (Exp z) in
+      y'
   (* Chained constant add *)
   | (Exp (Expr_TApply (FIdent ("add_int", 0), _, [x1; Expr_LitInt v])), Val (VInt y)) ->
       let n = Z.of_string v in
@@ -665,6 +683,11 @@ let sym_prim_simplify (name: string) (tes: sym list) (es: sym list): sym option 
 
   | ("mul_int",     _,                [Val x1; x2])       when is_one x1 -> Some x2
   | ("mul_int",     _,                [x1; Val x2])       when is_one x2 -> Some x1
+  | ("mul_int",     _,                [Exp (Expr_TApply (FIdent ("add_int", 0), [], [x1; Expr_LitInt v])); Val (VInt v2)]) ->
+      let v = Z.of_string v in
+      let c = Val (VInt (Z.mul v v2)) in
+      let e = Exp (Expr_TApply (FIdent ("mul_int", 0), [], [x1; Expr_LitInt (Z.to_string v2)])) in
+      Some (sym_add_int loc e c)
 
   | ("append_bits", [Val t1; _],      [_; x2])            when is_zero t1 -> Some x2
   | ("append_bits", [_; Val t2],      [x1; _])            when is_zero t2 -> Some x1
@@ -780,11 +803,13 @@ let stmt_loc (s: stmt): l =
 type access_chain =
   | Field of ident
   | Index of value
+  | SymIndex of expr
 
 let pp_access_chain =
   function
   | Field id -> "Field " ^ pprint_ident id
   | Index v -> "Index " ^ pp_value v
+  | SymIndex e -> "SymIndex " ^ pp_expr e
 
 let pp_access_chain_list = Utils.pp_list pp_access_chain
 
@@ -801,6 +826,11 @@ let rec get_access_chain (loc: l) (v: value) (a: access_chain list) : value =
   (match a with
   | (Field f)::a -> (get_access_chain loc (get_field loc v f) a)
   | (Index i)::a -> (get_access_chain loc (get_array loc v i) a)
+  | (SymIndex e)::a ->
+      assert (a = []);
+      (match v with
+      | VArray (x, d) -> assert (ImmutableArray.cardinal x = 0); d
+      | _ -> failwith "unreachable")
   | [] -> v)
 
 (** "set_access_chain loc v a r" sets the reference defined by "a"
@@ -809,6 +839,11 @@ let rec set_access_chain (loc: l) (v: value) (a: access_chain list) (r: value): 
   (match a with
   | (Field f)::a -> set_field loc v f (set_access_chain loc (get_field loc v f) a r)
   | (Index i)::a -> set_array loc v i (set_access_chain loc (get_array loc v i) a r)
+  | (SymIndex e)::a ->
+      assert (a = []);
+      (match v with
+      | VArray (x, d) -> assert (ImmutableArray.cardinal x = 0); VArray(x, d)
+      | _ -> failwith "unreachable")
   | [] -> r)
 
 (** Returns an lexpr for accessing the given reference within the given lexpr. *)
@@ -816,6 +851,7 @@ let rec lexpr_access_chain (x: lexpr) (a: access_chain list): lexpr =
   (match a with
   | (Field f)::a -> lexpr_access_chain (LExpr_Field(x,f)) a
   | (Index i)::a -> lexpr_access_chain (LExpr_Array(x,val_expr i)) a
+  | (SymIndex e)::a -> lexpr_access_chain (LExpr_Array(x,e)) a
   | [] -> x)
 
 (** Returns an expr for accessing the given reference within the given expr. *)
@@ -823,4 +859,5 @@ let rec expr_access_chain (x: expr) (a: access_chain list): expr =
   (match a with
   | (Field f)::a -> expr_access_chain (Expr_Field(x,f)) a
   | (Index i)::a -> expr_access_chain (Expr_Array(x,val_expr i)) a
+  | (SymIndex e)::a -> expr_access_chain (Expr_Array(x,e)) a
   | [] -> x)

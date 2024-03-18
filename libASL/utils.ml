@@ -88,6 +88,12 @@ let rec butlast l =
   | [e] -> []
   | e::es -> e::(butlast es)
 
+let rec getlast l =
+  match l with
+  | [] -> invalid_arg "getlast"
+  | [e] -> ([],e)
+  | e::es -> let (es,l) = getlast es in (e::es,l)
+
 (****************************************************************
  * Option related
  ****************************************************************)

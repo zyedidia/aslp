@@ -32,9 +32,14 @@ let mk_bindings (xs: (ident * 'a) list): 'a Bindings.t =
 let pp_bindings (pp: 'a -> string) (bs: 'a Bindings.t): string =
     String.concat ", " (List.map (fun (k, v) -> pprint_ident k ^"->"^ pp v) (Bindings.bindings bs))
 
+let bindings_of_list (l: (ident * 'a) list): 'a Bindings.t =
+    List.fold_right (fun (k,v) -> Bindings.add k v) l Bindings.empty
 
 (** {2 Sets of identifiers} *)
 module IdentSet = Set.Make(Id)
+
+let pp_identset is =
+    String.concat ", " (List.map (fun k -> pprint_ident k) (IdentSet.elements is))
 
 (** merge a list of sets *)
 let unionSets (idss: IdentSet.t list): IdentSet.t =
@@ -57,6 +62,8 @@ let addToBindingSet (k: ident) (v: ident) (bs: IdentSet.t Bindings.t): IdentSet.
 let to_sorted_list (s: IdentSet.t): ident list =
     IdentSet.elements s
 
+let bindings_domain (b: 'a Bindings.t): IdentSet.t =
+  Bindings.fold (fun k _ -> IdentSet.add k) b IdentSet.empty
 
 (****************************************************************)
 (** {2 Equivalence classes}                                     *)
@@ -537,6 +544,28 @@ let masklength (x: string): int =
     let r = ref 0 in
     String.iter (function ' ' -> () | _ -> r := !r + 1) x;
     !r
+
+(****************************************************************)
+(** {2 Function signature accessors}                            *)
+(****************************************************************)
+
+let fnsig_get_rt         (a,b,c,d,e,f) = a
+let fnsig_get_typed_args (a,b,c,d,e,f) = b
+let fnsig_get_targs      (a,b,c,d,e,f) = c
+let fnsig_get_args       (a,b,c,d,e,f) = d
+let fnsig_get_body       (a,b,c,d,e,f) = f
+
+let fnsig_set_rt         (_,b,c,d,e,f) a = (a,b,c,d,e,f)
+let fnsig_set_typed_args (a,_,c,d,e,f) b = (a,b,c,d,e,f)
+let fnsig_set_targs      (a,b,_,d,e,f) c = (a,b,c,d,e,f)
+let fnsig_set_args       (a,b,c,_,e,f) d = (a,b,c,d,e,f)
+let fnsig_set_body       (a,b,c,d,e,_) f = (a,b,c,d,e,f)
+
+let fnsig_upd_rt         upd (a,b,c,d,e,f) = (upd a,b,c,d,e,f)
+let fnsig_upd_typed_args upd (a,b,c,d,e,f) = (a,upd b,c,d,e,f)
+let fnsig_upd_targs      upd (a,b,c,d,e,f) = (a,b,upd c,d,e,f)
+let fnsig_upd_args       upd (a,b,c,d,e,f) = (a,b,c,upd d,e,f)
+let fnsig_upd_body       upd (a,b,c,d,e,f) = (a,b,c,d,e,upd f)
 
 (****************************************************************
  * End
