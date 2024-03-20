@@ -23,6 +23,9 @@ let is_lit f =
 let is_slice f =
   f = FIdent ("gen_slice", 0)
 
+let is_merge_target f2 =
+  f2 = Offline_transform.rt_merge_branch
+
 let is_gen_call f =
   let prefix = "gen_" in
   match f with
@@ -228,15 +231,15 @@ module CopyProp = struct
         merge_st tst fst
 
     (* RunTime branch *)
-    | Stmt_Assign(LExpr_Tuple([LExpr_Var tv; LExpr_Var fv; LExpr_Var mv]), Expr_TApply(f, [], [c]), loc) when is_branch f ->
+    | Stmt_ConstDecl(t, v, Expr_TApply(f, [], [c]), loc) when is_branch f ->
         (* Collect reads and process them all *)
         let deps = get_deps c in
         let st = read_vars deps st in
         (* Push the merge point *)
-        push_context mv st
+        push_context v st
 
     (* Context switch *)
-    | Stmt_TCall(f, [], [Expr_Var i], loc) when is_context_switch f ->
+    | Stmt_TCall(f, [], [Expr_TApply(f2, [], [Expr_Var i])], loc) when is_context_switch f && is_merge_target f2 ->
         let top = peek_context st in
         if i = top then pop_context st else st
 
