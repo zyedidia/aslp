@@ -34,10 +34,6 @@ let unsupported_set = IdentSet.of_list [
 
 (* Problematic instruction encoding names, due to various disassembly issues *)
 let problematic_enc = [
-  (* >10k lines due to unrolling/splitting *)
-  "aarch64_memory_vector_multiple_no_wb";
-  "aarch64_memory_vector_multiple_post_inc";
-
   (* Need to extend RemoveUnsupported to remove all undesirable global variables & fields *)
   "aarch64_system_register_system";
   "aarch64_system_register_cpsr";
