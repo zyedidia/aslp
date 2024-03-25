@@ -310,7 +310,7 @@ class aslTreeVisitor (vis: #aslVisitor) = object(self)
         vis#leave_scope ();
         stmts'
 
-    method with_locals (ls: ((ty * ident) list)) (f: 'a -> 'b) (x: 'a): 'b =
+    method with_locals : 'a 'b. (ty * ident) list -> ('a -> 'b) -> 'a -> 'b = fun ls f x ->
         vis#enter_scope ls;
         let result = f x in
         vis#leave_scope ();
@@ -531,7 +531,7 @@ class aslTreeVisitor (vis: #aslVisitor) = object(self)
         (match x with
         | (ty, v) ->
                 let ty' = self#visit_type ty in
-                let v'  = visit_var  vis v in
+                let v'  = self#visit_var v in
                 if ty == ty' && v == v' then x else
                 (ty', v')
         )
@@ -715,6 +715,62 @@ class aslTreeVisitor (vis: #aslVisitor) = object(self)
         in
         doVisit vis (vis#vdecl x) aux x
 end
+
+(* convenience methods to visit with the ordinary forwards aslTreeVisitor. *)
+
+let visit_exprs (vis: #aslVisitor) : expr list -> expr list = (new aslTreeVisitor vis)#visit_exprs
+
+let visit_var (vis: #aslVisitor) : ident -> ident = (new aslTreeVisitor vis)#visit_var
+
+let visit_lvar (vis: #aslVisitor) : ident -> ident = (new aslTreeVisitor vis)#visit_lvar
+
+let visit_e_elsif (vis: #aslVisitor) : e_elsif -> e_elsif = (new aslTreeVisitor vis)#visit_e_elsif
+
+let visit_slice (vis: #aslVisitor) : slice -> slice = (new aslTreeVisitor vis)#visit_slice
+
+let visit_patterns (vis: #aslVisitor) : pattern list -> pattern list = (new aslTreeVisitor vis)#visit_patterns
+
+let visit_pattern (vis: #aslVisitor) : pattern -> pattern = (new aslTreeVisitor vis)#visit_pattern
+
+let visit_expr (vis: #aslVisitor) : expr -> expr = (new aslTreeVisitor vis)#visit_expr
+
+let visit_types (vis: #aslVisitor) : ty list -> ty list = (new aslTreeVisitor vis)#visit_types
+
+let visit_type (vis: #aslVisitor) : ty -> ty = (new aslTreeVisitor vis)#visit_type
+
+let visit_lexprs (vis: #aslVisitor) : lexpr list -> lexpr list = (new aslTreeVisitor vis)#visit_lexprs
+
+let visit_lexpr (vis: #aslVisitor) : lexpr -> lexpr = (new aslTreeVisitor vis)#visit_lexpr
+
+let visit_stmts (vis: #aslVisitor) : stmt list -> stmt list = (new aslTreeVisitor vis)#visit_stmts
+
+let visit_stmt (vis: #aslVisitor) : stmt -> stmt = (new aslTreeVisitor vis)#visit_stmt
+
+let visit_s_elsif (vis: #aslVisitor) : s_elsif -> s_elsif = (new aslTreeVisitor vis)#visit_s_elsif
+
+let visit_alt (vis: #aslVisitor) : alt -> alt = (new aslTreeVisitor vis)#visit_alt
+
+let visit_catcher (vis: #aslVisitor) : catcher -> catcher = (new aslTreeVisitor vis)#visit_catcher
+
+let visit_mapfield (vis: #aslVisitor) : mapfield -> mapfield = (new aslTreeVisitor vis)#visit_mapfield
+
+let visit_sformal (vis: #aslVisitor) : sformal -> sformal = (new aslTreeVisitor vis)#visit_sformal
+
+let visit_dpattern (vis: #aslVisitor) : decode_pattern -> decode_pattern = (new aslTreeVisitor vis)#visit_dpattern
+
+let visit_encoding (vis: #aslVisitor) : encoding -> encoding = (new aslTreeVisitor vis)#visit_encoding
+
+let visit_decode_case (vis: #aslVisitor) : decode_case -> decode_case = (new aslTreeVisitor vis)#visit_decode_case
+
+let visit_decode_alt (vis: #aslVisitor) : decode_alt -> decode_alt = (new aslTreeVisitor vis)#visit_decode_alt
+
+let visit_decode_body (vis: #aslVisitor) : decode_body -> decode_body = (new aslTreeVisitor vis)#visit_decode_body
+
+let visit_arg (vis: #aslVisitor) : (ty * ident) -> (ty * ident) = (new aslTreeVisitor vis)#visit_arg
+
+let visit_args (vis: #aslVisitor) : (ty * ident) list -> (ty * ident) list = (new aslTreeVisitor vis)#visit_args
+
+let visit_decl (vis: #aslVisitor) : declaration -> declaration = (new aslTreeVisitor vis)#visit_decl
 
 
 (****************************************************************)
