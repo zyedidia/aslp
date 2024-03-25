@@ -1697,3 +1697,106 @@ module RemoveRegisters = struct
     visit_stmts v
 
 end
+
+
+module type ScopedBindings = sig  
+    type 'elt t = 'elt Bindings.t Stack.t
+
+    val push_scope : 'elt t  -> unit -> unit 
+    val pop_scope : 'elt t  -> unit -> unit 
+    val add_bind : 'elt t  -> ident -> 'elt -> unit 
+    val find_binding : 'elt t -> ident -> 'elt option 
+    val current_scope_bindings : 'elt t -> 'elt Bindings.t
+end
+
+module ScopedBindings : ScopedBindings = struct 
+  type 'elt t = 'elt Bindings.t Stack.t
+  let push_scope (b:'elt t) (_:unit) : unit = Stack.push (Bindings.empty) b 
+  let pop_scope (b:'elt t) (_:unit) : unit = Stack.pop_opt b |> ignore 
+  let add_bind (b:'elt t) k v : unit = Stack.push (Bindings.add k v (Stack.pop b)) b 
+  let find_binding (b:'elt t) (i) : 'a option = Seq.find_map (fun s -> Bindings.find_opt i s) (Stack.to_seq b)
+
+  
+  (** returns a flattened view of bindings accessible from the current (innermost) scope. *)
+  let current_scope_bindings (b:'elt t) : 'elt Bindings.t =
+    (* inner bindings shadow outer bindings. *)
+    let join = Bindings.union (fun _ inner _outer -> Some inner) in
+    Seq.fold_left join Bindings.empty (Stack.to_seq b)
+end
+
+module FixRedefinitions = struct
+  type var_t = {name: ident ; index: int}
+
+  let ident_for_v (e: var_t) : ident =
+    if e.index = 0 then e.name else
+    match e.name with
+    | Ident s -> Ident (s ^ "_" ^ (string_of_int e.index))
+    | FIdent (s, i) -> FIdent ((s ^ "_" ^ (string_of_int e.index), i))
+
+  open ScopedBindings
+
+  class redef_renamer (globals) = object(this)
+    inherit Asl_visitor.nopAslVisitor
+
+    val mutable seen = Bindings.empty
+    val scoped_bindings : var_t ScopedBindings.t =
+      let s = Stack.create () in
+      Stack.push (Bindings.empty) s ; s
+
+    method push_scope (_:unit) : unit = push_scope scoped_bindings ()
+    method pop_scope (_:unit) : unit = pop_scope scoped_bindings () 
+    method add_bind (n: var_t) : unit = add_bind scoped_bindings n.name n 
+    method existing_binding (i: ident) : var_t option = find_binding scoped_bindings i
+
+    method incr_binding (i: ident) : var_t =
+      let v = this#existing_binding i in
+      match v with
+      | Some b -> {b with index = b.index + 1}
+      | None -> {name=i; index=0}
+
+    method! vstmt s =
+      match s with
+        | Stmt_VarDeclsNoInit(ty, vs, loc) ->
+            let ns = List.map this#incr_binding vs in
+            List.iter this#add_bind ns; DoChildren
+        | Stmt_VarDecl(ty, v, i, loc) ->
+            let b = this#incr_binding v in
+            this#add_bind b; DoChildren
+        | Stmt_ConstDecl(ty, v, i, loc) ->
+            let b = this#incr_binding v in
+            this#add_bind b; DoChildren
+        | Stmt_If (c, t, els, e, loc) ->
+            let c'   = visit_expr this c in
+            this#push_scope () ;
+            let t'   = visit_stmts this t in
+            this#pop_scope (); this#push_scope () ;
+            let els' = mapNoCopy (visit_s_elsif this ) els in
+            this#pop_scope (); this#push_scope () ;
+            let e'   = visit_stmts this e in
+            this#pop_scope ();
+            ChangeTo (Stmt_If (c', t', els', e', loc))
+        (* Statements with child scopes that shouldn't appear towards the end of transform pipeline *)
+        | Stmt_Case _ -> failwith "(FixRedefinitions) case not expected"
+        | Stmt_For _ -> failwith "(FixRedefinitions) for not expected"
+        | Stmt_While _ -> failwith "(FixRedefinitions) while not expected"
+        | Stmt_Repeat _ -> failwith "(FixRedefinitions) repeat not expected"
+        | Stmt_Try _ -> failwith "(FixRedefinitions) try not expected"
+        | _ -> DoChildren
+
+    method! vlvar e =
+       (match (this#existing_binding e) with
+          | Some e -> ChangeTo (ident_for_v e)
+          | None -> SkipChildren)
+
+    method! vvar e =
+       (match (this#existing_binding e) with
+          | Some e -> ChangeTo (ident_for_v e)
+          | None -> SkipChildren)
+
+    end
+
+  let run (g: IdentSet.t) (s:stmt list) : stmt list =
+    let v = new redef_renamer g in
+    visit_stmts v s
+end
+
