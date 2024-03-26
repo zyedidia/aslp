@@ -32,7 +32,7 @@ class type aslVisitor = object
     method vtype     : ty             -> ty             visitAction
     method vlvar     : ident          -> ident          visitAction
     method vlexpr    : lexpr          -> lexpr          visitAction
-    method vstmt     : stmt           -> stmt           visitAction
+    method vstmt     : stmt           -> stmt list      visitAction
     method vs_elsif  : s_elsif        -> s_elsif        visitAction
     method valt      : alt            -> alt            visitAction
     method vcatcher  : catcher        -> catcher        visitAction
@@ -48,6 +48,20 @@ class type aslVisitor = object
     method enter_scope : (ty * ident) list -> unit
     method leave_scope : unit -> unit
 end
+
+(** Converts a visitAction on single values to an action on lists.
+    The generated visitAction will throw if given a non-singleton list. *)
+let singletonVisitAction (a: 'a visitAction) : 'a list visitAction =
+    let listpost post : 'a list -> 'a list = function
+        | [x] -> [post x]
+        | xs ->
+            let len = string_of_int @@ List.length xs in
+            failwith @@ "this ChangeDoChildrenPost handles single values only, but was given a list of " ^ len ^ " items"
+    in match a with
+    | ChangeTo x -> ChangeTo [x]
+    | ChangeDoChildrenPost(x, post) -> ChangeDoChildrenPost([x], listpost post)
+    | DoChildren -> DoChildren
+    | SkipChildren -> SkipChildren
 
 
 (****************************************************************)
@@ -306,7 +320,7 @@ class aslForwardsVisitor (vis: #aslVisitor) = object(self)
      *)
     method visit_stmts (xs: stmt list): stmt list =
         vis#enter_scope [];
-        let stmts' = mapNoCopy (self#visit_stmt) xs in
+        let stmts' = List.concat_map (self#visit_stmt) xs in
         vis#leave_scope ();
         stmts'
 
@@ -316,7 +330,7 @@ class aslForwardsVisitor (vis: #aslVisitor) = object(self)
         vis#leave_scope ();
         result
 
-    method visit_stmt (x: stmt): stmt =
+    method visit_stmt (x: stmt): stmt list =
         let aux (_: #aslVisitor) (x: stmt): stmt =
             (match x with
             | Stmt_VarDeclsNoInit (ty, vs, loc) ->
@@ -404,7 +418,7 @@ class aslForwardsVisitor (vis: #aslVisitor) = object(self)
 
             )
         in
-        doVisit vis (vis#vstmt x) aux x
+        doVisitList vis (vis#vstmt x) aux x
 
     method visit_s_elsif (x: s_elsif): s_elsif =
         let aux (_: #aslVisitor) (x: s_elsif): s_elsif =
@@ -755,7 +769,7 @@ let visit_lexpr (vis: #aslVisitor) : lexpr -> lexpr = (new aslForwardsVisitor vi
 
 let visit_stmts (vis: #aslVisitor) : stmt list -> stmt list = (new aslForwardsVisitor vis)#visit_stmts
 
-let visit_stmt (vis: #aslVisitor) : stmt -> stmt = (new aslForwardsVisitor vis)#visit_stmt
+let visit_stmt (vis: #aslVisitor) : stmt -> stmt list = (new aslForwardsVisitor vis)#visit_stmt
 
 let visit_s_elsif (vis: #aslVisitor) : s_elsif -> s_elsif = (new aslForwardsVisitor vis)#visit_s_elsif
 
@@ -782,6 +796,11 @@ let visit_arg (vis: #aslVisitor) : (ty * ident) -> (ty * ident) = (new aslForwar
 let visit_args (vis: #aslVisitor) : (ty * ident) list -> (ty * ident) list = (new aslForwardsVisitor vis)#visit_args
 
 let visit_decl (vis: #aslVisitor) : declaration -> declaration = (new aslForwardsVisitor vis)#visit_decl
+
+let visit_stmt_single (vis: #aslVisitor) : stmt -> stmt =
+    fun s -> match visit_stmt vis s with
+    | [x] -> x
+    | _ -> failwith "visit_stmt_single requires exactly one returned statement"
 
 
 (****************************************************************)
