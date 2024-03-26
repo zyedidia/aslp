@@ -90,8 +90,10 @@ let arg_of_ifield (IField_Field (id, _, wd)): (ty * ident) =
 let args_of_encoding (Encoding_Block (_, _, fs, _, _, _, _, _)): (ty * ident) list =
     List.map arg_of_ifield fs
 
-
-class aslForwardsVisitor (vis: #aslVisitor) = object(self)
+(** a base class for treeVisitors transforming the AST.
+    the method visit_stmts is left abstract for subclasses
+    to implement. *)
+class virtual aslTreeVisitor (vis: #aslVisitor) = object(self)
 
     method visit_exprs (xs: expr list): expr list =
         mapNoCopy (self#visit_expr) xs
@@ -314,15 +316,7 @@ class aslForwardsVisitor (vis: #aslVisitor) = object(self)
         doVisit vis (vis#vlexpr x) aux x
 
 
-    (* todo: should probably make this more like cil visitor and allow
-     * visit_stmt to generate a list of statements and provide a mechanism to emit
-     * statements to be inserted before/after the statement being transformed
-     *)
-    method visit_stmts (xs: stmt list): stmt list =
-        vis#enter_scope [];
-        let stmts' = List.concat_map (self#visit_stmt) xs in
-        vis#leave_scope ();
-        stmts'
+    method virtual visit_stmts : stmt list -> stmt list
 
     method with_locals : 'a 'b. (ty * ident) list -> ('a -> 'b) -> 'a -> 'b = fun ls f x ->
         vis#enter_scope ls;
@@ -730,14 +724,29 @@ class aslForwardsVisitor (vis: #aslVisitor) = object(self)
         doVisit vis (vis#vdecl x) aux x
 end
 
+class aslForwardsVisitor (vis: #aslVisitor) = object(self)
+    inherit aslTreeVisitor vis
+
+    method visit_stmts (xs: stmt list): stmt list =
+        vis#enter_scope [];
+        let stmts' = List.concat_map (self#visit_stmt) xs in
+        vis#leave_scope ();
+        stmts'
+end
+
 (** visit statement lists in a backwards order.
     i.e., enter_scope is called before the final statement in a block and
     exit_scope is called after the initial statement. *)
-class aslBackwardsVisitor (vis: #aslVisitor) = object
-    inherit aslForwardsVisitor vis as forwards
+class aslBackwardsVisitor (vis: #aslVisitor) = object(self)
+    inherit aslTreeVisitor vis
 
-    method! visit_stmts (xs: stmt list): stmt list =
-        List.rev @@ forwards#visit_stmts (List.rev xs)
+    method visit_stmts (xs: stmt list): stmt list =
+        vis#enter_scope [];
+        (* reverse resultant statements as blocks, to avoid reversing
+           lists returned by the visitAction. *)
+        let stmts' = List.rev @@ List.map (self#visit_stmt) (List.rev xs) in
+        vis#leave_scope ();
+        List.concat stmts'
 end
 
 
