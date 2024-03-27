@@ -121,6 +121,10 @@ let f_gen_branch cond =
             Expr_LitInt (string_of_int merge)], loc));
   (true_branch, false_branch, merge)
 
+let f_true_branch (a,_,_) = a
+let f_false_branch (_,b,_) = b
+let f_merge_branch (_,_,c) = c
+
 let undefined () = Expr_Tuple []
 
 (* Runtime assert *)

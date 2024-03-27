@@ -34,10 +34,6 @@ let unsupported_set = IdentSet.of_list [
 
 (* Problematic instruction encoding names, due to various disassembly issues *)
 let problematic_enc = [
-  (* >10k lines due to unrolling/splitting *)
-  "aarch64_memory_vector_multiple_no_wb";
-  "aarch64_memory_vector_multiple_post_inc";
-
   (* Need to extend RemoveUnsupported to remove all undesirable global variables & fields *)
   "aarch64_system_register_system";
   "aarch64_system_register_cpsr";
@@ -372,6 +368,7 @@ let run iset pat env =
   Printf.printf "Stages 7-8: Offline Transform\n";
   let offline_fns = Offline_transform.run fns env in
   let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.CopyProp.run k)) offline_fns in
+  let offline_fns = Bindings.mapi (fun k -> fnsig_upd_body (Offline_opt.DeadContextSwitch.run k)) offline_fns in
   let dsig = fnsig_upd_body (DecoderCleanup.run (unsupported_inst tests offline_fns)) dsig in
   let dsig = fnsig_upd_body (Transforms.RemoveUnused.remove_unused IdentSet.empty) dsig in
   Printf.printf "\n";

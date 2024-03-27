@@ -715,23 +715,20 @@ let gen_fresh_var loc ty =
   let+ _ = gen_var_decl loc ty i in
   i
 
+let rt_true_branch = FIdent("true_branch", 0)
+let rt_false_branch = FIdent("false_branch", 0)
+let rt_merge_branch = FIdent("merge_branch", 0)
+
 (* Generate a branch in the runtime program, with some way to refer to its targets and merge point *)
 let gen_branch loc c =
-  let@ tl = get_fresh_name in
-  let@ tf = get_fresh_name in
-  let@ tm = get_fresh_name in
-  let lexpr = LExpr_Tuple ( List.map (fun v -> LExpr_Var v) [tl;tf;tm] ) in
-  let+ _ = write [
-    Stmt_VarDeclsNoInit( rt_label_ty, [tl], loc);
-    Stmt_VarDeclsNoInit( rt_label_ty, [tf], loc);
-    Stmt_VarDeclsNoInit( rt_label_ty, [tm], loc);
-    Stmt_Assign(lexpr, Expr_TApply(rt_gen_branch, [], [c]), loc)
-  ] in
-  (tl,tf,tm)
+  let@ res = get_fresh_name in
+  let v = Expr_Var res in
+  let+ _ = write [Stmt_ConstDecl( rt_label_ty, res, Expr_TApply(rt_gen_branch, [], [c]), loc) ] in
+  (Expr_TApply(rt_true_branch, [], [v]),Expr_TApply(rt_false_branch,[],[v]),Expr_TApply(rt_merge_branch,[],[v]))
 
 (* Switch the implicit context to one produced by gen_branch *)
 let switch_context loc t =
-  write [Stmt_TCall(rt_switch_context, [], [Expr_Var t], loc)]
+  write [Stmt_TCall(rt_switch_context, [], [t], loc)]
 
 (* Generate a variable store/load *)
 let gen_var_store loc v e =

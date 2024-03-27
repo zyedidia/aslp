@@ -121,13 +121,14 @@ let infer_type (e: expr): ty option =
 
 (** Remove variables which are unused at the end of the statement list. *)
 module RemoveUnused = struct
-  let rec remove_unused (globals: IdentSet.t) xs = (remove_unused' globals xs)
+  let rec remove_unused (globals: IdentSet.t) xs = fst (remove_unused' globals IdentSet.empty xs)
 
-  and remove_unused' (used: IdentSet.t) (xs: stmt list): (stmt list) =
-    fst @@ List.fold_right (fun stmt (acc, used) ->
+  and remove_unused' globals (used: IdentSet.t) (xs: stmt list): (stmt list * IdentSet.t) =
+    List.fold_right (fun stmt (acc, used) ->
 
       let pass = (acc, used)
       and emit (s: stmt) = (s::acc, IdentSet.union used (fv_stmt s))
+      and halt (s: stmt) = ([stmt], IdentSet.empty)
       in
 
       match stmt with
@@ -146,19 +147,34 @@ module RemoveUnused = struct
           else pass
       | Stmt_Assign(le, r, loc) ->
         let lvs = assigned_vars_of_stmts [stmt] in
-        if not (IdentSet.disjoint lvs used)
+        if not (IdentSet.disjoint lvs used) || not (IdentSet.disjoint lvs globals)
           then emit stmt
           else pass
+
+      (* Skip if structure if possible - often seen in decode tests *)
+      | Stmt_If(Expr_Var (Ident "TRUE"), tstmts, elsif, fstmts, loc) ->
+          let (tstmts',tused) = remove_unused' globals used tstmts in
+          (tstmts'@acc,tused)
+
       | Stmt_If(c, tstmts, elsif, fstmts, loc) ->
-        let tstmts' = remove_unused' used tstmts in
-        let fstmts' = remove_unused' used fstmts in
+        let (tstmts',tused) = remove_unused' globals used tstmts in
+        let (fstmts',fused) = remove_unused' globals used fstmts in
         let elsif' = List.map
           (fun (S_Elsif_Cond (c,ss)) ->
-            S_Elsif_Cond (c, remove_unused' used ss))
+            let (b, bused) = remove_unused' globals used ss in
+            let bused = IdentSet.union bused (fv_expr c) in
+            (S_Elsif_Cond (c,b), bused))
           elsif in
+        let used = List.fold_right (fun (_,u) -> IdentSet.union u) elsif' (IdentSet.union tused fused) in
+        let used = IdentSet.union used (fv_expr c) in
         (match (tstmts',fstmts',elsif') with
         | [], [], [] -> pass
-        | _, _, _ -> emit (Stmt_If(c, tstmts', elsif', fstmts', loc)))
+        | _, _, _ -> (Stmt_If(c, tstmts', List.map fst elsif', fstmts', loc)::acc,used))
+
+      (* Unreachable points *)
+      | Stmt_Assert (Expr_Var (Ident "FALSE"), _)
+      | Stmt_Throw _ -> halt stmt
+
       | x -> emit x
 
     ) xs ([], used)

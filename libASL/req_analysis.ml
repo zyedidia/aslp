@@ -68,6 +68,10 @@ let wrap f = fun s ->
   match f s with
   | Either.Left r -> Either.Left (s,[],r)
   | Either.Right e -> Either.Right e
+let wrapl f = fun s ->
+  match f s with
+  | Either.Left (s,w,r) -> Either.Left (s,[],(w,r))
+  | Either.Right e -> Either.Right e
 let write l = fun s ->
   Either.Left (s,[l],())
 let writel l = fun s ->
@@ -391,7 +395,17 @@ let contains_req_assign s : bool wrm =
     | _ -> pure false) s in
   List.mem true search
 
-let fix_stmt fid s =
+let rec process_alts fid v loc alts d =
+  match alts with
+  | (Alt_Alt(p,oc,b))::alts ->
+      let e = Expr_In (v, Pat_Set p) in
+      let e = match oc with Some c -> Expr_TApply (FIdent ("and_bool", 0), [], [e;c]) | _ -> e in
+      let@ (b,_) = wrapl (fix_stmts fid b) in
+      let+ acc = process_alts fid v loc alts d in
+      [Stmt_If(e, b, [], acc, loc)]
+  | _ -> pure d
+
+and fix_stmt fid s =
   match s with
   | Stmt_VarDecl(ty, v, e, loc) 
   | Stmt_ConstDecl(ty, v, e, loc) ->
@@ -403,6 +417,16 @@ let fix_stmt fid s =
       | _, Some vals ->
           Printf.printf "  %s: Splitting %s into %d values\n" (name_of_FIdent fid)(pp_stmt s) (List.length vals);
           let@ _ = write (Stmt_VarDeclsNoInit(ty, [v], loc)) in
+          write (List.fold_right (fun (test,expr) acc ->
+            Stmt_If(test, [Stmt_Assign(LExpr_Var v, expr, loc)], [], [acc], loc)) vals (Stmt_Throw (Ident ("UNREACHABLE"), loc))))
+  | Stmt_Assign(LExpr_Var v, e, loc) ->
+      let@ r = get_req v in
+      let vals = enumerate e in
+      (match r, vals with
+      | NoReq, _
+      | _, None -> write s
+      | _, Some vals ->
+          Printf.printf "  %s: Splitting assign %s into %d values\n" (name_of_FIdent fid)(pp_stmt s) (List.length vals);
           write (List.fold_right (fun (test,expr) acc -> 
             Stmt_If(test, [Stmt_Assign(LExpr_Var v, expr, loc)], [], [acc], loc)) vals (Stmt_Throw (Ident ("UNREACHABLE"), loc))))
   | Stmt_Case(v, alts, None, loc) ->
@@ -410,22 +434,18 @@ let fix_stmt fid s =
       if not b then write s
       else
         (Printf.printf "  %s: Splitting %s into %d values\n" (name_of_FIdent fid) (pp_stmt s) (List.length alts);
-        write (List.fold_left (fun acc (Alt_Alt(p,oc,b)) ->
-          let e = Expr_In (v, Pat_Set p) in
-          let e = match oc with Some c -> Expr_TApply (FIdent ("and_bool", 0), [], [e;c]) | _ -> e in
-          Stmt_If(e, b, [], [acc], loc)) (Stmt_Throw (Ident ("UNREACHABLE"), loc))  alts))
+        let@ r = process_alts fid v loc alts [Stmt_Throw (Ident ("UNREACHABLE"), loc)] in
+        writel r)
   | Stmt_Case(v, alts, Some d, loc) ->
       let@ b = contains_req_assign (List.flatten (List.map (function Alt_Alt(p,oc,b) -> b) alts)) in
       if not b then write s
       else
         (Printf.printf "  %s: Splitting %s into %d values\n" (name_of_FIdent fid) (pp_stmt s) (List.length alts + 1);
-        writel (List.fold_left (fun acc (Alt_Alt(p,oc,b)) ->
-          let e = Expr_In (v, Pat_Set p) in
-          let e = match oc with Some c -> Expr_TApply (FIdent ("and_bool", 0), [], [e;c]) | _ -> e in
-          [Stmt_If(e, b, [], acc, loc)]) (d)  alts))
+        let@ r = process_alts fid v loc alts d in
+        writel r)
   | _ -> write s
 
-let fix_stmts fid s =
+and fix_stmts fid s =
   let+ _ = traverse (fix_stmt fid) s in
   () 
 
