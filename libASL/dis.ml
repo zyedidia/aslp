@@ -1327,19 +1327,27 @@ and dis_stmt' (x: AST.stmt): unit rws =
         | _, _ ->
             raise (DisUnsupported (loc, "for loop bounds not statically known: " ^ pp_stmt x)))
     | Stmt_Dep_Undefined loc
-    | Stmt_Undefined loc
-    | Stmt_Unpred loc
-    | Stmt_ConstrainedUnpred loc
-    | Stmt_ImpDef (_, loc)
-    | Stmt_ExceptionTaken loc
-    | Stmt_Dep_Unpred loc
-    | Stmt_Dep_ImpDef (_, loc)
+    | Stmt_Undefined loc ->
+        DisEnv.write [Stmt_TCall(FIdent("Undefined", 0), [], [], loc)]
+    | Stmt_Unpred loc ->
+        DisEnv.write [Stmt_TCall(FIdent("Unpred", 0), [], [], loc)]
+    | Stmt_ConstrainedUnpred loc ->
+        DisEnv.write [Stmt_TCall(FIdent("ConstrainedUnpred", 0), [], [], loc)]
+    | Stmt_ImpDef (x, loc) ->
+        DisEnv.write [Stmt_TCall(FIdent("ImpDef", 0), [], [], loc)]
+    | Stmt_ExceptionTaken loc ->
+        DisEnv.write [Stmt_TCall(FIdent("ExceptionTaken", 0), [], [], loc)]
+    | Stmt_Dep_Unpred loc ->
+        DisEnv.write [Stmt_TCall(FIdent("Dep_Unpred", 0), [], [], loc)]
+    | Stmt_Dep_ImpDef (x, loc) ->
+        DisEnv.write [Stmt_TCall(FIdent("Dep_ImpDef", 0), [], [], loc)]
     | Stmt_See (_, loc)
     | Stmt_Throw (_, loc)
     | Stmt_DecodeExecute (_, _, loc)
     | Stmt_While (_, _, loc)
     | Stmt_Repeat (_, _, loc)
     | Stmt_Try (_, _, _, _, loc) ->
+        (* raise (DisUnsupported (loc, "dis_unsupported")) *)
         DisEnv.write [Stmt_Assert(expr_false, loc)]
     )
 

@@ -542,6 +542,7 @@ ProcState PSTATE;
 // be defined by each implementation, according to its implementation choices.
 
 Constraint ConstrainUnpredictable(Unpredictable which)
+    CONSTRAINED_UNPREDICTABLE;
     case which of
         when Unpredictable_WBOVERLAPLD
             return Constraint_WBSUPPRESS; // return loaded value

@@ -29,6 +29,7 @@
     "lwt"
     "cohttp-lwt-unix"
     "yojson"
+    "ctypes-foreign"
   )
   (sites (share aslfiles))
 )

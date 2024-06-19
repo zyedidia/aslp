@@ -30,6 +30,7 @@ depends: [
   "lwt"
   "cohttp-lwt-unix"
   "yojson"
+  "ctypes-foreign"
   "odoc" {with-doc}
 ]
 build: [

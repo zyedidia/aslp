@@ -8,7 +8,6 @@
 (** ASL interactive frontend *)
 
 open LibASL
-
 open Asl_ast
 open Value
 open Eval
@@ -20,6 +19,7 @@ module PP     = Asl_parser_pp
 module AST    = Asl_ast
 
 let opt_prelude : string ref = ref "prelude.asl"
+let opt_project : string ref = ref ""
 let opt_filenames : string list ref = ref []
 let opt_print_version = ref false
 let opt_no_default_aarch64 = ref false
@@ -309,6 +309,7 @@ let rec repl (tcenv: TC.Env.t) (cpu: Cpu.cpu): unit =
 let options = Arg.align ([
     ( "-x", Arg.Set_int Dis.debug_level,      "       Partial evaluation debugging (requires debug level argument >= 0)");
     ( "-v", Arg.Set opt_verbose,              "       Verbose output");
+    ("--project", Arg.Set_string opt_project,"       ASLp project file");
     ( "--no-aarch64", Arg.Set opt_no_default_aarch64 , "       Disable bundled AArch64 semantics");
     ( "--aarch64-dir", Arg.Set opt_print_aarch64_dir, "       Print directory of bundled AArch64 semantics");
     ( "--version", Arg.Set opt_print_version, "       Print version");
@@ -371,7 +372,30 @@ let main () =
         let denv = Dis.build_env env in
         let tcenv = TC.Env.mkEnv TC.env0 and cpu = Cpu.mkCPU env denv in
 
-        repl tcenv cpu
+        if !opt_project <> "" then
+            let reading = ref true in
+            let inchan = open_in !opt_project in
+            while !reading do
+                (try
+                    LoadASL.report_eval_error (fun _ -> ()) (fun _ ->
+                        LoadASL.report_type_error (fun _ -> ()) (fun _ ->
+                            LoadASL.report_parse_error (fun _ -> ()) (fun _ ->
+                                process_command tcenv cpu !opt_project (input_line inchan)
+                            )
+                        )
+                    )
+                with
+                | End_of_file ->
+                    reading := false;
+                    close_in inchan
+                | exc ->
+                    Printf.printf "  Error %s\n" (Printexc.to_string exc);
+                    Printexc.print_backtrace stdout;
+                );
+            done
+        else
+            repl tcenv cpu
+
     end
 
 let _ = ignore (main ())

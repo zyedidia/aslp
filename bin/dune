@@ -5,8 +5,17 @@
  (modes exe byte)
  (modules asli)
  (flags (-cclib -lstdc++))
- (libraries libASL linenoise pprint pcre)
- )
+ (libraries libASL linenoise pprint pcre))
+
+(executable
+ (name decl)
+ (public_name decl)
+ (modes exe)
+ (modules decl)
+ (flags (-cclib -lstdc++))
+ (foreign_stubs (language c) (names lfi.bdd result))
+ (libraries libASL linenoise pprint pcre ctypes ctypes-foreign domainslib))
+
 
 (executable
  (name server)
